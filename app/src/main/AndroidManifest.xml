@@ -17,7 +17,17 @@
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Detect the Pleos services; otherwise the app falls back to fake car data. -->
+    <queries>
+        <package android:name="ai.pleos.service.car" />
+        <package android:name="ai.pleos.playground.service.navi" />
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <application
+        android:name=".TimeCapsuleApp"
         android:allowBackup="false"
         android:label="@string/app_name"
         android:supportsRtl="true"
@@ -25,7 +35,9 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|density|uiMode">
             <!-- Screens 04-06 are usable while driving (spec 07). -->
             <meta-data android:name="distractionOptimized" android:value="true" />
             <intent-filter>

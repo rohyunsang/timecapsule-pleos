@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
@@ -34,6 +35,7 @@ data class Capsule(
 @Entity(tableName = "letter_lock")
 data class LetterLock(
     @PrimaryKey val capsuleId: Long,
+    /** First day the capsule may open, as LocalDate.toEpochDay(). */
     val openAfter: Long,
     val recipientProfileId: Long? = null,
 )
@@ -69,6 +71,10 @@ interface CapsuleDao {
     @Query("SELECT * FROM capsule WHERE id = :id")
     suspend fun get(id: Long): Capsule?
 
+    /** Demo only: move a capsule back in time so the narration has years to count. */
+    @Query("UPDATE capsule SET createdAt = :createdAt WHERE id = :id")
+    suspend fun setCreatedAt(id: Long, createdAt: Long)
+
     @Query("DELETE FROM capsule WHERE id = :id")
     suspend fun delete(id: Long)
 
@@ -81,11 +87,41 @@ interface CapsuleDao {
     @Query("SELECT * FROM letter_lock WHERE capsuleId = :capsuleId")
     suspend fun lockFor(capsuleId: Long): LetterLock?
 
-    @Insert
+    @Query("SELECT * FROM letter_lock")
+    fun observeLocks(): Flow<List<LetterLock>>
+
+    @Query("DELETE FROM letter_lock WHERE capsuleId = :capsuleId")
+    suspend fun deleteLock(capsuleId: Long)
+
+    @Query("DELETE FROM letter_lock")
+    suspend fun deleteAllLocks()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun log(entry: NotifyLog)
 
-    @Query("SELECT COUNT(*) FROM notify_log WHERE capsuleId = :capsuleId AND date = :date")
-    suspend fun notifiedOn(capsuleId: Long, date: String): Int
+    @Query("SELECT capsuleId FROM notify_log WHERE date = :date")
+    suspend fun notifiedIdsOn(date: String): List<Long>
+
+    @Query("DELETE FROM notify_log")
+    suspend fun deleteAllLogs()
+
+    @Insert
+    suspend fun insertTrip(trip: Trip): Long
+
+    @Query("SELECT * FROM trip WHERE endAt IS NULL ORDER BY startAt DESC LIMIT 1")
+    suspend fun openTrip(): Trip?
+
+    @Query("UPDATE trip SET endAt = :endAt, endOdometer = :endOdometer WHERE id = :id")
+    suspend fun endTrip(id: Long, endAt: Long, endOdometer: Double?)
+
+    @Query("UPDATE trip SET occupants = :occupants WHERE id = :id AND (occupants IS NULL OR occupants < :occupants)")
+    suspend fun raiseOccupants(id: Long, occupants: Int)
+
+    @Query("SELECT * FROM trip ORDER BY startAt DESC")
+    fun observeTrips(): Flow<List<Trip>>
+
+    @Query("DELETE FROM trip")
+    suspend fun deleteAllTrips()
 }
 
 @Database(entities = [Capsule::class, LetterLock::class, Trip::class, NotifyLog::class], version = 1)

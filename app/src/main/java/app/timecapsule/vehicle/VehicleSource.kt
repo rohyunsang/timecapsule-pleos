@@ -22,7 +22,21 @@ data class VehicleSnapshot(
     val placeName: String? = null,
     val odometerKm: Double? = null,
     val carModel: String? = null,
-)
+) {
+    /** Raw values for Capsule.rawVehicleState (spec F-02: keep raw data so tags can be recomputed). */
+    fun toJson(): String {
+        fun q(v: String) = "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        val fields = listOf(
+            "wiperOn" to wiperOn, "headlightOn" to headlightOn, "occupiedSeats" to occupiedSeats,
+            "outsideTempC" to outsideTempC, "anyWindowOpen" to anyWindowOpen, "gearInPark" to gearInPark,
+            "anyDoorOpen" to anyDoorOpen, "onHighway" to onHighway, "placeName" to placeName,
+            "odometerKm" to odometerKm, "carModel" to carModel,
+        )
+        return fields.filter { it.second != null }.joinToString(",", "{", "}") { (k, v) ->
+            q(k) + ":" + if (v is String) q(v) else v.toString()
+        }
+    }
+}
 
 /** Signals that must pause playback or end recording (spec F-05, F-13). */
 enum class SafetySignal { SAFETY_WARNING, HARD_BRAKE, TURN_SIGNAL, NAVI_VOICE }

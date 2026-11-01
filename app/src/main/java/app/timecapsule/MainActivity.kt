@@ -1,89 +1,118 @@
 package app.timecapsule
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.view.KeyEvent
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import app.timecapsule.drive.DriveEvent
+import androidx.core.content.ContextCompat
 import app.timecapsule.drive.DriveState
-import app.timecapsule.drive.DriveStateMachine
 import app.timecapsule.tag.MoodTagEngine
-import app.timecapsule.tag.Narration
-import app.timecapsule.vehicle.FakeVehicleSource
-import app.timecapsule.vehicle.VehicleSnapshot
-import java.time.LocalDate
+import app.timecapsule.ui.AlbumScreen
+import app.timecapsule.ui.AlertCard
+import app.timecapsule.ui.DevPanel
+import app.timecapsule.ui.HomeScreen
+import app.timecapsule.ui.LetterScreen
+import app.timecapsule.ui.PlayingScreen
+import app.timecapsule.ui.RecordingScreen
+import app.timecapsule.ui.Screen
+import app.timecapsule.ui.SettingsScreen
+import app.timecapsule.ui.TimeCapsuleTheme
 
-/**
- * Stage-1 dev screen: toggles a fake car state and shows the tags, narration and drive state
- * the real flow will produce. Replaced by screens 01-06 later.
- */
 class MainActivity : ComponentActivity() {
-    private val car = FakeVehicleSource(VehicleSnapshot(occupiedSeats = 1, outsideTempC = 18f, placeName = "7번 국도"))
+    private val app get() = application as TimeCapsuleApp
+
+    private val askMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) Toast.makeText(this, "마이크 권한이 없으면 캡슐을 묻을 수 없어요", Toast.LENGTH_LONG).show()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            askMic.launch(Manifest.permission.RECORD_AUDIO)
+        }
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                Surface(Modifier.fillMaxSize()) { DevScreen(car) }
+            TimeCapsuleTheme {
+                Surface(Modifier.fillMaxSize()) { Root(app) }
             }
         }
     }
-}
 
-@Composable
-private fun DevScreen(car: FakeVehicleSource) {
-    val snap by car.snapshot.collectAsState()
-    var state by remember { mutableStateOf<DriveState>(DriveState.Idle) }
-    val tags = MoodTagEngine.tagsFor(snap)
-    val narration = Narration.build(LocalDate.now().minusYears(18), LocalDate.now(), tags)
-
-    Column(Modifier.padding(32.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Text("타임캡슐 프로토타입", fontSize = 32.sp)
-        Text("주행 상태: $state", fontSize = 20.sp)
-
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            FilterChip(snap.wiperOn == true, { car.set { it.copy(wiperOn = it.wiperOn != true) } }, { Text("와이퍼") })
-            FilterChip(snap.headlightOn == true, { car.set { it.copy(headlightOn = it.headlightOn != true) } }, { Text("전조등") })
-            FilterChip(snap.anyWindowOpen == true, { car.set { it.copy(anyWindowOpen = it.anyWindowOpen != true) } }, { Text("창문") })
-            FilterChip(snap.onHighway == true, { car.set { it.copy(onHighway = it.onHighway != true) } }, { Text("고속도로") })
-            FilterChip(false, { car.set { it.copy(occupiedSeats = ((it.occupiedSeats ?: 1) % 4) + 1) } }, { Text("탑승 ${snap.occupiedSeats}명") })
+    /** F-01: the steering-wheel voice button buries a capsule, a second press ends it. */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode in VOICE_KEYS && event.repeatCount == 0) {
+            if (app.drive.state.value == DriveState.Recording) app.drive.stopRecording() else app.drive.bury()
+            return true
         }
+        return super.onKeyDown(keyCode, event)
+    }
 
-        Text("태그: " + tags.joinToString(" · ") { it.label }, fontSize = 22.sp)
-        Text("내레이션: $narration", fontSize = 22.sp)
-
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            BigButton("묻어줘") { state = DriveStateMachine.reduce(state, DriveEvent.BuryRequested).state }
-            BigButton("그만") { state = DriveStateMachine.reduce(state, DriveEvent.RecordingEnded).state }
-            BigButton("1.2km 접근") { state = DriveStateMachine.reduce(state, DriveEvent.CapsuleWithinRange(1)).state }
-            BigButton("들려줘") { state = DriveStateMachine.reduce(state, DriveEvent.PlayRequested).state }
-            BigButton("방향지시등") { state = DriveStateMachine.reduce(state, DriveEvent.SafetySignalOn).state }
-        }
+    private companion object {
+        val VOICE_KEYS = setOf(KeyEvent.KEYCODE_VOICE_ASSIST, KeyEvent.KEYCODE_SEARCH, KeyEvent.KEYCODE_HEADSETHOOK)
     }
 }
 
-/** Spec 07: buttons used while driving are at least 72 dp tall. */
 @Composable
-private fun BigButton(label: String, onClick: () -> Unit) {
-    Button(onClick, Modifier.heightIn(min = 72.dp)) { Text(label, fontSize = 20.sp) }
+private fun Root(app: TimeCapsuleApp) {
+    val drive = app.drive
+    val state by drive.state.collectAsState()
+    val car by drive.car.collectAsState()
+    val alert by drive.alert.collectAsState()
+    val playing by drive.playing.collectAsState()
+    val signals by drive.signals.collectAsState()
+    val userPaused by drive.userPaused.collectAsState()
+    val recordingSince by drive.recordingSince.collectAsState()
+    var screen by remember { mutableStateOf(Screen.HOME) }
+    var dev by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Unknown gear counts as parked so the app stays usable on a bench.
+    val parked = car.gearInPark != false
+
+    // Spec 07: only screens 04-06 (and home) while driving.
+    LaunchedEffect(parked) { if (!parked) screen = Screen.HOME }
+    LaunchedEffect(Unit) {
+        drive.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    }
+    BackHandler(screen != Screen.HOME) { screen = Screen.HOME }
+
+    Box(Modifier.fillMaxSize()) {
+        val s = state
+        when {
+            s == DriveState.Recording ->
+                RecordingScreen(recordingSince, MoodTagEngine.tagsFor(car)) { drive.stopRecording() }
+            s is DriveState.Playing || (s is DriveState.Paused && s.resumeTo is DriveState.Playing) ->
+                PlayingScreen(
+                    playing,
+                    safetyPaused = if (s is DriveState.Paused) signals else null,
+                    userPaused = userPaused,
+                    onRestart = drive::restart,
+                    onPause = drive::togglePause,
+                    onStop = drive::stopPlayback,
+                )
+            else -> when (screen) {
+                Screen.HOME -> HomeScreen(drive, parked, app.onPleos, { screen = it }, { dev = !dev })
+                Screen.LETTER -> LetterScreen(drive) { screen = Screen.HOME }
+                Screen.ALBUM -> AlbumScreen(drive) { screen = Screen.HOME }
+                Screen.SETTINGS -> SettingsScreen(app) { screen = Screen.HOME }
+            }
+        }
+        alert?.let { AlertCard(it, drive::listen, drive::later) }
+        if (dev && s != DriveState.Recording) DevPanel(app) { dev = false }
+    }
 }

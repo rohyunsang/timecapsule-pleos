@@ -59,4 +59,20 @@ class DriveStateMachineTest {
     @Test fun cannotBuryWhilePlaying() {
         assertEquals(DriveState.Playing(1), reduce(DriveState.Playing(1), DriveEvent.BuryRequested).state)
     }
+
+    @Test fun albumPlaysDirectlyAndStopWhilePausedEnds() {
+        val play = reduce(DriveState.Idle, DriveEvent.PlayCapsule(3))
+        assertEquals(DriveState.Playing(3), play.state)
+        assertEquals(listOf(Effect.StartPlayback(3)), play.effects)
+
+        val paused = reduce(play.state, DriveEvent.SafetySignalOn)
+        val stop = reduce(paused.state, DriveEvent.PlaybackFinished)
+        assertEquals(DriveState.Idle, stop.state)
+        assertEquals(listOf(Effect.StopPlayback), stop.effects)
+    }
+
+    @Test fun pausedAlertDismissedBecomesLater() {
+        val stop = reduce(DriveState.Paused(DriveState.ApproachAlert(4)), DriveEvent.PlaybackFinished)
+        assertEquals(listOf(Effect.RepromptAtNextStop(4)), stop.effects)
+    }
 }

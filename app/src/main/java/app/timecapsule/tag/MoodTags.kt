@@ -35,4 +35,17 @@ object MoodTagEngine {
         s.placeName?.takeIf { it.isNotBlank() }?.let { tags += MoodTag(it, TagCategory.PLACE) }
         return tags.sortedBy { it.category.ordinal }.take(MAX_TAGS)
     }
+
+    private val FIXED = mapOf(
+        "밤길" to TagCategory.TIME,
+        "비 오던" to TagCategory.WEATHER, "추운 날" to TagCategory.WEATHER,
+        "더운 날" to TagCategory.WEATHER, "창문 열고" to TagCategory.WEATHER,
+        "둘이서" to TagCategory.PEOPLE, "셋이서" to TagCategory.PEOPLE, "넷이서" to TagCategory.PEOPLE,
+    )
+
+    /** Rebuilds tags stored as "a|b|c" in Capsule.tags; anything not in the rule table is a place. */
+    fun fromStored(stored: String): List<MoodTag> =
+        stored.split('|').filter { it.isNotBlank() }.map { MoodTag(it, FIXED[it] ?: TagCategory.PLACE) }
+
+    fun toStored(tags: List<MoodTag>): String = tags.joinToString("|") { it.label.replace("|", " ") }
 }

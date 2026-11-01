@@ -18,8 +18,9 @@ sealed interface DriveEvent {
     data object RecordingEnded : DriveEvent         // "그만", 30 s limit, end button
     data class CapsuleWithinRange(val capsuleId: Long) : DriveEvent // 1.2 km
     data object PlayRequested : DriveEvent          // "들려줘"
+    data class PlayCapsule(val capsuleId: Long) : DriveEvent // album / home card, while parked
     data object Later : DriveEvent                  // "다음에" or 10 s silence
-    data object PlaybackFinished : DriveEvent
+    data object PlaybackFinished : DriveEvent       // end of audio or the stop button
     data object SafetySignalOn : DriveEvent
     data object SafetySignalOff : DriveEvent
 }
@@ -31,6 +32,7 @@ sealed interface Effect {
     data object HideApproachAlert : Effect
     data class StartPlayback(val capsuleId: Long) : Effect
     data object PausePlayback : Effect
+    data object StopPlayback : Effect
     data class RepromptAtNextStop(val capsuleId: Long) : Effect
     /** Send [DriveEvent.SafetySignalOff]-driven resume after this delay (2 s playback, 10 s alert). */
     data class ResumeAfter(val millis: Long, val target: DriveState) : Effect
@@ -47,6 +49,8 @@ object DriveStateMachine {
             DriveEvent.BuryRequested -> Transition(DriveState.Recording, listOf(Effect.StartRecording))
             is DriveEvent.CapsuleWithinRange ->
                 Transition(DriveState.ApproachAlert(event.capsuleId), listOf(Effect.ShowApproachAlert(event.capsuleId)))
+            is DriveEvent.PlayCapsule ->
+                Transition(DriveState.Playing(event.capsuleId), listOf(Effect.StartPlayback(event.capsuleId)))
             else -> Transition(state)
         }
 
@@ -68,7 +72,7 @@ object DriveStateMachine {
         }
 
         is DriveState.Playing -> when (event) {
-            DriveEvent.PlaybackFinished -> Transition(DriveState.Idle)
+            DriveEvent.PlaybackFinished -> Transition(DriveState.Idle, listOf(Effect.StopPlayback))
             DriveEvent.SafetySignalOn -> Transition(DriveState.Paused(state), listOf(Effect.PausePlayback))
             else -> Transition(state)
         }
@@ -77,6 +81,12 @@ object DriveStateMachine {
             DriveEvent.SafetySignalOff -> {
                 val delay = if (state.resumeTo is DriveState.Playing) RESUME_PLAYBACK_MS else RESUME_ALERT_MS
                 Transition(state, listOf(Effect.ResumeAfter(delay, state.resumeTo)))
+            }
+            // Stopping while paused ends playback; an alert left paused becomes "later".
+            DriveEvent.PlaybackFinished -> when (val r = state.resumeTo) {
+                is DriveState.Playing -> Transition(DriveState.Idle, listOf(Effect.StopPlayback))
+                is DriveState.ApproachAlert -> Transition(DriveState.Idle, listOf(Effect.RepromptAtNextStop(r.capsuleId)))
+                else -> Transition(DriveState.Idle)
             }
             else -> Transition(state)
         }

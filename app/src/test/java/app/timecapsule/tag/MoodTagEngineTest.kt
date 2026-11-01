@@ -45,4 +45,10 @@ class MoodTagEngineTest {
         assertEquals(tags.sortedBy { it.category.ordinal }, tags)
         assertEquals("밤길", tags.first().label)
     }
+
+    @Test fun storedTagsRoundTripWithCategories() {
+        val tags = MoodTagEngine.tagsFor(VehicleSnapshot(headlightOn = true, wiperOn = true, occupiedSeats = 3, placeName = "7번 국도"))
+        val back = MoodTagEngine.fromStored(MoodTagEngine.toStored(tags))
+        assertEquals(tags, back)
+    }
 }
