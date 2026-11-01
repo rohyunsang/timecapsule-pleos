@@ -2,7 +2,6 @@ package app.timecapsule.ui
 
 import android.view.SoundEffectConstants
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -43,11 +41,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -62,13 +58,14 @@ import androidx.compose.ui.unit.sp
 import app.timecapsule.R
 
 /*
- * Design system. The reference is the Pleos Connect system UI itself (built-in navigation,
- * settings, driving view) and the Pleos UI Design Guide components:
- *  - Monochrome. Pleos basic buttons are light gray, filled buttons dark gray; panels are flat
- *    with a 1px line. No brand color inside the UI (the brand lives in the app icon), red only
- *    for "recording", blue only for switches, as in the system.
- *  - The one main action is a solid dark bar, like navigation's "어디로 갈까요?" bar.
- *  - Lists are rows with dividers (Android Automotive / CarPlay list templates), not card piles.
+ * Design system. References:
+ *  - Pleos UI Design Guide, Page Navigation: a screen header is a title (+ back on depth
+ *    pages) and one "more" action. The status bar already shows driving state, so the app
+ *    does not repeat it, and the app draws no logo of its own.
+ *  - Android for Cars List template: rows sit directly on the background, separated by thin
+ *    dividers. No cards, no panel borders, no shadows except for things that float (popups).
+ *  - Pleos buttons: Basic (light gray) and Filled (dark gray). Monochrome; red only for
+ *    "recording", blue only for switches, as in the system.
  *  - Asta Sans on the Pleos type scale; 160 dpi, so the guide's px are used as sp/dp.
  *  - Every tap plays the system click (guide: audio feedback on touch).
  */
@@ -95,7 +92,7 @@ data class Palette(
 )
 
 private val Day = Palette(
-    bg = Color(0xFFF7F8FA), surface = Color(0xFFFFFFFF), basic = Color(0xFFF1F2F4), basicPressed = Color(0xFFE0E1E6),
+    bg = Color(0xFFFFFFFF), surface = Color(0xFFFFFFFF), basic = Color(0xFFF1F2F4), basicPressed = Color(0xFFE0E1E6),
     line = Color(0xFFE0E1E6), text = Color(0xFF131417), textSub = Color(0xFF393A3C), textMute = Color(0xFF68696B),
     filled = Color(0xFF44464E), filledPressed = Color(0xFF313236), onFilled = Color(0xFFFFFFFF),
     strong = Color(0xFF131417), onStrong = Color(0xFFFFFFFF), onStrongSub = Color(0xFFB3B4B5),
@@ -125,8 +122,10 @@ object Tc {
     val Info @Composable get() = LocalPalette.current.info
     val P @Composable get() = LocalPalette.current
 
-    val Gutter = 32.dp
-    val Gap = 20.dp
+    /** Screen edge. Rows add [Inset] inside it, so row text lines up with headers. */
+    val Gutter = 16.dp
+    val Inset = 16.dp
+    val Gap = 16.dp
     val PanelRadius = 20.dp
     val BtnRadius = 20.dp
     /** Spec 07 asks for >= 72 dp while driving; Pleos Large buttons are ~100. */
@@ -262,15 +261,10 @@ fun IconBtn(icon: ImageVector, description: String, modifier: Modifier = Modifie
     }
 }
 
-/** Flat white panel with a hairline, like the navigation search panel. Holds rows. */
+/** A group of rows. No box around it: rows sit on the background (Android for Cars lists). */
 @Composable
 fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(Tc.PanelRadius),
-        color = Tc.Surface,
-        border = BorderStroke(1.dp, Tc.Line),
-    ) { Column(content = content) }
+    Column(modifier.fillMaxWidth(), content = content)
 }
 
 /**
@@ -292,7 +286,7 @@ fun ListRow(
     val pressed by source.collectIsPressedAsState()
     val body: @Composable () -> Unit = {
         Row(
-            Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
+            Modifier.padding(horizontal = Tc.Inset, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(24.dp),
         ) {
@@ -317,35 +311,24 @@ fun ListRow(
 
 /** Divider inset to the row text, as in system lists. */
 @Composable
-fun RowDivider() = Box(Modifier.padding(horizontal = 28.dp).fillMaxWidth().height(1.dp).background(Tc.Line))
+fun RowDivider() = Box(Modifier.padding(horizontal = Tc.Inset).fillMaxWidth().height(1.dp).background(Tc.Line))
 
 @Composable
 fun Divider() = Box(Modifier.fillMaxWidth().height(1.dp).background(Tc.Line))
 
-/** Section label above a panel. */
+/** Section header above a group of rows (the List template requires one when sections exist). */
 @Composable
 fun Section(text: String, trailing: @Composable () -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().padding(start = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = Tc.Inset, top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text, style = Type.LabelStrong, color = Tc.TextMute, modifier = Modifier.weight(1f))
         trailing()
     }
 }
 
-/** The app icon as drawn by the launcher, for headers and notifications (like Pleos settings). */
-@Composable
-fun AppMark(size: Dp = 48.dp) {
-    Box(
-        Modifier.size(size).clip(RoundedCornerShape(size * 0.26f)).background(Color(0xFFF0B865)),
-        contentAlignment = Alignment.Center,
-    ) {
-        // Launchers show the middle ~2/3 of the 108dp adaptive layer; draw it the same way.
-        Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.requiredSize(size * 1.4f))
-    }
-}
-
 /**
- * Pleos System Notification: app icon, title, description, two equal buttons (CTA filled,
- * sub-action basic). [footer] carries the auto-dismiss timer.
+ * Floating notice in the Pleos System Notification layout: title, description, two equal
+ * buttons (CTA filled, sub-action basic). Text only, no icon. [footer] carries the timer.
+ * Only for things that float over the screen; in-page questions use [InlinePrompt].
  */
 @Composable
 fun SystemNotice(
@@ -360,18 +343,15 @@ fun SystemNotice(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(32.dp),
+        shape = RoundedCornerShape(24.dp),
         color = Tc.Surface,
-        border = if (elevated) null else BorderStroke(1.dp, Tc.Line),
-        shadowElevation = if (elevated) 16.dp else 0.dp,
+        border = BorderStroke(1.dp, Tc.Line),
+        shadowElevation = if (elevated) 12.dp else 0.dp,
     ) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                AppMark(80.dp)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(title, style = Type.TitleS, color = Tc.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    if (description != null) Text(description, style = Type.BodyS, color = Tc.TextMute, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
+        Column(Modifier.padding(28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, style = Type.TitleS, color = Tc.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (description != null) Text(description, style = Type.BodyS, color = Tc.TextMute, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             if (cta != null || sub != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -384,16 +364,32 @@ fun SystemNotice(
     }
 }
 
+/** An in-page question: text, then two equal buttons under it. No box. */
+@Composable
+fun InlinePrompt(title: String, description: String?, cta: Pair<String, () -> Unit>, sub: Pair<String, () -> Unit>, ctaIcon: ImageVector? = null) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Tc.Inset, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = Type.BodyStrong, color = Tc.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (description != null) Text(description, style = Type.LabelM, color = Tc.TextMute, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Btn(sub.first, Modifier.weight(1f), onClick = sub.second)
+            Btn(cta.first, Modifier.weight(1f), icon = ctaIcon, style = BtnStyle.Filled, onClick = cta.second)
+        }
+    }
+}
+
 @Composable
 fun Dot(color: Color, size: Dp = 12.dp) = Box(Modifier.size(size).background(color, CircleShape))
 
-/** Screen header: back arrow + title, like the built-in Pleos apps. */
+/** Pleos Page Navigation: title (+ back on depth pages) and trailing actions. Nothing else. */
 @Composable
 fun Header(title: String, back: (() -> Unit)? = null, trailing: @Composable () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().heightIn(min = Tc.Touch), verticalAlignment = Alignment.CenterVertically) {
         if (back != null) {
             IconBtn(Icons.AutoMirrored.Rounded.ArrowBack, "뒤로", onClick = back)
-            Spacer(Modifier.width(8.dp))
+        } else {
+            Spacer(Modifier.width(Tc.Inset))
         }
         Text(title, style = Type.TitleM, color = Tc.Text, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         trailing()

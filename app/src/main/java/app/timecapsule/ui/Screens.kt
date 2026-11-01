@@ -43,7 +43,7 @@ import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -147,29 +147,20 @@ fun HomeScreen(
     }
 }
 
-/** App bar like Pleos settings: app icon + name, a plain status line, dev entry. */
+/**
+ * Pleos Page Navigation (main): the title and one "more" action. No logo, no status label:
+ * the system status bar already shows whether the car is driving.
+ */
 @Composable
+@Suppress("UNUSED_PARAMETER")
 private fun AppBar(onPleos: Boolean, restricted: Boolean, onDev: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = Tc.Touch), verticalAlignment = Alignment.CenterVertically) {
-        AppMark(48.dp)
-        Spacer(Modifier.width(16.dp))
-        Text("타임캡슐", style = Type.TitleM, color = Tc.Text)
-        Spacer(Modifier.width(20.dp))
-        val (dot, label) = when {
-            restricted -> Tc.Info to "주행 중"
-            onPleos -> Tc.TextMute to "차량 연결됨"
-            else -> Tc.TextMute to "가짜 차량"
-        }
-        Dot(dot, 10.dp)
-        Text("  $label", style = Type.LabelM, color = Tc.TextMute)
-        Spacer(Modifier.weight(1f))
-        IconBtn(Icons.Rounded.Tune, "개발 패널", onClick = onDev)
-    }
+    Header("타임캡슐") { IconBtn(Icons.Rounded.MoreHoriz, "개발 패널", onClick = onDev) }
 }
 
 /**
  * The one main action, shaped like navigation's "어디로 갈까요?" bar: a solid dark bar with a
  * mic, the verb, and what will be saved with it (place and mood) on the second line.
+ * Plain icon, no colored badge.
  */
 @Composable
 private fun VoiceBar(drive: DriveController) {
@@ -180,17 +171,15 @@ private fun VoiceBar(drive: DriveController) {
     val pressed by source.collectIsPressedAsState()
     Surface(
         onClick = clickWithSound { drive.bury() },
-        modifier = Modifier.fillMaxWidth().heightIn(min = 152.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 128.dp),
         shape = RoundedCornerShape(Tc.PanelRadius),
         color = if (pressed) p.filled else p.strong,
         contentColor = p.onStrong,
         interactionSource = source,
     ) {
         Row(Modifier.padding(horizontal = 32.dp, vertical = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(88.dp).background(p.rec, CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Mic, null, tint = Color.White, modifier = Modifier.size(48.dp))
-            }
-            Column(Modifier.padding(start = 28.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Rounded.Mic, null, tint = p.onStrong, modifier = Modifier.size(44.dp))
+            Column(Modifier.padding(start = 24.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("목소리 남기기", style = Type.TitleM)
                 Text(
                     (listOf(car.placeName ?: "위치 확인 중") + tags).joinToString(" · "),
@@ -201,7 +190,7 @@ private fun VoiceBar(drive: DriveController) {
     }
 }
 
-/** The single most relevant "now" message, in the Pleos notification shape (flat, in-page). */
+/** The single most relevant "now" message, as a plain row (or a question with two buttons). */
 @Composable
 private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalDate) {
     val forecast by drive.forecast.collectAsState()
@@ -211,21 +200,20 @@ private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalD
     val again = reprompt
     val f = forecast
     when {
-        arrival -> SystemNotice(
-            "도착했어요. 한마디 남길까요?", "이곳엔 아직 캡슐이 없어요", elevated = false,
+        arrival -> InlinePrompt(
+            "도착했어요. 한마디 남길까요?", "이곳엔 아직 캡슐이 없어요",
             cta = "남기기" to { drive.answerArrival(true) }, ctaIcon = Icons.Rounded.Mic,
             sub = "괜찮아요" to { drive.answerArrival(false) },
         )
-        again != null && !restricted -> SystemNotice(
-            "아까 지나친 캡슐", "${Narration.elapsed(again.date(), today)} · ${again.placeName ?: "이 길"}", elevated = false,
+        again != null && !restricted -> InlinePrompt(
+            "아까 지나친 캡슐이 있어요", "${Narration.elapsed(again.date(), today)} · ${again.placeName ?: "이 길"}",
             cta = "들려줘" to { drive.playCapsule(again.id) }, ctaIcon = Icons.Rounded.PlayArrow,
             sub = "닫기" to { drive.dismissReprompt() },
         )
-        f != null && f.total > 0 -> Panel { ForecastRow(f, position?.point, today) }
-        else -> Panel {
-            ListRow("오늘 길", "길 안내를 시작하면 이 길의 캡슐을 알려 드려요", leading = Icons.Rounded.Route, leadingTint = Tc.TextMute)
-        }
+        f != null && f.total > 0 -> ForecastRow(f, position?.point, today)
+        else -> ListRow("오늘 길", "길 안내를 시작하면 이 길의 캡슐을 알려 드려요", leading = Icons.Rounded.Route, leadingTint = Tc.TextMute)
     }
+    Divider()
 }
 
 @Composable
@@ -274,12 +262,13 @@ private fun CapsuleList(
 }
 
 /**
- * Bottom menu, like navigation's icon row: one panel split by dividers. While driving the
- * items stay tappable, show a lock and explain why.
+ * Bottom menu, like navigation's icon row: a line above, three items split by dividers.
+ * While driving the items stay tappable, show a lock and explain why.
  */
 @Composable
 private fun MenuBar(restricted: Boolean, go: (Screen) -> Unit, onLocked: () -> Unit) {
-    Panel {
+    Column(Modifier.fillMaxWidth()) {
+        Divider()
         Row(Modifier.fillMaxWidth().height(120.dp), verticalAlignment = Alignment.CenterVertically) {
             val item: @Composable (ImageVector, String, Screen) -> Unit = { icon, label, screen ->
                 MenuItem(icon, label, restricted, Modifier.weight(1f)) { if (restricted) onLocked() else go(screen) }

@@ -73,7 +73,7 @@ fun RecordingScreen(since: Long?, place: String?, tags: List<MoodTag>, onStop: (
     val tooShort = elapsed < Rules.MIN_RECORD_SEC
 
     Column(Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter)) {
-        Row(Modifier.fillMaxWidth().padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = Tc.Inset, end = Tc.Inset, top = 24.dp), verticalAlignment = Alignment.CenterVertically) {
             Dot(Tc.Rec, 16.dp)
             Text("  녹음 중", style = Type.TitleS, color = Tc.Text)
             Spacer(Modifier.weight(1f))
@@ -120,7 +120,7 @@ fun AlertCard(alert: AlertUi, onListen: () -> Unit, onLater: () -> Unit) {
         SystemNotice(
             title = alert.line,
             description = alertDescription(alert),
-            modifier = Modifier.padding(24.dp).widthIn(max = 760.dp),
+            modifier = Modifier.padding(16.dp).widthIn(max = 760.dp),
             cta = "들려줘" to onListen, ctaIcon = Icons.Rounded.PlayArrow,
             sub = "다음에" to onLater,
             footer = {
@@ -163,15 +163,12 @@ fun PlayingScreen(
             val c = playing.capsule
             val date = Instant.ofEpochMilli(c.createdAt).atZone(ZoneId.systemDefault())
                 .format(DateTimeFormatter.ofPattern("yyyy년 M월 d일 a h:mm"))
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                AppMark(64.dp)
-                Column(Modifier.padding(start = 20.dp).weight(1f)) {
-                    Text(c.placeName ?: "장소 기록 없음", style = Type.TitleS, color = Tc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(date, style = Type.LabelM, color = Tc.TextMute)
-                }
+            Column(Modifier.fillMaxWidth().padding(start = Tc.Inset, top = 16.dp)) {
+                Text(c.placeName ?: "장소 기록 없음", style = Type.TitleS, color = Tc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(date, style = Type.LabelM, color = Tc.TextMute)
             }
             Column(
-                Modifier.weight(1f).fillMaxWidth().widthIn(max = 1200.dp),
+                Modifier.weight(1f).fillMaxWidth().widthIn(max = 1200.dp).padding(horizontal = Tc.Inset),
                 verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
             ) {
                 Text(
