@@ -90,6 +90,13 @@ fun FriendsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                             .onSuccess { message = "${it.name}님 계정을 불러왔어요" }
                             .onFailure { message = it.message }
                     }
+                }, onForgot = { email ->
+                    focus.clearFocus()
+                    app.scope.launch {
+                        message = app.social.resetPassword(email).fold(
+                            { "$email 로 비밀번호 바꾸는 링크를 보냈어요" }, { it.message },
+                        )
+                    }
                 }) { name ->
                     focus.clearFocus()
                     app.scope.launch {
@@ -176,7 +183,7 @@ private fun AccountRow(email: String?, onLink: (String, String, (String?) -> Uni
 
 /** Email and password fields with one action. */
 @Composable
-private fun EmailForm(action: String, message: String?, onSubmit: (String, String) -> Unit) {
+private fun EmailForm(action: String, message: String?, onForgot: ((String) -> Unit)? = null, onSubmit: (String, String) -> Unit) {
     var email by remember { mutableStateOf("") }
     var pw by remember { mutableStateOf("") }
     val ok = email.contains('@') && pw.length >= 6
@@ -187,17 +194,20 @@ private fun EmailForm(action: String, message: String?, onSubmit: (String, Strin
         }
         if (message != null) Text(message, style = Type.LabelM, color = Tc.TextSub)
         Btn(action, Modifier.fillMaxWidth(), style = BtnStyle.Filled, enabled = ok) { onSubmit(email, pw) }
+        if (onForgot != null) {
+            Btn("비밀번호를 잊었어요", Modifier.fillMaxWidth(), style = BtnStyle.Quiet, enabled = email.contains('@')) { onForgot(email) }
+        }
     }
 }
 
 @Composable
-private fun SignUp(message: String?, onSignIn: (String, String) -> Unit, onStart: (String) -> Unit) {
+private fun SignUp(message: String?, onSignIn: (String, String) -> Unit, onForgot: (String) -> Unit, onStart: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
     var existing by remember { mutableStateOf(false) }
     if (existing) {
         Text("내 계정 불러오기", style = Type.TitleS, color = Tc.Text, modifier = Modifier.padding(start = Tc.Inset, top = 8.dp))
         Text("연결해 둔 이메일로 이름, 친구, 친구에게 남긴 캡슐을 불러와요", style = Type.BodyS, color = Tc.TextMute, modifier = Modifier.padding(start = Tc.Inset, bottom = 8.dp))
-        EmailForm("불러오기", message, onSignIn)
+        EmailForm("불러오기", message, onForgot, onSignIn)
         Btn("처음이에요", Modifier.fillMaxWidth(), style = BtnStyle.Quiet) { existing = false }
         return
     }

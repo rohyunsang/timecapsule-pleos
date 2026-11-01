@@ -250,6 +250,11 @@ class FirebaseBackend(
         p
     }.recoverCatching { throw IllegalStateException(authMessage(it)) }
 
+    override suspend fun resetPassword(email: String): Result<Unit> = runCatching {
+        withTimeout(WRITE_TIMEOUT_MS) { auth.sendPasswordResetEmail(email.trim()).await() }
+        Unit
+    }.recoverCatching { throw IllegalStateException(authMessage(it)) }
+
     private fun authMessage(e: Throwable): String = when (e) {
         is FirebaseAuthWeakPasswordException -> "비밀번호는 6자 이상이어야 해요"
         is FirebaseAuthUserCollisionException -> "이미 다른 계정에 연결된 이메일이에요"

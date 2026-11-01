@@ -69,6 +69,9 @@ class FakeBackend(context: Context) : SocialBackend {
         return Result.success(p)
     }
 
+    override suspend fun resetPassword(email: String): Result<Unit> =
+        Result.failure(IllegalStateException("가짜 서버에서는 메일을 보낼 수 없어요"))
+
     private fun emailOf(uid: String?) = emails.all.entries.firstOrNull { (it.value as? String)?.substringAfter('|') == uid }?.key
 
     init {

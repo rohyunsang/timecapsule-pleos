@@ -65,6 +65,8 @@ interface SocialBackend {
     suspend fun linkEmail(email: String, password: String): Result<Unit>
     /** Loads an existing account (name, code, friends, my capsules) onto this car. */
     suspend fun signInEmail(email: String, password: String): Result<Profile>
+    /** Sends a link to set a new password. */
+    suspend fun resetPassword(email: String): Result<Unit>
 
     suspend fun signUp(name: String): Result<Profile>
     suspend fun addFriend(code: String): Result<Friend>
