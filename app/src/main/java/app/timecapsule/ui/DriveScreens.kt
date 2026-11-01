@@ -45,6 +45,7 @@ import app.timecapsule.tag.MoodTag
 import app.timecapsule.tag.MoodTagEngine
 import app.timecapsule.vehicle.SafetySignal
 import kotlinx.coroutines.delay
+import androidx.compose.ui.draw.alpha
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.ui.geometry.Size
@@ -91,13 +92,13 @@ fun RecordingScreen(
     LaunchedEffect(Unit) { while (true) { target = level(); delay(60) } }
     val voice by animateFloatAsState(target, tween(120), label = "voice")
     val left by animateFloatAsState(1f - shown / Rules.MAX_RECORD_SEC.toFloat(), tween(900, easing = LinearEasing), label = "left")
-    val rec = Tc.Rec; val track = Tc.Basic; val ink = Tc.Text; val paper = Tc.Bg
+    val track = Tc.Basic; val ink = Tc.Text; val paper = Tc.Bg
 
     Box(Modifier.fillMaxSize().background(Tc.Bg)) {
-        WeatherBackdrop(sky, night, animate, Modifier.fillMaxSize())
+        WeatherBackdrop(sky, night, animate, Modifier.fillMaxSize().alpha(0.55f))
         Column(Modifier.fillMaxSize().padding(Tc.Gutter)) {
             Row(Modifier.fillMaxWidth().padding(start = Tc.Inset, end = Tc.Inset, top = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                Dot(Tc.Rec, 16.dp)
+                Dot(Tc.Rec, 12.dp)
                 Text("  녹음 중", style = Type.TitleS, color = Tc.Text)
                 Spacer(Modifier.weight(1f))
                 Text("최대 ${Rules.MAX_RECORD_SEC}초", style = Type.LabelM, color = Tc.TextMute)
@@ -113,10 +114,10 @@ fun RecordingScreen(
                         val core = 70.dp.toPx()
                         // Voice: a soft halo that grows with loudness.
                         val halo = core + 60.dp.toPx() * voice
-                        drawCircle(rec.copy(alpha = 0.10f + 0.14f * voice), halo, c)
-                        drawCircle(rec.copy(alpha = 0.08f), core + 18.dp.toPx() + 24.dp.toPx() * voice, c)
+                        drawCircle(ink.copy(alpha = 0.04f + 0.08f * voice), halo, c)
+                        drawCircle(ink.copy(alpha = 0.05f), core + 14.dp.toPx() + 22.dp.toPx() * voice, c)
                         // Time left: a thin ring that runs down clockwise from the top.
-                        val stroke = 6.dp.toPx()
+                        val stroke = 3.dp.toPx()
                         val r = size.minDimension / 2 - stroke
                         drawCircle(track, r, c, style = Stroke(stroke))
                         drawArc(
@@ -124,7 +125,7 @@ fun RecordingScreen(
                             topLeft = Offset(c.x - r, c.y - r), size = Size(r * 2, r * 2),
                             style = Stroke(stroke, cap = StrokeCap.Round),
                         )
-                        drawCircle(rec, core, c)
+                        drawCircle(ink, core, c)
                     }
                     Icon(Icons.Rounded.Mic, null, tint = paper, modifier = Modifier.size(64.dp))
                 }

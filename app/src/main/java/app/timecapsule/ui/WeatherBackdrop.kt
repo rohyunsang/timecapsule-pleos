@@ -81,7 +81,7 @@ private class Scene(val sky: Sky?, val night: Boolean) {
             wet -> Color(0xFF7D8FA3).copy(alpha = 0.20f)
             sky == Sky.SNOW -> Color(0xFF8A9BAE).copy(alpha = 0.42f)
             sky == Sky.CLOUDY || sky == Sky.FOG -> ink.copy(alpha = 0.09f)
-            sky == Sky.CLEAR || sky == Sky.PARTLY -> Color(0xFFFFE2B0).copy(alpha = 0.22f)
+            sky == Sky.CLEAR || sky == Sky.PARTLY -> Color(0xFF6FA8E8).copy(alpha = 0.30f) // blue sky
             else -> Color.Transparent
         }
         if (tint.alpha > 0f) drawRect(Brush.verticalGradient(listOf(tint, tint.copy(alpha = tint.alpha * 0.3f))))
@@ -89,7 +89,7 @@ private class Scene(val sky: Sky?, val night: Boolean) {
         // Low sun (day) or moon (night) behind the glass, breathing very slowly.
         if (sky == Sky.CLEAR || sky == Sky.PARTLY || (night && sky == null)) {
             val c = Offset(w * 0.86f, h * 0.06f)
-            val glow = if (night) Color(0xFFC9D4E6) else Color(0xFFFFE6BC)
+            val glow = if (night) Color(0xFFC9D4E6) else Color(0xFFFFFFFF) // white sun on the blue
             val breath = 1f + 0.04f * sin(t * 0.4f)
             val rad = w * 0.46f * breath
             drawCircle(Brush.radialGradient(listOf(glow.copy(alpha = if (night) 0.65f else 0.85f), Color.Transparent), c, rad), rad, c)
