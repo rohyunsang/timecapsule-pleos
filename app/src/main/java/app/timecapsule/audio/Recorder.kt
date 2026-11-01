@@ -33,6 +33,13 @@ class Recorder(private val context: Context, private val beeper: Beeper) {
 
     val isRecording get() = recorder != null
 
+    /** How loud the mic is right now, 0..1 (peak since the last call), for the recording screen. */
+    fun level(): Float {
+        val amp = runCatching { recorder?.maxAmplitude ?: 0 }.getOrDefault(0)
+        // Speech peaks sit around 2k-20k; a square root makes quiet talk still visible.
+        return kotlin.math.sqrt((amp / 20_000f).coerceIn(0f, 1f))
+    }
+
     /** Starts recording; [onLimit] fires on the main thread when 30 s is reached. */
     fun start(onLimit: () -> Unit): Boolean {
         if (recorder != null) return true

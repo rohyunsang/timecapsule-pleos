@@ -67,7 +67,6 @@ class PleosVehicleSource(context: Context, private val scope: CoroutineScope) : 
         subscribeWindows()
         subscribeDoors()
         subscribeGear()
-        subscribeTemperature()
         subscribeOdometer()
         subscribeTurnSignal()
         subscribeSteering()
@@ -171,20 +170,6 @@ class PleosVehicleSource(context: Context, private val scope: CoroutineScope) : 
             override fun onFailed(e: Exception) = failed("Gear")(e)
         }
         sub("Gear", { vehicle.getGear().registerGearSelection(l) }) { vehicle.getGear().unregisterGearSelection(l) }
-    }
-
-    /**
-     * The SDK has no outside-air sensor API, so the HVAC current temperature of the driver zone
-     * stands in for it. Revisit when 42dot confirms an outside temperature property.
-     */
-    private fun subscribeTemperature() {
-        val area = SeatArea(SeatValue.ROW_1_LEFT)
-        val l = object : HvacTemperatureListener {
-            override fun onHvacTemperatureUpdated(value: Float?) { if (value != null) _snapshot.update { it.copy(outsideTempC = value) } }
-            override fun onFailed(e: Exception) = failed("HVAC")(e)
-        }
-        val hvac = vehicle.getHVAC()
-        sub("HVAC", { hvac.registerHvacTemperatureCurrent(area, l) }) { hvac.unregisterHvacTemperatureCurrent(area, l) }
     }
 
     private fun subscribeOdometer() {

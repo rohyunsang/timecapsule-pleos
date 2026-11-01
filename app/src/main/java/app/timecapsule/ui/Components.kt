@@ -437,3 +437,6 @@ fun formatDistance(m: Double): String = if (m >= 1000) "%.1fkm".format(m / 1000)
 enum class WidthClass { Portrait, Landscape }
 
 fun widthClass(maxWidth: Dp) = if (maxWidth < 1100.dp) WidthClass.Portrait else WidthClass.Landscape
+
+/** Between short facts on one line: plain spacing, no middle dots. */
+const val Sep = "   "

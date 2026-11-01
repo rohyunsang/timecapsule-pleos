@@ -136,11 +136,11 @@ fun FriendsScreen(app: TimeCapsuleApp, back: () -> Unit) {
             Section("친구 ${friends.size}")
             Panel {
                 if (friends.isEmpty()) {
-                    ListRow("아직 친구가 없어요", "먼저 체험해 보려면 위에 ${spaced(DEMO_CODE)}을 넣어 보세요 · 체험 친구가 이 근처에 캡슐을 남겨 둬요", leading = Icons.Rounded.Person, leadingTint = Tc.TextMute)
+                    ListRow("아직 친구가 없어요", "먼저 체험해 보려면 위에 ${spaced(DEMO_CODE)}을 넣어 보세요. 체험 친구가 이 근처에 캡슐을 남겨 둬요", leading = Icons.Rounded.Person, leadingTint = Tc.TextMute)
                 }
                 friends.forEachIndexed { i, f ->
                     if (i > 0) RowDivider()
-                    ListRow(f.name, "코드 ${spaced(f.code)} · 친구에게 공개한 캡슐이 이 친구 차에서도 열려요", leading = Icons.Rounded.Person) {
+                    ListRow(f.name, "코드 ${spaced(f.code)}${Sep}친구에게 공개한 캡슐이 이 친구 차에서도 열려요", leading = Icons.Rounded.Person) {
                         IconBtn(Icons.Rounded.PersonRemove, "친구 끊기") { removing = f }
                     }
                 }
@@ -174,7 +174,7 @@ private fun AccountRow(email: String?, onLink: (String, String, (String?) -> Uni
     var open by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     if (email != null) {
-        ListRow("이메일 연결됨", "$email · 앱을 다시 깔거나 차를 바꿔도 이 이메일로 불러와요", leading = Icons.Rounded.Lock)
+        ListRow("이메일 연결됨", "$email${Sep}앱을 다시 깔거나 차를 바꿔도 이 이메일로 불러와요", leading = Icons.Rounded.Lock)
         return
     }
     ListRow(

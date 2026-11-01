@@ -12,7 +12,7 @@ class TheDayTest {
 
     @Test fun factsFromRawState() {
         val raw = """{"wiperOn":true,"headlightOn":true,"occupiedSeats":3,"outsideTempC":11.6,"placeName":"7번 국도, \"강릉\""}"""
-        assertEquals(listOf("금요일 밤", "비", "바깥 12도", "셋이서"), TheDay.facts(fridayNight, raw, zone))
+        assertEquals(listOf("금요일 밤", "비", "바깥 12도", "3명 탑승"), TheDay.facts(fridayNight, raw, zone))
     }
 
     @Test fun emptyStateStillSaysWhen() {
@@ -20,16 +20,16 @@ class TheDayTest {
     }
 
     @Test fun spokenIsOnePlainSentence() {
-        assertEquals("그날은 비가 왔고, 셋이 타고 있었어요.", TheDay.spoken("""{"wiperOn":true,"occupiedSeats":3}"""))
+        assertEquals("그날은 비가 왔고, 3명이 타고 있었어요.", TheDay.spoken("""{"wiperOn":true,"occupiedSeats":3}"""))
         assertEquals("그날은 비가 왔어요.", TheDay.spoken("""{"wiperOn":true,"occupiedSeats":1}"""))
-        assertEquals("그날은 둘이 타고 있었어요.", TheDay.spoken("""{"wiperOn":false,"occupiedSeats":2}"""))
+        assertEquals("그날은 2명이 타고 있었어요.", TheDay.spoken("""{"wiperOn":false,"occupiedSeats":2}"""))
         assertNull(TheDay.spoken("""{"headlightOn":true}"""))
     }
 
     @Test fun savedSkyAndWiper() {
-        assertEquals(listOf("금요일 밤", "흐림", "둘이서"), TheDay.facts(fridayNight, """{"sky":"CLOUDY","occupiedSeats":2}""", zone))
+        assertEquals(listOf("금요일 밤", "흐림", "2명 탑승"), TheDay.facts(fridayNight, """{"sky":"CLOUDY","occupiedSeats":2}""", zone))
         assertEquals("그날은 맑았어요.", TheDay.spoken("""{"sky":"CLEAR"}"""))
-        assertEquals("그날은 흐렸고, 둘이 타고 있었어요.", TheDay.spoken("""{"sky":"CLOUDY","occupiedSeats":2}"""))
+        assertEquals("그날은 흐렸고, 2명이 타고 있었어요.", TheDay.spoken("""{"sky":"CLOUDY","occupiedSeats":2}"""))
         // The wiper is the car's own proof: a "clear" forecast with the wiper on was rain.
         assertEquals(app.timecapsule.weather.Sky.RAIN, TheDay.sky("""{"sky":"CLEAR","wiperOn":true}"""))
         assertEquals(app.timecapsule.weather.Sky.SNOW, TheDay.sky("""{"sky":"SNOW","wiperOn":true}"""))

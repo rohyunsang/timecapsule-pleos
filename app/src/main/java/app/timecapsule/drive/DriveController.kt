@@ -67,13 +67,16 @@ class DriveController(
     /** Uploads capsules left for friends; set once the sharing layer exists. */
     var sharing: app.timecapsule.social.CapsuleSharing? = null,
     sky: StateFlow<app.timecapsule.weather.Sky?> = MutableStateFlow(null),
+    outsideTempC: StateFlow<Float?> = MutableStateFlow(null),
 ) {
     private fun today() = LocalDate.now()
 
     /** Car state plus the place fields that come from the navigation app (spec F-02). */
-    val car: StateFlow<VehicleSnapshot> = combine(vehicle.snapshot, navi.position, navi.route, sky) { s, pos, route, sk ->
+    val car: StateFlow<VehicleSnapshot> = combine(vehicle.snapshot, navi.position, navi.route, sky, outsideTempC) { s, pos, route, sk, temp ->
         s.copy(
             sky = s.sky ?: sk?.name,
+            // Real outside air from the weather service; the fake car's own value only in demos.
+            outsideTempC = temp ?: s.outsideTempC,
             placeName = s.placeName ?: PlaceName.shorten(pos?.address) ?: route?.destination?.name,
             onHighway = s.onHighway ?: pos?.address?.let(PlaceName::isHighway),
         )
@@ -191,6 +194,9 @@ class DriveController(
 
     /** When the last playback ended; no new alert right after one (one at a time, then quiet). */
     private var lastPlaybackEndAt = 0L
+
+    /** Mic loudness while recording, 0..1. */
+    fun micLevel(): Float = recorder.level()
 
     fun listen() = dispatch(DriveEvent.PlayRequested)
     fun later() = dispatch(DriveEvent.Later)

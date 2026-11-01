@@ -196,7 +196,7 @@ private fun VoiceBar(drive: DriveController, friendCount: Int) {
                             else -> "친구 ${friendCount}명에게"
                         },
                         car.placeName ?: "위치 확인 중",
-                    ) + tags).joinToString(" · "),
+                    ) + tags).joinToString(Sep),
                     style = Type.LabelM, color = p.onStrongSub, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -221,7 +221,7 @@ private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalD
         )
         again != null && !restricted -> InlinePrompt(
             again.ownerName?.let { "아까 지나친 ${it}님 캡슐이 있어요" } ?: "아까 지나친 캡슐이 있어요",
-            "${Narration.elapsed(again.date(), today)} · ${again.placeName ?: "이 길"}",
+            "${Narration.elapsed(again.date(), today)}$Sep${again.placeName ?: "이 길"}",
             cta = "들려줘" to { drive.playCapsule(again.id) }, ctaIcon = Icons.Rounded.PlayArrow,
             sub = "닫기" to { drive.dismissReprompt() },
         )
@@ -236,7 +236,7 @@ private fun ForecastRow(f: RouteForecast, here: GeoPoint?, today: LocalDate) {
     val oldest = f.open.firstOrNull()
     val desc = oldest?.let { o ->
         val dist = here?.let { Geo.distanceM(it, GeoPoint(o.lat, o.lng)) }
-        "가장 오래된 건 ${Narration.elapsed(o.date(), today)} ${o.placeName ?: ""}" + (dist?.let { " · ${formatDistance(it)} 남음" } ?: "")
+        "가장 오래된 건 ${Narration.elapsed(o.date(), today)} ${o.placeName ?: ""}" + (dist?.let { "$Sep${formatDistance(it)} 남음" } ?: "")
     }
     ListRow(f.message() ?: "오늘 길에 캡슐이 있어요", desc, leading = Icons.Rounded.Route)
 }
@@ -265,8 +265,8 @@ private fun CapsuleList(
                 else -> recent.forEachIndexed { i, c ->
                     if (i > 0) RowDivider()
                     ListRow(
-                        (c.ownerName?.let { "${it}님 · " } ?: "") + (c.placeName ?: "장소 기록 없음"),
-                        "${c.date().format(shortFmt)} · ${Narration.elapsed(c.date(), today)}",
+                        (c.ownerName?.let { "${it}님   " } ?: "") + (c.placeName ?: "장소 기록 없음"),
+                        "${c.date().format(shortFmt)}   ${Narration.elapsed(c.date(), today)}",
                         leading = Icons.Rounded.PlayArrow,
                         onClick = { onPlay(c.id) },
                     )
@@ -407,7 +407,7 @@ fun LetterScreen(app: TimeCapsuleApp, back: () -> Unit) {
         Column(Modifier.widthIn(max = 960.dp).fillMaxWidth().align(Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 8.dp)) {
                 Icon(Icons.Rounded.Lock, null, tint = Tc.TextMute, modifier = Modifier.size(28.dp))
-                Text("  ${to?.let { "${it.name}님에게 · " } ?: ""}${openOn.format(dayFmt)}에 열려요", style = Type.BodyS, color = Tc.TextSub)
+                Text("  ${to?.let { "${it.name}님에게   " } ?: ""}${openOn.format(dayFmt)}에 열려요", style = Type.BodyS, color = Tc.TextSub)
             }
             Btn("녹음하고 묻기", Modifier.fillMaxWidth(), icon = Icons.Rounded.Mic, style = BtnStyle.Filled, height = Tc.TouchLarge) {
                 val f = to
@@ -450,7 +450,7 @@ fun AlbumScreen(drive: DriveController, back: () -> Unit) {
                         Column(Modifier.weight(1f)) {
                             Text(groupTitle(trip, list), style = Type.BodyStrong, color = Tc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(
-                                "${Narration.elapsed(list.first().date(), today)} · ${list.size}개" + (trip?.let { tripSummary(it) } ?: ""),
+                                "${Narration.elapsed(list.first().date(), today)}   ${list.size}개" + (trip?.let { tripSummary(it) } ?: ""),
                                 style = Type.LabelM, color = Tc.TextMute, maxLines = 1,
                             )
                         }
@@ -513,11 +513,11 @@ private fun ColumnScope.EmptyState(back: () -> Unit) {
 private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onShare: (() -> Unit)? = null, onDelete: () -> Unit) {
     val locked = lockedUntil != null
     val time = Instant.ofEpochMilli(c.createdAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("a h:mm"))
-    val tags = app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).drop(1).joinToString(" · ")
+    val tags = app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).drop(1).joinToString(Sep)
     ListRow(
-        title = "${c.placeName ?: "장소 기록 없음"} · ${c.durationSec}초",
+        title = "${c.placeName ?: "장소 기록 없음"}   ${c.durationSec}초",
         sub = if (locked) "${LocalDate.ofEpochDay(lockedUntil!!).format(dayFmt)}에 열리는 편지"
-        else listOf(whoOf(c), time, tags, if (c.locationUncertain) "위치 불확실" else "").filter { it.isNotEmpty() }.joinToString(" · "),
+        else listOf(whoOf(c), time, tags, if (c.locationUncertain) "위치 불확실" else "").filter { it.isNotEmpty() }.joinToString(Sep),
         leading = if (locked) Icons.Rounded.Lock else Icons.Rounded.PlayArrow,
         leadingTint = if (locked) Tc.TextMute else Tc.Text,
         enabled = !locked,
@@ -545,8 +545,8 @@ private fun groupTitle(trip: Trip?, list: List<Capsule>): String {
 }
 
 private fun tripSummary(t: Trip): String {
-    val km = if (t.startOdometer != null && t.endOdometer != null) " · ${"%.0f".format(t.endOdometer - t.startOdometer)}km" else ""
-    val who = t.occupants?.takeIf { it > 1 }?.let { " · ${it}명" } ?: ""
+    val km = if (t.startOdometer != null && t.endOdometer != null) "   ${"%.0f".format(t.endOdometer - t.startOdometer)}km" else ""
+    val who = t.occupants?.takeIf { it > 1 }?.let { "   ${it}명" } ?: ""
     return km + who
 }
 
@@ -587,14 +587,14 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                 RowDivider()
                 ListRow("녹음 알림음", "함께 탄 사람도 알 수 있게 끌 수 없어요") { ValueText("켜짐") }
                 RowDivider()
-                ListRow("날씨", "묻을 때 그날 날씨를 함께 남겨요 · 날씨 서버에는 대략 위치(약 10km)만 보내요") { ValueText("자동") }
+                ListRow("날씨", "묻을 때 그날 날씨를 함께 남겨요. 날씨 서버에는 대략 위치(약 10km)만 보내요") { ValueText("자동") }
                 RowDivider()
-                ListRow("저장 위치", "친구에게 공개한 캡슐만 서버에 올라가요 · 앨범에서 하나씩 바꿀 수 있어요") { ValueText("이 차 + 서버") }
+                ListRow("저장 위치", "친구에게 공개한 캡슐만 서버에 올라가요. 앨범에서 하나씩 바꿀 수 있어요") { ValueText("이 차 + 서버") }
             }
             Spacer(Modifier.height(8.dp))
             Section("알림")
             Panel {
-                ListRow("도착 제안", "처음 온 곳에 도착하면 물어봐요 · 하루 2번까지") { TcSwitch(arrival, app.settings::setArrivalPrompt) }
+                ListRow("도착 제안", "처음 온 곳에 도착하면 물어봐요. 하루 2번까지") { TcSwitch(arrival, app.settings::setArrivalPrompt) }
                 RowDivider()
                 val ctx = androidx.compose.ui.platform.LocalContext.current
                 var overlay by remember { mutableStateOf(android.provider.Settings.canDrawOverlays(ctx)) }
@@ -738,19 +738,19 @@ private fun FriendDev(app: TimeCapsuleApp, close: () -> Unit) {
     val known by app.social.knownAccounts.collectAsState()
     val fake = app.social as? FakeBackend
     val context = androidx.compose.ui.platform.LocalContext.current
-    Section("친구 · ${app.social.label}")
+    Section("친구   ${app.social.label}")
     if (app.hasFirebaseKeys) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).padding(start = Tc.Inset)) {
                 Text("가짜 서버 쓰기", style = Type.BodyStrong, color = Tc.Text)
-                Text("인터넷이 없는 곳에서 시연할 때 · 앱을 다시 켜면 적용돼요", style = Type.LabelM, color = Tc.TextMute)
+                Text("인터넷이 없는 곳에서 시연할 때   앱을 다시 켜면 적용돼요", style = Type.LabelM, color = Tc.TextMute)
             }
             var on by remember { mutableStateOf(app.fakeServer) }
             TcSwitch(on) { on = it; app.fakeServer = it }
         }
     }
     Text(
-        me?.let { "지금 이 차: ${it.name} (${spaced(it.code)}) · 친구 ${friends.size}명" } ?: "아직 이름을 정하지 않았어요",
+        me?.let { "지금 이 차: ${it.name} (${spaced(it.code)})   친구 ${friends.size}명" } ?: "아직 이름을 정하지 않았어요",
         style = Type.LabelM, color = Tc.TextMute, modifier = Modifier.padding(start = Tc.Inset),
     )
     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

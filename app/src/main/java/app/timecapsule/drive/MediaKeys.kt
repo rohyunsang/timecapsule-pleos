@@ -79,7 +79,7 @@ class MediaKeys(context: Context, private val scope: CoroutineScope, private val
         }
         val session = open()
         val c = (what as? AlertUi)?.capsule ?: (what as? PlayingUi)?.capsule
-        val title = (c?.ownerName?.let { "${it}님의 캡슐" } ?: "내 캡슐") + " · " + (c?.placeName ?: "이 길")
+        val title = (c?.ownerName?.let { "${it}님의 캡슐" } ?: "내 캡슐") + "   " + (c?.placeName ?: "이 길")
         session.setMetadata(
             MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, title)

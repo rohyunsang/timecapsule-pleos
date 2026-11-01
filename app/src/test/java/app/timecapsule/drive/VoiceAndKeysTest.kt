@@ -21,3 +21,11 @@ class VoiceAndKeysTest {
         assertEquals("""{"wiperOn":true}""", shareableState("""{"wiperOn":true,"odometerKm":1.0}"""))
     }
 }
+
+class OpenMeteoParseTest {
+    @Test fun readsCodeAndTemperature() {
+        val body = """{"latitude":37.8,"current_units":{"temperature_2m":"°C"},"current":{"time":"2026-11-02T11:30","interval":900,"weather_code":61,"temperature_2m":-3.4}}"""
+        val src = app.timecapsule.weather.SkySource(kotlinx.coroutines.GlobalScope, kotlinx.coroutines.flow.MutableStateFlow(null))
+        assertEquals(61 to -3.4f, src.parse(body))
+    }
+}

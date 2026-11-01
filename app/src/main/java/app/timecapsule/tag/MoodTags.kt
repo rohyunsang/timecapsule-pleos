@@ -15,37 +15,43 @@ object MoodTagEngine {
 
     fun tagsFor(s: VehicleSnapshot): List<MoodTag> {
         val tags = mutableListOf<MoodTag>()
-        if (s.headlightOn == true) tags += MoodTag("밤길", TagCategory.TIME)
-        if (s.wiperOn == true) tags += MoodTag("비 오던", TagCategory.WEATHER)
+        if (s.headlightOn == true) tags += MoodTag("밤", TagCategory.TIME)
+        if (s.wiperOn == true) tags += MoodTag("비", TagCategory.WEATHER)
         s.outsideTempC?.let {
             when {
                 it <= COLD_AT_OR_BELOW_C -> tags += MoodTag("추운 날", TagCategory.WEATHER)
                 it >= HOT_AT_OR_ABOVE_C -> tags += MoodTag("더운 날", TagCategory.WEATHER)
             }
         }
-        if (s.anyWindowOpen == true) tags += MoodTag("창문 열고", TagCategory.WEATHER)
+        if (s.anyWindowOpen == true) tags += MoodTag("창문 열림", TagCategory.WEATHER)
         when (s.occupiedSeats) {
             null, 0, 1 -> Unit
-            2 -> tags += MoodTag("둘이서", TagCategory.PEOPLE)
-            3 -> tags += MoodTag("셋이서", TagCategory.PEOPLE)
-            else -> tags += MoodTag("넷이서", TagCategory.PEOPLE)
+            else -> tags += MoodTag("${s.occupiedSeats}명 탑승", TagCategory.PEOPLE)
         }
-        if (s.gearInPark == true && s.anyDoorOpen == true) tags += MoodTag("도착한 순간", TagCategory.PLACE)
-        if (s.onHighway == true) tags += MoodTag("고속도로를 달리던", TagCategory.PLACE)
+        if (s.gearInPark == true && s.anyDoorOpen == true) tags += MoodTag("도착", TagCategory.PLACE)
+        if (s.onHighway == true) tags += MoodTag("고속도로", TagCategory.PLACE)
         s.placeName?.takeIf { it.isNotBlank() }?.let { tags += MoodTag(it, TagCategory.PLACE) }
         return tags.sortedBy { it.category.ordinal }.take(MAX_TAGS)
     }
 
     private val FIXED = mapOf(
-        "밤길" to TagCategory.TIME,
-        "비 오던" to TagCategory.WEATHER, "추운 날" to TagCategory.WEATHER,
-        "더운 날" to TagCategory.WEATHER, "창문 열고" to TagCategory.WEATHER,
-        "둘이서" to TagCategory.PEOPLE, "셋이서" to TagCategory.PEOPLE, "넷이서" to TagCategory.PEOPLE,
+        "밤" to TagCategory.TIME,
+        "비" to TagCategory.WEATHER, "추운 날" to TagCategory.WEATHER,
+        "더운 날" to TagCategory.WEATHER, "창문 열림" to TagCategory.WEATHER,
+        "도착" to TagCategory.PLACE, "고속도로" to TagCategory.PLACE,
     )
+
+    /** Words used before 2026-11-02, still stored in older capsules and friends' cars. */
+    private val OLD = mapOf(
+        "밤길" to "밤", "비 오던" to "비", "창문 열고" to "창문 열림", "둘이서" to "2명 탑승",
+        "셋이서" to "3명 탑승", "넷이서" to "4명 탑승", "도착한 순간" to "도착", "고속도로를 달리던" to "고속도로",
+    )
+
+    private fun category(label: String) = FIXED[label] ?: if (label.endsWith("명 탑승")) TagCategory.PEOPLE else TagCategory.PLACE
 
     /** Rebuilds tags stored as "a|b|c" in Capsule.tags; anything not in the rule table is a place. */
     fun fromStored(stored: String): List<MoodTag> =
-        stored.split('|').filter { it.isNotBlank() }.map { MoodTag(it, FIXED[it] ?: TagCategory.PLACE) }
+        stored.split('|').filter { it.isNotBlank() }.map { OLD[it] ?: it }.map { MoodTag(it, category(it)) }
 
     fun toStored(tags: List<MoodTag>): String = tags.joinToString("|") { it.label.replace("|", " ") }
 }

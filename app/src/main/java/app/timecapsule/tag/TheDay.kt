@@ -9,8 +9,8 @@ import java.time.ZoneId
  * What the day was like when the capsule was buried, for whoever listens to it later.
  * Built from the raw values saved with the capsule (Capsule.rawVehicleState), so a friend's
  * car shows the same thing. Facts only, no mood words:
- *   screen: "금요일 밤 · 흐림 · 바깥 12도 · 셋이서"
- *   spoken: "그날은 흐렸고, 셋이 타고 있었어요."
+ *   screen: "금요일 밤   흐림   바깥 12도   3명 탑승"
+ *   spoken: "그날은 흐렸고, 3명이 타고 있었어요."
  */
 object TheDay {
 
@@ -34,7 +34,7 @@ object TheDay {
             sky(raw)?.let(::label),
             v["outsideTempC"]?.toFloatOrNull()?.let { "바깥 ${Math.round(it)}도" },
             v["occupiedSeats"]?.toIntOrNull()?.let(::people),
-            "창문 열고".takeIf { v["anyWindowOpen"] == "true" },
+            "창문 열림".takeIf { v["anyWindowOpen"] == "true" },
             "고속도로".takeIf { v["onHighway"] == "true" },
         )
     }
@@ -87,16 +87,10 @@ object TheDay {
     private fun people(n: Int) = when {
         n <= 0 -> null
         n == 1 -> "혼자"
-        n <= 4 -> count(n) + "서" // 둘이서
-        else -> "${n}명"
+        else -> "${n}명 탑승"
     }
 
-    private fun count(n: Int) = when (n) {
-        2 -> "둘이"
-        3 -> "셋이"
-        4 -> "넷이"
-        else -> "${n}명이"
-    }
+    private fun count(n: Int) = "${n}명이"
 
     /** Flat {"key":value} written by VehicleSnapshot.toJson; no JSON library so it runs in unit tests. */
     private fun parse(raw: String): Map<String, String> =

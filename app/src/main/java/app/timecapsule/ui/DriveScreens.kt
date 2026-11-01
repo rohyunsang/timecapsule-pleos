@@ -45,6 +45,16 @@ import app.timecapsule.tag.MoodTag
 import app.timecapsule.tag.MoodTagEngine
 import app.timecapsule.vehicle.SafetySignal
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -62,47 +72,77 @@ private fun rememberNow(key: Any?): Long {
 }
 
 /**
- * Screen 04: recording, laid out like a voice recorder / call screen: status on top, a big
- * timer in the middle, the two ways out in a fixed bar at the bottom. No animation.
+ * Screen 04: recording. A mic in a circle that swells with the voice, so it is plain that the
+ * car is listening; the ring around it runs down over the 30 seconds. Today's weather sits
+ * faintly behind, because it is buried with the voice. The two ways out stay fixed at the bottom.
  */
 @Composable
-fun RecordingScreen(since: Long?, place: String?, tags: List<MoodTag>, onStop: () -> Unit, onCancel: () -> Unit) {
+fun RecordingScreen(
+    since: Long?, place: String?, tags: List<MoodTag>, level: () -> Float,
+    sky: app.timecapsule.weather.Sky?, night: Boolean, animate: Boolean,
+    onStop: () -> Unit, onCancel: () -> Unit,
+) {
     val now = rememberNow(since)
     val elapsed = since?.let { ((now - it) / 1000).toInt() } ?: 0
     val shown = elapsed.coerceAtMost(Rules.MAX_RECORD_SEC)
     val tooShort = elapsed < Rules.MIN_RECORD_SEC
+    // Mic level polled ~16 times a second and eased, so the circle breathes instead of jumping.
+    var target by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) { while (true) { target = level(); delay(60) } }
+    val voice by animateFloatAsState(target, tween(120), label = "voice")
+    val left by animateFloatAsState(1f - shown / Rules.MAX_RECORD_SEC.toFloat(), tween(900, easing = LinearEasing), label = "left")
+    val rec = Tc.Rec; val track = Tc.Basic; val ink = Tc.Text; val paper = Tc.Bg
 
-    Column(Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter)) {
-        Row(Modifier.fillMaxWidth().padding(start = Tc.Inset, end = Tc.Inset, top = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-            Dot(Tc.Rec, 16.dp)
-            Text("  녹음 중", style = Type.TitleS, color = Tc.Text)
-            Spacer(Modifier.weight(1f))
-            Text("최대 ${Rules.MAX_RECORD_SEC}초", style = Type.LabelM, color = Tc.TextMute)
-        }
-        Column(
-            Modifier.weight(1f).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
-        ) {
-            Text("0:%02d".format(shown), style = Type.Display.copy(fontFeatureSettings = "tnum"), color = Tc.Text)
-            LinearProgressIndicator(
-                progress = { shown / Rules.MAX_RECORD_SEC.toFloat() },
-                modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                color = Tc.Rec, trackColor = Tc.Basic, drawStopIndicator = {},
-            )
+    Box(Modifier.fillMaxSize().background(Tc.Bg)) {
+        WeatherBackdrop(sky, night, animate, Modifier.fillMaxSize())
+        Column(Modifier.fillMaxSize().padding(Tc.Gutter)) {
+            Row(Modifier.fillMaxWidth().padding(start = Tc.Inset, end = Tc.Inset, top = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Dot(Tc.Rec, 16.dp)
+                Text("  녹음 중", style = Type.TitleS, color = Tc.Text)
+                Spacer(Modifier.weight(1f))
+                Text("최대 ${Rules.MAX_RECORD_SEC}초", style = Type.LabelM, color = Tc.TextMute)
+            }
+            Column(
+                Modifier.weight(1f).fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
+            ) {
+                Box(Modifier.size(300.dp), contentAlignment = Alignment.Center) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        val c = center
+                        val core = 70.dp.toPx()
+                        // Voice: a soft halo that grows with loudness.
+                        val halo = core + 60.dp.toPx() * voice
+                        drawCircle(rec.copy(alpha = 0.10f + 0.14f * voice), halo, c)
+                        drawCircle(rec.copy(alpha = 0.08f), core + 18.dp.toPx() + 24.dp.toPx() * voice, c)
+                        // Time left: a thin ring that runs down clockwise from the top.
+                        val stroke = 6.dp.toPx()
+                        val r = size.minDimension / 2 - stroke
+                        drawCircle(track, r, c, style = Stroke(stroke))
+                        drawArc(
+                            ink, -90f, -360f * left, false,
+                            topLeft = Offset(c.x - r, c.y - r), size = Size(r * 2, r * 2),
+                            style = Stroke(stroke, cap = StrokeCap.Round),
+                        )
+                        drawCircle(rec, core, c)
+                    }
+                    Icon(Icons.Rounded.Mic, null, tint = paper, modifier = Modifier.size(64.dp))
+                }
+                Text("0:%02d".format(shown), style = Type.TitleS.copy(fontFeatureSettings = "tnum"), color = Tc.Text)
+                Text(
+                    (listOf(place ?: "위치 확인 중") + tags.map { it.label }).joinToString(Sep),
+                    style = Type.BodyS, color = Tc.TextMute, textAlign = TextAlign.Center, maxLines = 2,
+                )
+            }
             Text(
-                (listOf(place ?: "위치 확인 중") + tags.map { it.label }).joinToString(" · "),
-                style = Type.BodyS, color = Tc.TextMute, textAlign = TextAlign.Center, maxLines = 2,
+                if (tooShort) "3초 이상 말해 주세요" else "다 말했으면 묻기를 누르세요",
+                style = Type.BodyM, color = Tc.TextSub, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
             )
-        }
-        Text(
-            if (tooShort) "3초 이상 말해 주세요" else "다 말했으면 묻기를 누르세요",
-            style = Type.BodyM, color = Tc.TextSub, textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Btn("지우기", Modifier.weight(1f), icon = Icons.Rounded.Close, height = Tc.TouchLarge, onClick = onCancel)
-            Btn("묻기", Modifier.weight(1f), icon = Icons.Rounded.Check, style = BtnStyle.Filled, enabled = !tooShort, height = Tc.TouchLarge, onClick = onStop)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Btn("지우기", Modifier.weight(1f), icon = Icons.Rounded.Close, height = Tc.TouchLarge, onClick = onCancel)
+                Btn("묻기", Modifier.weight(1f), icon = Icons.Rounded.Check, style = BtnStyle.Filled, enabled = !tooShort, height = Tc.TouchLarge, onClick = onStop)
+            }
         }
     }
 }
@@ -119,7 +159,7 @@ fun AlertCard(alert: AlertUi, onListen: () -> Unit, onLater: () -> Unit, hearing
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         SystemNotice(
             title = alert.line,
-            description = alertDescription(alert) + if (hearing) " · 말로 해도 돼요: 들려줘 / 다음에" else "",
+            description = alertDescription(alert) + if (hearing) Sep + "'들려줘' 또는 '다음에'라고 말해도 돼요" else "",
             modifier = Modifier.padding(16.dp).widthIn(max = 760.dp),
             cta = "들려줘" to onListen, ctaIcon = Icons.Rounded.PlayArrow,
             sub = "다음에" to onLater,
@@ -142,7 +182,7 @@ fun alertDescription(alert: AlertUi): String {
     val about = if (c.ownerName != null) listOfNotNull(
         app.timecapsule.tag.Narration.elapsed(c.date(), java.time.LocalDate.now()), c.placeName,
     ) else tags
-    return (listOf(where) + about).joinToString(" · ")
+    return (listOf(where) + about).joinToString(Sep)
 }
 
 /**
@@ -183,7 +223,7 @@ fun PlayingScreen(
                 .format(DateTimeFormatter.ofPattern("yyyy년 M월 d일 a h:mm"))
             Column(Modifier.fillMaxWidth().padding(start = Tc.Inset, top = 16.dp)) {
                 Text(c.placeName ?: "장소 기록 없음", style = Type.TitleS, color = Tc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(c.ownerName?.let { "${it}님이 남김 · $date" } ?: date, style = Type.LabelM, color = Tc.TextMute)
+                Text(c.ownerName?.let { "${it}님이 남김$Sep$date" } ?: date, style = Type.LabelM, color = Tc.TextMute)
             }
             Column(
                 Modifier.weight(1f).fillMaxWidth().widthIn(max = 1200.dp).padding(horizontal = Tc.Inset),
@@ -195,7 +235,7 @@ fun PlayingScreen(
                     color = Tc.Text, maxLines = 5, overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "그날  " + app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).joinToString(" · "),
+                    "그날  " + app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).joinToString(Sep),
                     style = Type.BodyM, color = Tc.TextSub,
                 )
                 VoiceProgress(pos, c.ownerName)
@@ -235,7 +275,7 @@ private fun VoiceProgress(pos: Pair<Int, Int>?, owner: String?) {
         )
         Text(
             if (pos == null) "안내 뒤 ${owner?.let { "${it}님의 " } ?: ""}목소리가 나와요"
-            else "${owner?.let { "${it}님의 " } ?: ""}목소리 · ${t(pos.first)} / ${t(pos.second)}",
+            else "${owner?.let { "${it}님의 " } ?: ""}목소리$Sep${t(pos.first)} / ${t(pos.second)}",
             style = Type.LabelM, color = Tc.TextMute,
         )
     }

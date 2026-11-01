@@ -11,7 +11,7 @@ class MoodTagEngineTest {
 
     @Test fun rainyNightWithThree() {
         val s = VehicleSnapshot(wiperOn = true, headlightOn = true, occupiedSeats = 3, placeName = "7번 국도")
-        assertEquals(listOf("밤길", "비 오던", "셋이서", "7번 국도"), labels(s))
+        assertEquals(listOf("밤", "비", "3명 탑승", "7번 국도"), labels(s))
     }
 
     @Test fun unreadDomainsProduceNoTags() {
@@ -20,8 +20,8 @@ class MoodTagEngineTest {
 
     @Test fun seatCounts() {
         assertTrue(labels(VehicleSnapshot(occupiedSeats = 1)).isEmpty())
-        assertEquals(listOf("둘이서"), labels(VehicleSnapshot(occupiedSeats = 2)))
-        assertEquals(listOf("넷이서"), labels(VehicleSnapshot(occupiedSeats = 5)))
+        assertEquals(listOf("2명 탑승"), labels(VehicleSnapshot(occupiedSeats = 2)))
+        assertEquals(listOf("5명 탑승"), labels(VehicleSnapshot(occupiedSeats = 5)))
     }
 
     @Test fun temperatureThresholds() {
@@ -32,7 +32,7 @@ class MoodTagEngineTest {
 
     @Test fun arrivalNeedsParkAndOpenDoor() {
         assertTrue(labels(VehicleSnapshot(gearInPark = true, anyDoorOpen = false)).isEmpty())
-        assertEquals(listOf("도착한 순간"), labels(VehicleSnapshot(gearInPark = true, anyDoorOpen = true)))
+        assertEquals(listOf("도착"), labels(VehicleSnapshot(gearInPark = true, anyDoorOpen = true)))
     }
 
     @Test fun capsAtFiveInNarrationOrder() {
@@ -43,7 +43,7 @@ class MoodTagEngineTest {
         val tags = MoodTagEngine.tagsFor(s)
         assertEquals(5, tags.size)
         assertEquals(tags.sortedBy { it.category.ordinal }, tags)
-        assertEquals("밤길", tags.first().label)
+        assertEquals("밤", tags.first().label)
     }
 
     @Test fun storedTagsRoundTripWithCategories() {

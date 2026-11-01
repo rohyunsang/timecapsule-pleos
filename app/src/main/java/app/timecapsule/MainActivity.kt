@@ -1,5 +1,6 @@
 package app.timecapsule
 
+import app.timecapsule.weather.Sky
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -140,6 +141,10 @@ private fun Root(app: TimeCapsuleApp) {
                     recordingSince,
                     car.placeName,
                     MoodTagEngine.tagsFor(car).filter { it.label != car.placeName },
+                    level = drive::micLevel,
+                    sky = car.sky?.let { s -> Sky.entries.firstOrNull { it.name == s } },
+                    night = java.time.LocalTime.now().hour.let { it >= 20 || it < 5 },
+                    animate = !restricted,
                     onStop = drive::stopRecording,
                     onCancel = drive::cancelRecording,
                 )

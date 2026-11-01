@@ -28,9 +28,9 @@ object Narration {
 
     /** Joins a weather adjective with a time noun: "비 오던 밤", "추운 날", "비 오던 날". */
     fun weatherAndTime(tags: List<MoodTag>): String? {
-        val night = tags.any { it.label == "밤길" }
+        val night = tags.any { it.label == "밤" }
         val adjective = when {
-            tags.any { it.label == "비 오던" } -> "비 오던"
+            tags.any { it.label == "비" } -> "비 오던"
             tags.any { it.label == "추운 날" } -> "추운"
             tags.any { it.label == "더운 날" } -> "더운"
             else -> null

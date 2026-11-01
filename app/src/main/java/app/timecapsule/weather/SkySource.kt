@@ -43,6 +43,9 @@ enum class Sky { CLEAR, PARTLY, CLOUDY, FOG, RAIN, SNOW, STORM;
 class SkySource(private val scope: CoroutineScope, private val position: StateFlow<NaviPosition?>) {
     private val _sky = MutableStateFlow<Sky?>(null)
     val sky: StateFlow<Sky?> = _sky.asStateFlow()
+    private val _tempC = MutableStateFlow<Float?>(null)
+    /** Outside air temperature there, from the same answer (the car SDK has no outside sensor). */
+    val tempC: StateFlow<Float?> = _tempC.asStateFlow()
 
     private var lastAt = 0L
     private var lastPoint: GeoPoint? = null
@@ -63,19 +66,27 @@ class SkySource(private val scope: CoroutineScope, private val position: StateFl
     private suspend fun fetch(p: GeoPoint) {
         val lat = "%.1f".format(java.util.Locale.US, p.lat)
         val lng = "%.1f".format(java.util.Locale.US, p.lng)
-        val code = withContext(Dispatchers.IO) {
+        val body = withContext(Dispatchers.IO) {
             runCatching {
-                val c = URL("https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lng&current=weather_code")
+                val c = URL("https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lng&current=weather_code,temperature_2m")
                     .openConnection() as HttpURLConnection
                 c.connectTimeout = 5000; c.readTimeout = 5000
-                c.inputStream.bufferedReader().use { it.readText() }.let { body ->
-                    Regex("\"current\"\\s*:\\s*\\{[^}]*\"weather_code\"\\s*:\\s*(\\d+)").find(body)?.groupValues?.get(1)?.toInt()
-                }
+                c.inputStream.bufferedReader().use { it.readText() }
             }.onFailure { Log.w(TAG, "weather failed: ${it.message}") }.getOrNull()
         } ?: return
+        val (code, temp) = parse(body) ?: return
         _sky.value = Sky.fromWmo(code)
+        _tempC.value = temp
         lastAt = SystemClock.elapsedRealtime(); lastPoint = p
-        Log.i(TAG, "sky ${_sky.value} (code $code) near $lat,$lng")
+        Log.i(TAG, "sky ${_sky.value} (code $code), $temp°C near $lat,$lng")
+    }
+
+    /** The "current" block of an Open-Meteo answer: weather code and outside temperature. */
+    internal fun parse(body: String): Pair<Int, Float?>? {
+        val current = Regex("\"current\"\\s*:\\s*\\{([^}]*)\\}").find(body)?.groupValues?.get(1) ?: return null
+        fun num(key: String) = Regex("\"$key\"\\s*:\\s*(-?[\\d.]+)").find(current)?.groupValues?.get(1)
+        val code = num("weather_code")?.toIntOrNull() ?: return null
+        return code to num("temperature_2m")?.toFloatOrNull()
     }
 
     private companion object {
