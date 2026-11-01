@@ -50,7 +50,7 @@ fun WeatherBackdrop(sky: Sky?, night: Boolean, animate: Boolean, modifier: Modif
                 drawContent()
                 // Fade out toward the bottom so the buttons stay on the plain background.
                 drawRect(
-                    Brush.verticalGradient(0f to Color.Black, 0.45f to Color.Black, 0.85f to Color.Transparent),
+                    Brush.verticalGradient(0f to Color.Black, 0.55f to Color.Black, 0.95f to Color.Transparent),
                     blendMode = BlendMode.DstIn,
                 )
             },
@@ -61,26 +61,27 @@ private class Scene(val sky: Sky?, val night: Boolean) {
     private val rnd = Random(sky?.ordinal ?: 99)
     private val wet = sky == Sky.RAIN || sky == Sky.STORM
     private val beads = List(if (sky == Sky.STORM) 120 else if (wet) 90 else 0) { Bead(rnd) }
-    private val runners = List(if (sky == Sky.STORM) 12 else if (wet) 7 else 0) { Runner(rnd) }
+    private val runners = List(if (sky == Sky.STORM) 24 else if (wet) 16 else 0) { Runner(rnd) }
     private val mist = List(if (sky == Sky.STORM) 260 else if (wet) 200 else 0) { Mist(rnd) }
-    private val streaks = List(if (sky == Sky.STORM) 110 else if (wet) 60 else 0) { Streak(rnd) }
-    private val flakes = List(if (sky == Sky.SNOW) 170 else 0) { Flake(rnd) }
+    private val streaks = List(if (sky == Sky.STORM) 170 else if (wet) 110 else 0) { Streak(rnd) }
+    private val flakes = List(if (sky == Sky.SNOW) 230 else 0) { Flake(rnd) }
     private val clouds = List(
-        when (sky) { Sky.CLOUDY -> 6; Sky.STORM -> 3; Sky.PARTLY -> 3; else -> 0 },
+        when (sky) { Sky.CLOUDY -> 9; Sky.STORM -> 5; Sky.PARTLY -> 4; else -> 0 },
     ) { Cloud(rnd, it) }
-    private val haze = List(if (sky == Sky.FOG) 5 else 0) { Haze(rnd, it) }
-    private val stars = List(if (night && (sky == null || sky == Sky.CLEAR || sky == Sky.PARTLY)) 36 else 0) { Star(rnd) }
+    private val haze = List(if (sky == Sky.FOG) 7 else 0) { Haze(rnd, it) }
+    private val stars = List(if (night && (sky == null || sky == Sky.CLEAR || sky == Sky.PARTLY)) 80 else 0) { Star(rnd) }
 
     fun draw(d: DrawScope, t: Float, ink: Color, paper: Color) = with(d) {
         pxPerDp = density
         val w = size.width; val h = size.height
         // Tint of the sky: darker at night and in storms, cooler when wet or snowy.
         val tint = when {
-            sky == Sky.STORM -> ink.copy(alpha = 0.10f)
-            night -> ink.copy(alpha = 0.08f)
-            wet -> Color(0xFF7D8FA3).copy(alpha = 0.12f)
-            sky == Sky.SNOW -> Color(0xFF8A9BAE).copy(alpha = 0.34f)
-            sky == Sky.CLOUDY || sky == Sky.FOG -> ink.copy(alpha = 0.04f)
+            sky == Sky.STORM -> ink.copy(alpha = 0.16f)
+            night -> Color(0xFF1F2E4A).copy(alpha = 0.42f)
+            wet -> Color(0xFF7D8FA3).copy(alpha = 0.20f)
+            sky == Sky.SNOW -> Color(0xFF8A9BAE).copy(alpha = 0.42f)
+            sky == Sky.CLOUDY || sky == Sky.FOG -> ink.copy(alpha = 0.09f)
+            sky == Sky.CLEAR || sky == Sky.PARTLY -> Color(0xFFFFE2B0).copy(alpha = 0.22f)
             else -> Color.Transparent
         }
         if (tint.alpha > 0f) drawRect(Brush.verticalGradient(listOf(tint, tint.copy(alpha = tint.alpha * 0.3f))))
@@ -90,13 +91,13 @@ private class Scene(val sky: Sky?, val night: Boolean) {
             val c = Offset(w * 0.86f, h * 0.06f)
             val glow = if (night) Color(0xFFC9D4E6) else Color(0xFFFFE6BC)
             val breath = 1f + 0.04f * sin(t * 0.4f)
-            val rad = w * 0.30f * breath
-            drawCircle(Brush.radialGradient(listOf(glow.copy(alpha = if (night) 0.40f else 0.32f), Color.Transparent), c, rad), rad, c)
+            val rad = w * 0.46f * breath
+            drawCircle(Brush.radialGradient(listOf(glow.copy(alpha = if (night) 0.65f else 0.85f), Color.Transparent), c, rad), rad, c)
             // Two faint light spots that slide like light through a windshield.
             for (i in 0..1) {
                 val k = t * (0.05f + i * 0.03f) + i * 2f
                 val p = Offset(w * (0.55f + 0.25f * sin(k)), h * (0.22f + 0.10f * cos(k * 1.3f)))
-                drawCircle(Brush.radialGradient(listOf(glow.copy(alpha = 0.12f), Color.Transparent), p, w * 0.10f), w * 0.10f, p)
+                drawCircle(Brush.radialGradient(listOf(glow.copy(alpha = 0.32f), Color.Transparent), p, w * 0.12f), w * 0.12f, p)
             }
         }
         stars.forEach { it.draw(this, t, ink) }
@@ -138,9 +139,9 @@ private class Bead(r: Random) {
 /** A heavier drop that slides down in small jerks and leaves a thin wet trail. */
 private class Runner(r: Random) {
     val x0 = r.nextFloat()
-    val speed = 22f + r.nextFloat() * 40f
+    val speed = 40f + r.nextFloat() * 60f
     val start = r.nextFloat() * 50f
-    val radius = 5f + r.nextFloat() * 3f
+    val radius = 6f + r.nextFloat() * 4f
     val jerk = 1.5f + r.nextFloat() * 2f
 
     fun draw(d: DrawScope, t: Float, ink: Color, paper: Color) = with(d) {
@@ -151,11 +152,11 @@ private class Runner(r: Random) {
         val span = h * 1.3f
         val y = travel % span - h * 0.15f
         val x = x0 * size.width + 3f.dpPx() * sin(y / 40f.dpPx())
-        val trail = (70f + speed * 1.5f).dpPx().coerceAtMost(y + h * 0.15f)
+        val trail = (110f + speed * 2.2f).dpPx().coerceAtMost(y + h * 0.15f)
         // The wet path fades out upwards; a couple of tiny drops are left behind on it.
         drawLine(
-            Brush.verticalGradient(listOf(Color.Transparent, ink.copy(alpha = 0.07f)), y - trail, y),
-            Offset(x, y - trail), Offset(x, y), (radius * 0.5f).dpPx(), StrokeCap.Round,
+            Brush.verticalGradient(listOf(Color.Transparent, ink.copy(alpha = 0.16f)), y - trail, y),
+            Offset(x, y - trail), Offset(x, y), (radius * 0.6f).dpPx(), StrokeCap.Round,
         )
         var k = 30f.dpPx()
         while (k < trail * 0.7f) {
@@ -179,7 +180,7 @@ private fun DrawScope.drawDrop(c: Offset, r: Float, a: Float, ink: Color, paper:
     // Lens body: clear centre, darker towards the rim; centre pushed down so the top rim is heavier.
     drawOval(
         Brush.radialGradient(
-            0f to Color.Transparent, 0.62f to ink.copy(alpha = 0.035f * a), 1f to ink.copy(alpha = 0.20f * a),
+            0f to Color.Transparent, 0.62f to ink.copy(alpha = 0.035f * a), 1f to ink.copy(alpha = 0.30f * a),
             center = Offset(c.x, c.y + r * 0.22f), radius = r * 1.12f,
         ),
         tl, Size(w, h),
@@ -208,13 +209,13 @@ private class Streak(r: Random) {
     val x0 = r.nextFloat()
     val y0 = r.nextFloat()
     val speed = 520f + r.nextFloat() * 300f
-    val len = 14f + r.nextFloat() * 16f
+    val len = 22f + r.nextFloat() * 26f
 
     fun draw(d: DrawScope, t: Float, ink: Color) = with(d) {
         val h = size.height
         val y = frac(y0 + t * speed.dpPx() / h) * (h + len.dpPx()) - len.dpPx()
         val x = frac(x0 + y / size.width * 0.12f) * size.width
-        drawLine(ink.copy(alpha = 0.07f), Offset(x, y), Offset(x + len.dpPx() * 0.12f, y + len.dpPx()), 1f.dpPx(), StrokeCap.Round)
+        drawLine(ink.copy(alpha = 0.14f), Offset(x, y), Offset(x + len.dpPx() * 0.12f, y + len.dpPx()), 1.3f.dpPx(), StrokeCap.Round)
     }
 }
 
@@ -223,7 +224,7 @@ private class Flake(r: Random) {
     val depth = r.nextInt(3)
     val x0 = r.nextFloat()
     val y0 = r.nextFloat()
-    val radius = when (depth) { 0 -> 3.6f + r.nextFloat() * 2.4f; 1 -> 2.3f + r.nextFloat() * 1.2f; else -> 1.3f + r.nextFloat() * 0.7f }
+    val radius = when (depth) { 0 -> 5.5f + r.nextFloat() * 3f; 1 -> 3.4f + r.nextFloat() * 1.6f; else -> 2f + r.nextFloat() * 0.9f }
     val speed = when (depth) { 0 -> 36f; 1 -> 22f; else -> 12f } * (0.8f + r.nextFloat() * 0.4f)
     val sway = when (depth) { 0 -> 14f; 1 -> 9f; else -> 5f }
     val freq = 0.4f + r.nextFloat() * 0.5f
@@ -235,7 +236,7 @@ private class Flake(r: Random) {
         val x = frac(x0) * size.width + sway.dpPx() * sin(t * freq + ph)
         val rr = radius.dpPx()
         val a = if (depth == 2) 0.6f else 1f
-        drawCircle(Brush.radialGradient(listOf(ink.copy(alpha = 0.16f * a), Color.Transparent), Offset(x, y + rr * 0.3f), rr * 1.7f), rr * 1.7f, Offset(x, y + rr * 0.3f))
+        drawCircle(Brush.radialGradient(listOf(ink.copy(alpha = 0.42f * a), Color.Transparent), Offset(x, y + rr * 0.3f), rr * 1.7f), rr * 1.7f, Offset(x, y + rr * 0.3f))
         drawCircle(Brush.radialGradient(listOf(paper.copy(alpha = a), paper.copy(alpha = 0.6f * a), Color.Transparent), Offset(x, y), rr), rr, Offset(x, y))
     }
 }
@@ -248,7 +249,7 @@ private class Cloud(r: Random, i: Int) {
     val speed = 5f + r.nextFloat() * 8f
     // Flat, wide clouds: many puffs spread sideways, very light.
     val puffs = List(8) { Triple(r.nextFloat() * 2.4f - 1.2f, r.nextFloat() * 0.3f - 0.15f, 0.35f + r.nextFloat() * 0.4f) }
-    val alpha = 0.022f + r.nextFloat() * 0.02f
+    val alpha = 0.05f + r.nextFloat() * 0.04f
 
     fun draw(d: DrawScope, t: Float, ink: Color) = with(d) {
         val w = size.width
@@ -270,7 +271,7 @@ private class Haze(r: Random, i: Int) {
     val thick = 0.05f + r.nextFloat() * 0.05f
 
     fun draw(d: DrawScope, t: Float, ink: Color) = with(d) {
-        val a = 0.075f + 0.035f * sin(t * freq + ph)
+        val a = 0.14f + 0.05f * sin(t * freq + ph)
         val cy = size.height * y + 6f.dpPx() * sin(t * freq * 0.7f + ph)
         val half = size.width * thick
         drawRect(
@@ -283,14 +284,17 @@ private class Haze(r: Random, i: Int) {
 /** A few faint stars on clear nights, twinkling slowly. */
 private class Star(r: Random) {
     val x = r.nextFloat()
-    val y = r.nextFloat() * 0.45f
-    val radius = 0.8f + r.nextFloat() * 0.9f
+    val y = r.nextFloat() * 0.6f
+    val radius = 1.0f + r.nextFloat() * r.nextFloat() * 1.6f
     val freq = 0.3f + r.nextFloat() * 0.7f
     val ph = r.nextFloat() * 6.28f
 
     fun draw(d: DrawScope, t: Float, ink: Color) = with(d) {
-        val a = 0.10f + 0.12f * (0.5f + 0.5f * sin(t * freq + ph))
-        drawCircle(ink.copy(alpha = a), radius.dpPx(), Offset(x * size.width, y * size.height))
+        // Light points on the dark night tint, in both day and night themes.
+        val a = 0.45f + 0.45f * (0.5f + 0.5f * sin(t * freq + ph))
+        val c = Offset(x * size.width, y * size.height)
+        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = a * 0.5f), Color.Transparent), c, radius.dpPx() * 4f), radius.dpPx() * 4f, c)
+        drawCircle(Color.White.copy(alpha = a), radius.dpPx(), c)
     }
 }
 
