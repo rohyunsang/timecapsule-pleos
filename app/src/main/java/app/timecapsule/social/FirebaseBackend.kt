@@ -4,7 +4,12 @@ import android.content.Context
 import android.util.Log
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.firestore.Blob
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
@@ -77,9 +82,17 @@ class FirebaseBackend(
     private val _problem = MutableStateFlow<String?>(null)
     override val problem: StateFlow<String?> = _problem.asStateFlow()
 
+    private val _synced = MutableStateFlow(false)
+    override val synced: StateFlow<Boolean> = _synced.asStateFlow()
+
+    private val _email = MutableStateFlow<String?>(null)
+    override val email: StateFlow<String?> = _email.asStateFlow()
+
     private var listeners = emptyList<ListenerRegistration>()
     private var mine = emptyList<RemoteCapsule>()
     private var forMe = emptyList<RemoteCapsule>()
+    /** Which of the three listeners (friends, mine, for me) delivered a server snapshot. */
+    private val fromServer = BooleanArray(3)
 
     init {
         scope.launch {
@@ -93,6 +106,7 @@ class FirebaseBackend(
      * account still works locally and Firestore retries when it can.
      */
     private suspend fun ensureAuth() {
+        _email.value = auth.currentUser?.email?.takeIf { it.isNotBlank() }
         if (auth.currentUser != null) return
         val ok = withTimeoutOrNull(10_000) { runCatching { auth.signInAnonymously().await() }.isSuccess } ?: false
         if (!ok) Log.w(TAG, "anonymous sign-in failed; continuing")
@@ -103,22 +117,29 @@ class FirebaseBackend(
         listeners = emptyList()
         _friends.value = emptyList()
         mine = emptyList(); forMe = emptyList(); _remote.value = emptyList()
+        fromServer.fill(false); _synced.value = false
+        _email.value = auth.currentUser?.email?.takeIf { it.isNotBlank() }
         if (p == null) return
+        fun loaded(i: Int, s: com.google.firebase.firestore.QuerySnapshot) {
+            if (!s.metadata.isFromCache) fromServer[i] = true
+            _synced.value = fromServer.all { it }
+        }
         val onError = { e: Exception -> _problem.value = "서버에 연결하지 못했어요"; Log.w(TAG, "listen", e); Unit }
         listeners = listOf(
-            db.collection("users").document(p.uid).collection("friends").addSnapshotListener { s, e ->
+            db.collection("users").document(p.uid).collection("friends").addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { s, e ->
                 if (e != null) return@addSnapshotListener onError(e)
                 _problem.value = null
                 _friends.value = s!!.documents.map { Friend(it.id, it.getString("name") ?: "친구", it.getString("code") ?: "") }
                     .sortedBy { it.name }
+                loaded(0, s)
             },
-            db.collection("capsules").whereEqualTo("ownerUid", p.uid).addSnapshotListener { s, e ->
+            db.collection("capsules").whereEqualTo("ownerUid", p.uid).addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { s, e ->
                 if (e != null) return@addSnapshotListener onError(e)
-                mine = s!!.documents.mapNotNull(::toCapsule); publish()
+                mine = s!!.documents.mapNotNull(::toCapsule); publish(); loaded(1, s)
             },
-            db.collection("capsules").whereArrayContains("visibleTo", p.uid).addSnapshotListener { s, e ->
+            db.collection("capsules").whereArrayContains("visibleTo", p.uid).addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { s, e ->
                 if (e != null) return@addSnapshotListener onError(e)
-                forMe = s!!.documents.mapNotNull(::toCapsule); publish()
+                forMe = s!!.documents.mapNotNull(::toCapsule); publish(); loaded(2, s)
             },
         )
     }
@@ -208,6 +229,35 @@ class FirebaseBackend(
         accounts.set(profile)
         ensureAuth()
     }
+
+    override suspend fun linkEmail(email: String, password: String): Result<Unit> = runCatching {
+        val user = auth.currentUser ?: error("인터넷에 연결되면 다시 해 주세요")
+        withTimeout(WRITE_TIMEOUT_MS) { user.linkWithCredential(EmailAuthProvider.getCredential(email.trim(), password)).await() }
+        _email.value = email.trim()
+        Unit
+    }.recoverCatching { throw IllegalStateException(authMessage(it)) }
+
+    override suspend fun signInEmail(email: String, password: String): Result<Profile> = runCatching {
+        // Keep the person already on this car in their own slot; load this one into a fresh slot.
+        if (me.value != null) useSlot((slots.all.values.filterIsInstance<Int>().maxOrNull() ?: 0) + 1)
+        withTimeout(WRITE_TIMEOUT_MS) { auth.signInWithEmailAndPassword(email.trim(), password).await() }
+        val uid = auth.currentUser!!.uid
+        val d = withTimeout(WRITE_TIMEOUT_MS) { db.collection("users").document(uid).get().await() }
+        val p = Profile(uid, d.getString("name") ?: error("이 계정에는 이름이 없어요"), d.getString("code") ?: "")
+        slots.edit().putInt("uid:$uid", slot).apply()
+        _email.value = email.trim()
+        accounts.set(p)
+        p
+    }.recoverCatching { throw IllegalStateException(authMessage(it)) }
+
+    private fun authMessage(e: Throwable): String = when (e) {
+        is FirebaseAuthWeakPasswordException -> "비밀번호는 6자 이상이어야 해요"
+        is FirebaseAuthUserCollisionException -> "이미 다른 계정에 연결된 이메일이에요"
+        is FirebaseAuthInvalidUserException -> "그 이메일로 된 계정이 없어요"
+        is FirebaseAuthInvalidCredentialsException -> "이메일이나 비밀번호가 맞지 않아요"
+        is kotlinx.coroutines.TimeoutCancellationException -> "인터넷 연결을 확인해 주세요"
+        else -> e.message ?: "다시 해 주세요"
+    }.also { Log.w(TAG, "auth", e) }
 
     override suspend fun signOut() {
         auth.signOut()

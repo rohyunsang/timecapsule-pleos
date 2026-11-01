@@ -43,6 +43,33 @@ class FakeBackend(context: Context) : SocialBackend {
     private val _remote = MutableStateFlow<List<RemoteCapsule>>(emptyList())
     override val remote: StateFlow<List<RemoteCapsule>> = _remote.asStateFlow()
     override val problem: StateFlow<String?> = MutableStateFlow(null)
+    private val _synced = MutableStateFlow(false)
+    override val synced: StateFlow<Boolean> = _synced.asStateFlow()
+
+    /** email -> "password|uid", kept across restarts like the friend links. */
+    private val emails = context.getSharedPreferences("social_fake_emails", Context.MODE_PRIVATE)
+    private val _email = MutableStateFlow<String?>(null)
+    override val email: StateFlow<String?> = _email.asStateFlow()
+
+    override suspend fun linkEmail(email: String, password: String): Result<Unit> {
+        val p = me.value ?: return Result.failure(IllegalStateException("먼저 이름을 정해 주세요"))
+        if (password.length < 6) return Result.failure(IllegalArgumentException("비밀번호는 6자 이상이어야 해요"))
+        if (emails.contains(email.trim())) return Result.failure(IllegalArgumentException("이미 다른 계정에 연결된 이메일이에요"))
+        emails.edit().putString(email.trim(), "$password|${p.uid}").apply()
+        _email.value = email.trim()
+        return Result.success(Unit)
+    }
+
+    override suspend fun signInEmail(email: String, password: String): Result<Profile> {
+        val v = emails.getString(email.trim(), null) ?: return Result.failure(IllegalArgumentException("그 이메일로 된 계정이 없어요"))
+        if (v.substringBefore('|') != password) return Result.failure(IllegalArgumentException("이메일이나 비밀번호가 맞지 않아요"))
+        val p = knownAccounts.value.firstOrNull { it.uid == v.substringAfter('|') }
+            ?: return Result.failure(IllegalStateException("이 차에서 만든 계정만 불러올 수 있어요(가짜 서버)"))
+        switchAccount(p)
+        return Result.success(p)
+    }
+
+    private fun emailOf(uid: String?) = emails.all.entries.firstOrNull { (it.value as? String)?.substringAfter('|') == uid }?.key
 
     init {
         knownAccounts.value.forEach { directory[it.code] = it }
@@ -51,10 +78,12 @@ class FakeBackend(context: Context) : SocialBackend {
 
     private fun refresh() {
         val p = me.value
-        if (p == null) { _friends.value = emptyList(); _remote.value = emptyList(); return }
+        _email.value = emailOf(p?.uid)
+        if (p == null) { _friends.value = emptyList(); _remote.value = emptyList(); _synced.value = false; return }
         _friends.value = links[p.uid].orEmpty().mapNotNull { uid -> directory.values.firstOrNull { it.uid == uid } }
             .map { Friend(it.uid, it.name, it.code) }.sortedBy { it.name }
         _remote.value = capsules.values.filter { it.ownerUid == p.uid || p.uid in it.visibleTo }
+        _synced.value = true
     }
 
     override suspend fun signUp(name: String): Result<Profile> {

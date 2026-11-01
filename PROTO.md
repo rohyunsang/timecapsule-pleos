@@ -33,12 +33,15 @@ Pleos 에뮬레이터에서는 Vehicle SDK·NaviHelper를 실제로 쓰고, 그 
 ## 친구와 서버 (Firebase)
 
 - 내레이션은 담백하게 한 줄: "18년 전 오늘 남긴 캡슐이에요." / "민수님이 3일 전 남긴 캡슐이에요." 날씨·인원은 화면 태그로만.
-- 서버는 Firebase 무료(Spark) 요금제: 익명 로그인 + Firestore만 씀. Pleos에는 구글 플레이 서비스가 없지만 이 둘은 없어도 동작함. 목소리(30초, 64kbps 약 240KB)는 Firestore 문서에 넣어서 유료인 Storage는 안 씀.
+- 서버는 Firebase 무료(Spark) 요금제: 익명 로그인(+ 이메일 연결) + Firestore만 씀. Pleos에는 구글 플레이 서비스가 없지만 이 둘은 없어도 동작함. 목소리(30초, 64kbps 약 240KB)는 Firestore 문서에 넣어서 유료인 Storage는 안 씀.
 - 연결된 프로젝트: `timecapsule-pleos-11020143` (lilmoohyun@gmail.com 계정, 서울 리전). 규칙·익명 로그인은 `firebase.json`으로 배포: `npx firebase-tools deploy --only firestore:rules,auth`.
+- 계정 지키기: 친구 화면 아래 "이메일 연결하기". 앱을 다시 깔거나 차를 바꾸면 친구 화면의 "이미 계정이 있어요"로 이름·친구·캡슐을 불러옴.
+- 친구를 끊으면 그 친구 캡슐은 이 차에서 지워짐(서버 응답을 다 받은 뒤에만 지움. 오프라인일 땐 안 지움).
+- 개발 패널 "가짜 서버 쓰기": 인터넷 없는 시연장용. 앱을 다시 켜면 적용.
 - 키가 없으면 앱 안의 가짜 서버로 돌아감. 가짜 친구: 민수 `MNSU27`, 지영 `JYNG38`.
 - 연결 방법
   1. Firebase 콘솔에서 프로젝트 만들기 → Android 앱 추가(패키지 `app.timecapsule.proto`)
-  2. Authentication → 익명 로그인 켜기, Firestore 데이터베이스 만들기
+  2. Authentication → 익명 로그인·이메일/비밀번호 켜기, Firestore 데이터베이스 만들기
   3. Firestore 규칙에 `firebase/firestore.rules` 붙여넣기
   4. `local.properties`(git에 안 올라감)에 넣기: `firebase.apiKey=...`, `firebase.appId=...`, `firebase.projectId=...`
 - 친구 캡슐은 받은 차에 오디오까지 내려받아 둠 → 길에서 인터넷이 끊겨도 알림·재생 됨.

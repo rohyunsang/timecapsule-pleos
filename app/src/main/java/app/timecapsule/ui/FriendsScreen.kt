@@ -44,6 +44,10 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.ui.unit.dp
 import app.timecapsule.TimeCapsuleApp
 import app.timecapsule.social.Friend
@@ -65,7 +69,7 @@ fun FriendsScreen(app: TimeCapsuleApp, back: () -> Unit) {
     val me by app.social.me.collectAsState()
     val friends by app.social.friends.collectAsState()
     val problem by app.social.problem.collectAsState()
-    val scope = rememberCoroutineScope()
+    val email by app.social.email.collectAsState()
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     var removing by remember { mutableStateOf<Friend?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -79,9 +83,16 @@ fun FriendsScreen(app: TimeCapsuleApp, back: () -> Unit) {
         ) {
             val p = me
             if (p == null) {
-                SignUp(message) { name ->
+                SignUp(message, onSignIn = { email, pw ->
                     focus.clearFocus()
-                    scope.launch {
+                    app.scope.launch {
+                        app.social.signInEmail(email, pw)
+                            .onSuccess { message = "${it.name}님 계정을 불러왔어요" }
+                            .onFailure { message = it.message }
+                    }
+                }) { name ->
+                    focus.clearFocus()
+                    app.scope.launch {
                         app.social.signUp(name).onSuccess {
                             message = null
                             // A QR link opened before signing up: add that friend now.
@@ -104,7 +115,7 @@ fun FriendsScreen(app: TimeCapsuleApp, back: () -> Unit) {
             Section("친구 추가")
             AddFriend(message) { code ->
                 focus.clearFocus()
-                scope.launch {
+                app.scope.launch {
                     app.social.addFriend(code)
                         .onSuccess { message = "${it.name}님과 친구가 됐어요" }
                         .onFailure { message = it.message ?: "추가하지 못했어요" }
@@ -124,22 +135,72 @@ fun FriendsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                     }
                 }
             }
+
+            Spacer(Modifier.height(8.dp))
+            Section("계정")
+            AccountRow(email) { e, pw, done ->
+                focus.clearFocus()
+                app.scope.launch { done(app.social.linkEmail(e, pw).exceptionOrNull()?.message) }
+            }
         }
     }
     removing?.let { f ->
         ConfirmPopup(
             "${f.name}님과 친구를 끊을까요?",
-            "서로의 캡슐이 더는 전해지지 않아요. 이미 받은 캡슐도 차에서 사라져요.",
+            "서로의 캡슐이 더는 전해지지 않아요. 받은 캡슐도 이 차에서 지워져요.",
             "끊기",
-            onConfirm = { scope.launch { app.social.removeFriend(f) }; removing = null },
+            onConfirm = { app.scope.launch { app.social.removeFriend(f) }; removing = null },
             onDismiss = { removing = null },
         )
     }
 }
 
+/**
+ * Keeps the account when the app is reinstalled or the car changes (기획서: 차를 바꿔도 이어짐).
+ * Email + password, because Pleos has no Google sign-in (no Play services).
+ */
 @Composable
-private fun SignUp(message: String?, onStart: (String) -> Unit) {
+private fun AccountRow(email: String?, onLink: (String, String, (String?) -> Unit) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    if (email != null) {
+        ListRow("이메일 연결됨", "$email · 앱을 다시 깔거나 차를 바꿔도 이 이메일로 불러와요", leading = Icons.Rounded.Lock)
+        return
+    }
+    ListRow(
+        "이메일 연결하기", "연결하지 않으면 앱을 지울 때 친구와 캡슐이 함께 사라져요",
+        leading = Icons.Rounded.Lock, leadingTint = Tc.TextMute, onClick = { open = !open },
+    )
+    if (open) EmailForm("연결", error) { e, pw -> onLink(e, pw) { err -> error = err; if (err == null) open = false } }
+}
+
+/** Email and password fields with one action. */
+@Composable
+private fun EmailForm(action: String, message: String?, onSubmit: (String, String) -> Unit) {
+    var email by remember { mutableStateOf("") }
+    var pw by remember { mutableStateOf("") }
+    val ok = email.contains('@') && pw.length >= 6
+    Column(Modifier.padding(horizontal = Tc.Inset), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Field(email, { email = it.trim().take(80) }, "이메일", KeyboardCapitalization.None, keyboard = KeyboardType.Email) {}
+        Field(pw, { pw = it.take(40) }, "비밀번호 6자 이상", KeyboardCapitalization.None, keyboard = KeyboardType.Password, hidden = true) {
+            if (ok) onSubmit(email, pw)
+        }
+        if (message != null) Text(message, style = Type.LabelM, color = Tc.TextSub)
+        Btn(action, Modifier.fillMaxWidth(), style = BtnStyle.Filled, enabled = ok) { onSubmit(email, pw) }
+    }
+}
+
+@Composable
+private fun SignUp(message: String?, onSignIn: (String, String) -> Unit, onStart: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
+    var existing by remember { mutableStateOf(false) }
+    if (existing) {
+        Text("내 계정 불러오기", style = Type.TitleS, color = Tc.Text, modifier = Modifier.padding(start = Tc.Inset, top = 8.dp))
+        Text("연결해 둔 이메일로 이름, 친구, 친구에게 남긴 캡슐을 불러와요", style = Type.BodyS, color = Tc.TextMute, modifier = Modifier.padding(start = Tc.Inset, bottom = 8.dp))
+        EmailForm("불러오기", message, onSignIn)
+        Btn("처음이에요", Modifier.fillMaxWidth(), style = BtnStyle.Quiet) { existing = false }
+        return
+    }
     Text("친구에게 보일 이름", style = Type.TitleS, color = Tc.Text, modifier = Modifier.padding(start = Tc.Inset, top = 8.dp))
     Text(
         "친구가 내 캡슐을 지나가면 \"○○님이 남긴 캡슐이 있어요\"라고 알려 줘요",
@@ -150,6 +211,7 @@ private fun SignUp(message: String?, onStart: (String) -> Unit) {
     Btn("시작하기", Modifier.fillMaxWidth(), style = BtnStyle.Filled, enabled = name.isNotBlank(), height = Tc.TouchLarge) {
         onStart(name.trim())
     }
+    Btn("이미 계정이 있어요", Modifier.fillMaxWidth(), style = BtnStyle.Quiet) { existing = true }
 }
 
 /**
@@ -200,14 +262,23 @@ private fun AddFriend(message: String?, onAdd: (String) -> Unit) {
 
 /** Text field in the Pleos input style: a filled basic box, no underline. */
 @Composable
-private fun Field(value: String, onChange: (String) -> Unit, hint: String, caps: KeyboardCapitalization, onDone: () -> Unit) {
+private fun Field(
+    value: String,
+    onChange: (String) -> Unit,
+    hint: String,
+    caps: KeyboardCapitalization,
+    keyboard: KeyboardType = KeyboardType.Text,
+    hidden: Boolean = false,
+    onDone: () -> Unit,
+) {
     val style = TextStyle(fontFamily = Type.BodyStrong.fontFamily, fontSize = Type.BodyStrong.fontSize, fontWeight = Type.BodyStrong.fontWeight, color = Tc.Text)
     Surface(shape = RoundedCornerShape(Tc.BtnRadius), color = Tc.Basic, modifier = Modifier.fillMaxWidth().heightIn(min = Tc.Touch)) {
         Box(Modifier.padding(horizontal = 28.dp), contentAlignment = Alignment.CenterStart) {
             if (value.isEmpty()) Text(hint, style = Type.BodyS, color = Tc.TextMute)
             BasicTextField(
                 value, onChange, singleLine = true, textStyle = style, cursorBrush = SolidColor(Tc.Text),
-                keyboardOptions = KeyboardOptions(capitalization = caps, imeAction = ImeAction.Done),
+                keyboardOptions = KeyboardOptions(capitalization = caps, keyboardType = keyboard, imeAction = ImeAction.Done),
+                visualTransformation = if (hidden) PasswordVisualTransformation() else VisualTransformation.None,
                 keyboardActions = KeyboardActions(onDone = { onDone() }),
                 modifier = Modifier.fillMaxWidth(),
             )

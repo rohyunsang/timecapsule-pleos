@@ -122,6 +122,12 @@ class TimeCapsuleApp : Application() {
 
     val forceFake get() = java.io.File(filesDir, FORCE_FAKE).exists()
 
+    /** Dev panel: in-memory server instead of Firebase (no internet at a venue); next start. */
+    var fakeServer: Boolean
+        get() = java.io.File(filesDir, FAKE_SERVER).exists()
+        set(on) { java.io.File(filesDir, FAKE_SERVER).let { if (on) it.createNewFile() else it.delete() } }
+    val hasFirebaseKeys get() = BuildConfig.FIREBASE_API_KEY.isNotBlank()
+
     /**
      * "차를 넘길 때 모두 지우기": the car forgets everything, including who was signed in.
      * Capsules left for friends stay on the server (they belong to the friends now too).

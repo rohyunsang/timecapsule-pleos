@@ -54,6 +54,18 @@ interface SocialBackend {
     /** Last error worth showing (offline, bad config), null when fine. */
     val problem: StateFlow<String?>
 
+    /**
+     * True once [friends] and [remote] both came from the server for the current account.
+     * Until then a missing capsule may just not be loaded yet, so nothing is removed.
+     */
+    val synced: StateFlow<Boolean>
+
+    /** Email linked to this account, so it can be loaded again on another car or reinstall. */
+    val email: StateFlow<String?>
+    suspend fun linkEmail(email: String, password: String): Result<Unit>
+    /** Loads an existing account (name, code, friends, my capsules) onto this car. */
+    suspend fun signInEmail(email: String, password: String): Result<Profile>
+
     suspend fun signUp(name: String): Result<Profile>
     suspend fun addFriend(code: String): Result<Friend>
     suspend fun removeFriend(friend: Friend)

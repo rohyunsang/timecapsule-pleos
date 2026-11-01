@@ -695,6 +695,16 @@ private fun FriendDev(app: TimeCapsuleApp, close: () -> Unit) {
     val fake = app.social as? FakeBackend
     val context = androidx.compose.ui.platform.LocalContext.current
     Section("친구 · ${app.social.label}")
+    if (app.hasFirebaseKeys) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(start = Tc.Inset)) {
+                Text("가짜 서버 쓰기", style = Type.BodyStrong, color = Tc.Text)
+                Text("인터넷이 없는 곳에서 시연할 때 · 앱을 다시 켜면 적용돼요", style = Type.LabelM, color = Tc.TextMute)
+            }
+            var on by remember { mutableStateOf(app.fakeServer) }
+            TcSwitch(on) { on = it; app.fakeServer = it }
+        }
+    }
     Text(
         me?.let { "지금 이 차: ${it.name} (${spaced(it.code)}) · 친구 ${friends.size}명" } ?: "아직 이름을 정하지 않았어요",
         style = Type.LabelM, color = Tc.TextMute, modifier = Modifier.padding(start = Tc.Inset),

@@ -133,6 +133,13 @@ class DriveController(
     private var arrivedAt: Long? = null
 
     init {
+        // A capsule removed from this car (deleted, unfriended) must not keep its "아까 지나친" prompt.
+        scope.launch {
+            repo.capsules.collect { list ->
+                val r = _reprompt.value ?: return@collect
+                if (list.none { it.id == r.id }) _reprompt.value = null
+            }
+        }
         scope.launch {
             signals.map { it.isNotEmpty() }.distinctUntilChanged().collect { on ->
                 if (on) {

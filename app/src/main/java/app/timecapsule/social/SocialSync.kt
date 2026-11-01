@@ -37,14 +37,15 @@ class SocialSync(
 ) : CapsuleSharing {
     private val dir = File(context.filesDir, "capsules").apply { mkdirs() }
     private val lock = Mutex()
-    /** Server ids seen in this session, to tell "deleted on the server" from "not loaded yet". */
-    private var seen = emptySet<String>()
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages = _messages.asSharedFlow()
 
     fun start() {
-        scope.launch { backend.remote.collect { lock.withLock { pull(it) } } }
+        scope.launch {
+            combine(backend.remote, backend.friends, backend.synced) { r, f, s -> Triple(r, f, s) }
+                .collect { (r, f, s) -> lock.withLock { pull(r, f, s) } }
+        }
         scope.launch {
             combine(backend.me, backend.friends) { me, f -> me to f }.collect { (me, f) ->
                 if (me == null) return@collect
@@ -92,7 +93,6 @@ class SocialSync(
         )
         backend.upload(r, audio).onSuccess { id ->
             repo.setRemoteId(fresh.id, id)
-            seen = seen + id
             if (announce) _messages.tryEmit(sentTo(fresh, visible))
         }.onFailure {
             if (announce) _messages.tryEmit("지금은 친구에게 보내지 못했어요. 연결되면 다시 보낼게요")
@@ -123,9 +123,13 @@ class SocialSync(
             .forEach { backend.setVisibleTo(it.id, uids) }
     }
 
-    private suspend fun pull(list: List<RemoteCapsule>) {
+    private suspend fun pull(all: List<RemoteCapsule>, friends: List<Friend>, synced: Boolean) {
         val me = backend.me.value ?: return
         val hidden = settings.hidden()
+        // Only mine and current friends'. An ex-friend's capsule can still list me until their
+        // car updates it; it must not reach me in the meantime.
+        val friendUids = friends.map { it.uid }.toSet()
+        val list = all.filter { it.ownerUid == me.uid || it.ownerUid in friendUids }
         for (r in list) {
             if (r.id in hidden || repo.byRemoteId(r.id) != null) continue
             val bytes = backend.audio(r.id) ?: continue
@@ -146,12 +150,14 @@ class SocialSync(
             )
             if (!mine) Log.i(TAG, "received ${r.id} from ${r.ownerName}")
         }
-        // Gone from the server (owner deleted it, or unfriended): drop friends' copies here.
-        val now = list.map { it.id }.toSet()
-        (seen - now).forEach { id ->
-            repo.byRemoteId(id)?.takeIf { !it.isMine }?.let { repo.delete(it) }
+        // Gone (owner deleted it, unfriended, or no longer for me): drop the copy on this car.
+        // Only against a full server answer, never a half-loaded or offline one.
+        if (!synced) return
+        val keep = list.map { it.id }.toSet()
+        repo.all().filter { !it.isMine && it.remoteId != null && it.remoteId !in keep }.forEach {
+            repo.delete(it)
+            Log.i(TAG, "removed ${it.remoteId}")
         }
-        seen = now
     }
 
     private companion object { const val TAG = "SocialSync" }
