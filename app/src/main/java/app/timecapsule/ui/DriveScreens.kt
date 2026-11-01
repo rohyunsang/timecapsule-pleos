@@ -186,8 +186,10 @@ fun PlayingScreen(
                     style = if (portrait) Type.TitleL else Type.HeadlineS,
                     color = Tc.Text, maxLines = 5, overflow = TextOverflow.Ellipsis,
                 )
-                val tags = MoodTagEngine.fromStored(c.tags).filter { it.label != c.placeName }
-                if (tags.isNotEmpty()) Text(tags.joinToString(" · ") { it.label }, style = Type.BodyS, color = Tc.TextMute)
+                Text(
+                    "그날  " + app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).joinToString(" · "),
+                    style = Type.BodyM, color = Tc.TextSub,
+                )
                 VoiceProgress(pos, c.ownerName)
             }
             if (safetyPaused != null) {

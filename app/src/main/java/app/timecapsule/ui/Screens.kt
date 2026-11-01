@@ -513,7 +513,7 @@ private fun ColumnScope.EmptyState(back: () -> Unit) {
 private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onShare: (() -> Unit)? = null, onDelete: () -> Unit) {
     val locked = lockedUntil != null
     val time = Instant.ofEpochMilli(c.createdAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("a h:mm"))
-    val tags = MoodTagEngine.fromStored(c.tags).filter { it.label != c.placeName }.joinToString(" · ") { it.label }
+    val tags = app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).drop(1).joinToString(" · ")
     ListRow(
         title = "${c.placeName ?: "장소 기록 없음"} · ${c.durationSec}초",
         sub = if (locked) "${LocalDate.ofEpochDay(lockedUntil!!).format(dayFmt)}에 열리는 편지"

@@ -367,7 +367,9 @@ class DriveController(
             _userPaused.value = false
             if (_reprompt.value?.id == id) _reprompt.value = null
             repo.logNotify(id, today(), "played")
-            player.play(narration, c.audioPath) { scope.launch { dispatch(DriveEvent.PlaybackFinished) } }
+            // The screen keeps the short line; the voice adds one plain fact about the day.
+            val spoken = listOfNotNull(narration, app.timecapsule.tag.TheDay.spoken(c.rawVehicleState)).joinToString(" ")
+            player.play(spoken, c.audioPath) { scope.launch { dispatch(DriveEvent.PlaybackFinished) } }
         }
     }
 
