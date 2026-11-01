@@ -79,6 +79,12 @@ class Player(context: Context) {
 
     val isActive get() = phase != Phase.IDLE
 
+    fun progress(): Pair<Int, Int>? {
+        if (phase != Phase.VOICE && phase != Phase.PAUSED_VOICE) return null
+        val m = media ?: return null
+        return runCatching { m.currentPosition to m.duration }.getOrNull()?.takeIf { it.second > 0 }
+    }
+
     /** Starts from the beginning: narration, then the recording at [path]. */
     fun play(narrationText: String, path: String, done: () -> Unit) {
         stopInternal()

@@ -13,7 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
  * Friends connect with a 6-character friend code, typed in or opened from a QR code. Both
  * sides become friends at once: knowing the code is the consent, as with a phone number.
  */
-enum class Audience { SELF, FRIENDS, SOME }
+/** DEMO: the 체험 친구 account; readable by anyone who added it, placed near the reader. */
+enum class Audience { SELF, FRIENDS, SOME, DEMO }
 
 data class Profile(val uid: String, val name: String, val code: String)
 

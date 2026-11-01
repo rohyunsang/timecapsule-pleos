@@ -27,7 +27,8 @@ service cloud.firestore {
 
     // A capsule is readable by its owner and by the people it was left for.
     match /capsules/{id} {
-      allow read: if signedIn() && (resource.data.ownerUid == me() || me() in resource.data.visibleTo);
+      allow read: if signedIn() && (resource.data.ownerUid == me() || me() in resource.data.visibleTo
+        || resource.data.audience == 'DEMO');
       allow create: if signedIn() && request.resource.data.ownerUid == me();
       allow update, delete: if signedIn() && resource.data.ownerUid == me();
     }
@@ -35,7 +36,8 @@ service cloud.firestore {
     // Voice, one document per capsule; same audience as the capsule.
     match /audio/{id} {
       allow read: if signedIn() && (resource.data.ownerUid == me() ||
-        me() in get(/databases/$(database)/documents/capsules/$(id)).data.visibleTo);
+        me() in get(/databases/$(database)/documents/capsules/$(id)).data.visibleTo ||
+        get(/databases/$(database)/documents/capsules/$(id)).data.audience == 'DEMO');
       allow create, update: if signedIn() && request.resource.data.ownerUid == me()
         && request.resource.data.data.size() < 1000000;
       allow delete: if signedIn() && resource.data.ownerUid == me();

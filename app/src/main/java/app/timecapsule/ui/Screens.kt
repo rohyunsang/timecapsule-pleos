@@ -107,6 +107,7 @@ fun HomeScreen(
     go: (Screen) -> Unit,
     onLocked: () -> Unit,
     onDev: () -> Unit,
+    friendCount: Int = 0,
 ) {
     val capsules by drive.capsules.collectAsState()
     val locks by drive.locks.collectAsState()
@@ -118,7 +119,7 @@ fun HomeScreen(
         if (portrait) {
             Column(Modifier.fillMaxSize().padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
                 AppBar(onPleos, restricted, onDev)
-                VoiceBar(drive)
+                VoiceBar(drive, friendCount)
                 NowNotice(drive, restricted, today)
                 // The list takes what is left (only whole rows); the menu stays pinned to the bottom.
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
@@ -134,7 +135,7 @@ fun HomeScreen(
             Row(Modifier.fillMaxSize().padding(Tc.Gutter), horizontalArrangement = Arrangement.spacedBy(Tc.Gutter)) {
                 Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
                     AppBar(onPleos, restricted, onDev)
-                    VoiceBar(drive)
+                    VoiceBar(drive, friendCount)
                     NowNotice(drive, restricted, today)
                     Spacer(Modifier.weight(1f))
                     MenuBar(restricted, go, onLocked)
@@ -158,7 +159,7 @@ fun HomeScreen(
 @Composable
 @Suppress("UNUSED_PARAMETER")
 private fun AppBar(onPleos: Boolean, restricted: Boolean, onDev: () -> Unit) {
-    Header("타임캡슐") { IconBtn(Icons.Rounded.MoreHoriz, "개발 패널", onClick = onDev) }
+    Header("타임캡슐") { if (app.timecapsule.BuildConfig.DEBUG) IconBtn(Icons.Rounded.MoreHoriz, "개발 패널", onClick = onDev) }
 }
 
 /**
@@ -167,7 +168,7 @@ private fun AppBar(onPleos: Boolean, restricted: Boolean, onDev: () -> Unit) {
  * Plain icon, no colored badge.
  */
 @Composable
-private fun VoiceBar(drive: DriveController) {
+private fun VoiceBar(drive: DriveController, friendCount: Int) {
     val car by drive.car.collectAsState()
     val audience by drive.defaultAudience.collectAsState()
     val tags = MoodTagEngine.tagsFor(car).filter { it.label != car.placeName }.map { it.label }
@@ -188,7 +189,14 @@ private fun VoiceBar(drive: DriveController) {
                 Text("목소리 남기기", style = Type.TitleM)
                 // Who hears it comes first: that is the point of leaving one.
                 Text(
-                    (listOf(if (audience == "SELF") "나만" else "친구 모두에게", car.placeName ?: "위치 확인 중") + tags).joinToString(" · "),
+                    (listOf(
+                        when {
+                            audience == "SELF" -> "나만"
+                            friendCount == 0 -> "친구 모두에게(아직 친구 없음)"
+                            else -> "친구 ${friendCount}명에게"
+                        },
+                        car.placeName ?: "위치 확인 중",
+                    ) + tags).joinToString(" · "),
                     style = Type.LabelM, color = p.onStrongSub, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -420,6 +428,7 @@ fun AlbumScreen(drive: DriveController, back: () -> Unit) {
     val today = LocalDate.now()
     val tripById = trips.associateBy { it.id }
     var deleting by remember { mutableStateOf<Capsule?>(null) }
+    var sharing by remember { mutableStateOf<Capsule?>(null) }
     // F-08: group by trip; capsules outside a trip are grouped by day.
     val groups = capsules.groupBy { c -> c.tripId?.let { "trip:$it" } ?: "day:${c.date()}" }
         .entries.sortedByDescending { e -> e.value.maxOf { it.createdAt } }
@@ -452,12 +461,26 @@ fun AlbumScreen(drive: DriveController, back: () -> Unit) {
                     Panel {
                         list.sortedBy { it.createdAt }.forEachIndexed { i, c ->
                             if (i > 0) RowDivider()
-                            CapsuleRow(c, locks[c.id]?.openAfter?.takeIf { locks[c.id].isLocked(today) }, { drive.playCapsule(c.id) }) { deleting = c }
+                            CapsuleRow(
+                                c, locks[c.id]?.openAfter?.takeIf { locks[c.id].isLocked(today) }, { drive.playCapsule(c.id) },
+                                onShare = { sharing = c }.takeIf { c.isMine && c.audience in setOf("SELF", "FRIENDS") },
+                            ) { deleting = c }
                         }
                     }
                 }
             }
         }
+    }
+    sharing?.let { c ->
+        val toFriends = c.audience == "SELF"
+        ConfirmPopup(
+            if (toFriends) "이 캡슐을 친구 모두에게 들려줄까요?" else "이 캡슐을 나만 들을까요?",
+            if (toFriends) "친구가 이 길을 지나면 내 목소리가 나와요. 언제든 다시 나만으로 바꿀 수 있어요."
+            else "서버와 친구 차에서 지워지고 이 차에만 남아요.",
+            if (toFriends) "친구에게 공개" else "나만 듣기",
+            onConfirm = { drive.setShared(c, toFriends); sharing = null },
+            onDismiss = { sharing = null },
+        )
     }
     deleting?.let { c ->
         ConfirmPopup(
@@ -487,7 +510,7 @@ private fun ColumnScope.EmptyState(back: () -> Unit) {
 
 /** One capsule: the whole row plays it; delete is a separate, confirmed action. */
 @Composable
-private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onDelete: () -> Unit) {
+private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onShare: (() -> Unit)? = null, onDelete: () -> Unit) {
     val locked = lockedUntil != null
     val time = Instant.ofEpochMilli(c.createdAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("a h:mm"))
     val tags = MoodTagEngine.fromStored(c.tags).filter { it.label != c.placeName }.joinToString(" · ") { it.label }
@@ -500,6 +523,9 @@ private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onDel
         enabled = !locked,
         onClick = onPlay,
     ) {
+        if (onShare != null) {
+            Btn(if (c.audience == "SELF") "친구에게 공개" else "나만 듣기", height = 56.dp, onClick = onShare)
+        }
         IconBtn(Icons.Rounded.DeleteOutline, "삭제", onClick = onDelete)
     }
 }
@@ -550,9 +576,9 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                         onClick = { app.settings.setDefaultAudience(value) },
                     )
                 }
-                radio("FRIENDS", "친구 모두에게", "친구가 그 길을 지나면 내 목소리가 나와요")
+                radio("SELF", "나만 (기본)", "이 차에만 남고 아무에게도 가지 않아요")
                 RowDivider()
-                radio("SELF", "나만", "이 차에만 남고 아무에게도 가지 않아요")
+                radio("FRIENDS", "친구 모두에게", "친구가 그 길을 지나면 내 목소리가 나와요")
             }
             Spacer(Modifier.height(8.dp))
             Section("개인정보")
@@ -561,12 +587,28 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                 RowDivider()
                 ListRow("녹음 알림음", "함께 탄 사람도 알 수 있게 끌 수 없어요") { ValueText("켜짐") }
                 RowDivider()
-                ListRow("저장 위치", "친구에게 남긴 캡슐만 서버에 올라가요") { ValueText("이 차 + 서버") }
+                ListRow("저장 위치", "친구에게 공개한 캡슐만 서버에 올라가요 · 앨범에서 하나씩 바꿀 수 있어요") { ValueText("이 차 + 서버") }
             }
             Spacer(Modifier.height(8.dp))
             Section("알림")
             Panel {
                 ListRow("도착 제안", "처음 온 곳에 도착하면 물어봐요 · 하루 2번까지") { TcSwitch(arrival, app.settings::setArrivalPrompt) }
+                RowDivider()
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                var overlay by remember { mutableStateOf(android.provider.Settings.canDrawOverlays(ctx)) }
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    while (true) { overlay = android.provider.Settings.canDrawOverlays(ctx); kotlinx.coroutines.delay(1000) }
+                }
+                ListRow(
+                    "지도 위에 알림 띄우기",
+                    if (overlay) "내비를 보고 있어도 캡슐 알림이 지도 위에 떠요" else "켜지 않으면 내비를 보는 동안 알림이 알림 센터로만 가요",
+                    onClick = {
+                        ctx.startActivity(
+                            android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + ctx.packageName))
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    },
+                ) { ValueText(if (overlay) "켜짐" else "꺼짐") }
             }
             Spacer(Modifier.height(8.dp))
             Section("차를 넘길 때")

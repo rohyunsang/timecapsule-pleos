@@ -64,6 +64,9 @@ import kotlinx.coroutines.launch
  *  - No name yet: pick the name friends will see.
  *  - Then: my code with its QR, a field to add a friend's code, the friend list.
  */
+/** Friend code of the 체험 친구 account (Firebase); see PROTO.md. */
+const val DEMO_CODE = "TRYCAP"
+
 @Composable
 fun FriendsScreen(app: TimeCapsuleApp, back: () -> Unit) {
     val me by app.social.me.collectAsState()
@@ -133,11 +136,11 @@ fun FriendsScreen(app: TimeCapsuleApp, back: () -> Unit) {
             Section("친구 ${friends.size}")
             Panel {
                 if (friends.isEmpty()) {
-                    ListRow("아직 친구가 없어요", "친구 코드를 받아 위에 입력해 보세요", leading = Icons.Rounded.Person, leadingTint = Tc.TextMute)
+                    ListRow("아직 친구가 없어요", "먼저 체험해 보려면 위에 ${spaced(DEMO_CODE)}을 넣어 보세요 · 체험 친구가 이 근처에 캡슐을 남겨 둬요", leading = Icons.Rounded.Person, leadingTint = Tc.TextMute)
                 }
                 friends.forEachIndexed { i, f ->
                     if (i > 0) RowDivider()
-                    ListRow(f.name, "코드 ${spaced(f.code)} · 내 캡슐이 이 친구 차에서도 열려요", leading = Icons.Rounded.Person) {
+                    ListRow(f.name, "코드 ${spaced(f.code)} · 친구에게 공개한 캡슐이 이 친구 차에서도 열려요", leading = Icons.Rounded.Person) {
                         IconBtn(Icons.Rounded.PersonRemove, "친구 끊기") { removing = f }
                     }
                 }

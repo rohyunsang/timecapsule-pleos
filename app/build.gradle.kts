@@ -33,9 +33,22 @@ android {
         buildConfigField("String", "FIREBASE_PROJECT_ID", cfg("firebase.projectId"))
     }
 
+    // Release signing: keystore.properties (git-ignored) points to a keystore kept outside the repo.
+    val keys = Properties().apply {
+        rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+    }
+    signingConfigs {
+        if (keys.getProperty("storeFile") != null) create("release") {
+            storeFile = file(keys.getProperty("storeFile"))
+            storePassword = keys.getProperty("storePassword")
+            keyAlias = keys.getProperty("keyAlias")
+            keyPassword = keys.getProperty("keyPassword")
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
         }
     }
     compileOptions {

@@ -32,6 +32,7 @@ class AlertNotifier(
     private val appVisible: StateFlow<Boolean>,
 ) {
     private val nm = NotificationManagerCompat.from(context)
+    private val overlay = OverlayAlert(context)
 
     fun start() {
         nm.createNotificationChannel(
@@ -45,7 +46,13 @@ class AlertNotifier(
         )
         scope.launch {
             combine(drive.alert, appVisible) { a, v -> a.takeIf { !v } }.collect { a ->
-                if (a != null) postAlert(a) else nm.cancel(ID_ALERT)
+                if (a != null) {
+                    postAlert(a)
+                    overlay.show(a.line, alertDescription(a), onListen = { nm.cancel(ID_ALERT); drive.listen() }, onLater = { nm.cancel(ID_ALERT); drive.later() })
+                } else {
+                    nm.cancel(ID_ALERT)
+                    overlay.hide()
+                }
             }
         }
         scope.launch {

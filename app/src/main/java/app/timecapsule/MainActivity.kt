@@ -107,6 +107,7 @@ private fun Root(app: TimeCapsuleApp) {
     val car by drive.car.collectAsState()
     val alert by drive.alert.collectAsState()
     val playing by drive.playing.collectAsState()
+    val friends by app.social.friends.collectAsState()
     val signals by drive.signals.collectAsState()
     val userPaused by drive.userPaused.collectAsState()
     val recordingSince by drive.recordingSince.collectAsState()
@@ -150,12 +151,14 @@ private fun Root(app: TimeCapsuleApp) {
                     onRestart = drive::restart,
                     onPause = drive::togglePause,
                     onStop = drive::stopPlayback,
+                    progress = drive::progress,
                 )
             else -> when (screen) {
                 Screen.HOME -> HomeScreen(
                     drive, restricted, app.onPleos, go = { screen = it },
                     onLocked = { Toast.makeText(context, "안전을 위해 차를 세우면 열려요", Toast.LENGTH_SHORT).show() },
                     onDev = { dev = !dev },
+                    friendCount = friends.size,
                 )
                 Screen.LETTER -> LetterScreen(app) { screen = Screen.HOME }
                 Screen.ALBUM -> AlbumScreen(drive) { screen = Screen.HOME }

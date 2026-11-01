@@ -98,7 +98,9 @@ class TimeCapsuleApp : Application() {
                 ?: app.timecapsule.social.FakeBackend(this)
         } else app.timecapsule.social.FakeBackend(this)
         android.util.Log.i("TimeCapsuleApp", "server: ${social.label}")
-        sync = app.timecapsule.social.SocialSync(this, scope, social, repo, settings).also { it.start() }
+        sync = app.timecapsule.social.SocialSync(this, scope, social, repo, settings) {
+            navi.position.value?.let { it.point to drive.car.value.placeName }
+        }.also { it.start() }
         drive.sharing = sync
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {

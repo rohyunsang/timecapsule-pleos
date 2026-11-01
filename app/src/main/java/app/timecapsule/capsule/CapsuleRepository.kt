@@ -36,7 +36,7 @@ class CapsuleRepository(private val db: AppDatabase) {
         at: GeoPoint?,
         lastKnown: GeoPoint?,
         openOn: LocalDate?,
-        audience: String = "FRIENDS",
+        audience: String = "SELF",
         recipients: List<String> = emptyList(),
     ): Capsule {
         val where = at ?: lastKnown
@@ -69,6 +69,8 @@ class CapsuleRepository(private val db: AppDatabase) {
     suspend fun all() = dao.all()
     suspend fun lockFor(id: Long) = dao.lockFor(id)
     suspend fun setRemoteId(id: Long, remoteId: String) = dao.setRemoteId(id, remoteId)
+    /** Mine only: just me (SELF) or all friends (FRIENDS). Forgets the server copy id. */
+    suspend fun setAudience(id: Long, audience: String) = dao.setAudience(id, audience)
 
     /** Stores a capsule that came from the server (a friend's, or mine from another car). */
     suspend fun insertFromServer(capsule: Capsule, openAfter: Long?): Long {

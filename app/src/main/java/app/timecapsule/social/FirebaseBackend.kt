@@ -91,8 +91,9 @@ class FirebaseBackend(
     private var listeners = emptyList<ListenerRegistration>()
     private var mine = emptyList<RemoteCapsule>()
     private var forMe = emptyList<RemoteCapsule>()
-    /** Which of the three listeners (friends, mine, for me) delivered a server snapshot. */
-    private val fromServer = BooleanArray(3)
+    private var demo = emptyList<RemoteCapsule>()
+    /** Which listeners (friends, mine, for me, demo) delivered a server snapshot. */
+    private val fromServer = BooleanArray(4)
 
     init {
         scope.launch {
@@ -116,7 +117,7 @@ class FirebaseBackend(
         listeners.forEach { it.remove() }
         listeners = emptyList()
         _friends.value = emptyList()
-        mine = emptyList(); forMe = emptyList(); _remote.value = emptyList()
+        mine = emptyList(); forMe = emptyList(); demo = emptyList(); _remote.value = emptyList()
         fromServer.fill(false); _synced.value = false
         _email.value = auth.currentUser?.email?.takeIf { it.isNotBlank() }
         if (p == null) return
@@ -141,10 +142,14 @@ class FirebaseBackend(
                 if (e != null) return@addSnapshotListener onError(e)
                 forMe = s!!.documents.mapNotNull(::toCapsule); publish(); loaded(2, s)
             },
+            db.collection("capsules").whereEqualTo("audience", Audience.DEMO.name).addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { s, e ->
+                if (e != null) return@addSnapshotListener onError(e)
+                demo = s!!.documents.mapNotNull(::toCapsule); publish(); loaded(3, s)
+            },
         )
     }
 
-    private fun publish() { _remote.value = (mine + forMe).distinctBy { it.id } }
+    private fun publish() { _remote.value = (mine + forMe + demo).distinctBy { it.id } }
 
     override suspend fun signUp(name: String): Result<Profile> = runCatching {
         ensureAuth()

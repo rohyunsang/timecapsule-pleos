@@ -22,7 +22,7 @@ class Settings(context: Context) {
         _arrivalPrompt.value = on
     }
 
-    private val _defaultAudience = MutableStateFlow(prefs.getString(KEY_AUDIENCE, "FRIENDS") ?: "FRIENDS")
+    private val _defaultAudience = MutableStateFlow(prefs.getString(KEY_AUDIENCE, "SELF") ?: "SELF")
     val defaultAudience: StateFlow<String> = _defaultAudience.asStateFlow()
 
     fun setDefaultAudience(a: String) {

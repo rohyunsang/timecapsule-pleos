@@ -96,6 +96,9 @@ interface CapsuleDao {
     @Query("UPDATE capsule SET remoteId = :remoteId WHERE id = :id")
     suspend fun setRemoteId(id: Long, remoteId: String)
 
+    @Query("UPDATE capsule SET audience = :audience, recipients = '', remoteId = NULL WHERE id = :id")
+    suspend fun setAudience(id: Long, audience: String)
+
     /** Demo only: move a capsule back in time so the narration has years to count. */
     @Query("UPDATE capsule SET createdAt = :createdAt WHERE id = :id")
     suspend fun setCreatedAt(id: Long, createdAt: Long)

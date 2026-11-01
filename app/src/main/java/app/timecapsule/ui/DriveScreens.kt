@@ -157,7 +157,12 @@ fun PlayingScreen(
     onRestart: () -> Unit,
     onPause: () -> Unit,
     onStop: () -> Unit,
+    progress: () -> Pair<Int, Int>? = { null },
 ) {
+    var pos by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Pair<Int, Int>?>(null) }
+    androidx.compose.runtime.LaunchedEffect(playing?.capsule?.id) {
+        while (true) { pos = progress(); kotlinx.coroutines.delay(200) }
+    }
     BoxWithConstraints(Modifier.fillMaxSize().background(Tc.Bg)) {
         val portrait = widthClass(maxWidth) == WidthClass.Portrait
         Column(Modifier.fillMaxSize().padding(Tc.Gutter)) {
@@ -183,6 +188,7 @@ fun PlayingScreen(
                 )
                 val tags = MoodTagEngine.fromStored(c.tags).filter { it.label != c.placeName }
                 if (tags.isNotEmpty()) Text(tags.joinToString(" · ") { it.label }, style = Type.BodyS, color = Tc.TextMute)
+                VoiceProgress(pos, c.ownerName)
             }
             if (safetyPaused != null) {
                 Panel(Modifier.padding(bottom = 16.dp)) {
@@ -203,6 +209,25 @@ fun PlayingScreen(
                 Btn("그만", Modifier.weight(1f), icon = Icons.Rounded.Stop, height = Tc.TouchLarge, onClick = onStop)
             }
         }
+    }
+}
+
+/** A thin bar with time, so it is clear whether the voice is still playing. */
+@Composable
+private fun VoiceProgress(pos: Pair<Int, Int>?, owner: String?) {
+    fun t(ms: Int) = "%d:%02d".format(ms / 60000, ms / 1000 % 60)
+    val frac = pos?.let { (it.first.toFloat() / it.second).coerceIn(0f, 1f) } ?: 0f
+    Column(Modifier.fillMaxWidth().widthIn(max = 720.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        androidx.compose.material3.LinearProgressIndicator(
+            progress = { frac },
+            modifier = Modifier.fillMaxWidth().height(6.dp),
+            color = Tc.Text, trackColor = Tc.TextMute.copy(alpha = 0.25f), drawStopIndicator = {},
+        )
+        Text(
+            if (pos == null) "안내 뒤 ${owner?.let { "${it}님의 " } ?: ""}목소리가 나와요"
+            else "${owner?.let { "${it}님의 " } ?: ""}목소리 · ${t(pos.first)} / ${t(pos.second)}",
+            style = Type.LabelM, color = Tc.TextMute,
+        )
     }
 }
 

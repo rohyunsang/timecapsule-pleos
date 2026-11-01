@@ -231,6 +231,11 @@ class DriveController(
         sharing?.onDeleted(capsule)
     }
 
+    fun setShared(capsule: Capsule, shared: Boolean) { sharing?.setShared(capsule, shared) }
+
+    /** Voice position and length in ms while the voice plays; null during the narration. */
+    fun progress(): Pair<Int, Int>? = player.progress()
+
     fun deleteEverything(context: Context) = scope.launch {
         player.stop()
         repo.deleteEverything(context)

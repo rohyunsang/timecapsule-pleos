@@ -18,6 +18,8 @@ import java.io.File
 interface CapsuleSharing {
     fun onBuried(capsule: Capsule)
     fun onDeleted(capsule: Capsule)
+    /** Album: share one of my capsules with all friends, or take it back to just me. */
+    fun setShared(capsule: Capsule, shared: Boolean)
 }
 
 /**
@@ -34,6 +36,8 @@ class SocialSync(
     private val backend: SocialBackend,
     private val repo: CapsuleRepository,
     private val settings: Settings,
+    /** Where the car is now and what the place is called; a DEMO capsule is placed just ahead. */
+    private val here: () -> Pair<app.timecapsule.geo.GeoPoint, String?>? = { null },
 ) : CapsuleSharing {
     private val dir = File(context.filesDir, "capsules").apply { mkdirs() }
     private val lock = Mutex()
@@ -67,6 +71,22 @@ class SocialSync(
         val rid = capsule.remoteId ?: return
         scope.launch {
             if (capsule.isMine) backend.delete(rid) else settings.hide(rid)
+        }
+    }
+
+    override fun setShared(capsule: Capsule, shared: Boolean) {
+        scope.launch {
+            lock.withLock {
+                if (shared) {
+                    repo.setAudience(capsule.id, Audience.FRIENDS.name)
+                    if (backend.me.value == null) _messages.tryEmit("친구 탭에서 이름을 정하면 친구에게도 전해져요")
+                    else upload(capsule, announce = true)
+                } else {
+                    capsule.remoteId?.let { backend.delete(it) }
+                    repo.setAudience(capsule.id, Audience.SELF.name)
+                    _messages.tryEmit("이제 나만 들어요. 친구 차에서도 지워져요")
+                }
+            }
         }
     }
 
@@ -138,10 +158,13 @@ class SocialSync(
             val file = runCatching { File(dir.apply { mkdirs() }, "remote_${r.id}.$ext").apply { writeBytes(bytes) } }
                 .onFailure { Log.w(TAG, "cannot save ${r.id}", it) }.getOrNull() ?: continue
             val mine = r.ownerUid == me.uid
+            // The 체험 친구 cannot know where a judge's car is: put its capsule ~500m from here.
+            val spot = if (r.audience == Audience.DEMO) here() else null
             repo.insertFromServer(
                 Capsule(
-                    createdAt = r.createdAt, lat = r.lat, lng = r.lng, radiusM = r.radiusM,
-                    placeName = r.placeName, audioPath = file.absolutePath, durationSec = r.durationSec,
+                    createdAt = r.createdAt,
+                    lat = spot?.first?.let { it.lat + 0.0045 } ?: r.lat, lng = spot?.first?.lng ?: r.lng, radiusM = r.radiusM,
+                    placeName = spot?.let { it.second ?: "이 근처" } ?: r.placeName, audioPath = file.absolutePath, durationSec = r.durationSec,
                     tags = r.tags, rawVehicleState = r.rawVehicleState, carModel = null, odometerKm = null,
                     ownerUid = if (mine) null else r.ownerUid, ownerName = if (mine) null else r.ownerName,
                     audience = r.audience.name, recipients = r.recipients.joinToString(","), remoteId = r.id,
