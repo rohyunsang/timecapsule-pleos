@@ -86,7 +86,8 @@ class TimeCapsuleApp : Application() {
         ux = UxRestrictions(this).also { it.start() }
 
         val beeper = Beeper()
-        drive = DriveController(scope, vehicle, navi, repo, Recorder(this, beeper), Player(this), beeper, settings)
+        val sky = app.timecapsule.weather.SkySource(scope, navi.position).also { it.start() }
+        drive = DriveController(scope, vehicle, navi, repo, Recorder(this, beeper), Player(this), beeper, settings, sky = sky.sky)
 
         val useFirebase = BuildConfig.FIREBASE_API_KEY.isNotBlank() && !java.io.File(filesDir, FAKE_SERVER).exists()
         social = if (useFirebase) {

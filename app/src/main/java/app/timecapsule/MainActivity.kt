@@ -152,6 +152,7 @@ private fun Root(app: TimeCapsuleApp) {
                     onPause = drive::togglePause,
                     onStop = drive::stopPlayback,
                     progress = drive::progress,
+                    animate = !restricted,
                 )
             else -> when (screen) {
                 Screen.HOME -> HomeScreen(

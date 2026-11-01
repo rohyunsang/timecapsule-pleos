@@ -22,6 +22,8 @@ data class VehicleSnapshot(
     val placeName: String? = null,
     val odometerKm: Double? = null,
     val carModel: String? = null,
+    /** Weather at the car (weather.Sky name), from the weather service; not a car signal. */
+    val sky: String? = null,
 ) {
     /** Raw values for Capsule.rawVehicleState (spec F-02: keep raw data so tags can be recomputed). */
     fun toJson(): String {
@@ -30,7 +32,7 @@ data class VehicleSnapshot(
             "wiperOn" to wiperOn, "headlightOn" to headlightOn, "occupiedSeats" to occupiedSeats,
             "outsideTempC" to outsideTempC, "anyWindowOpen" to anyWindowOpen, "gearInPark" to gearInPark,
             "anyDoorOpen" to anyDoorOpen, "onHighway" to onHighway, "placeName" to placeName,
-            "odometerKm" to odometerKm, "carModel" to carModel,
+            "odometerKm" to odometerKm, "carModel" to carModel, "sky" to sky,
         )
         return fields.filter { it.second != null }.joinToString(",", "{", "}") { (k, v) ->
             q(k) + ":" + if (v is String) q(v) else v.toString()

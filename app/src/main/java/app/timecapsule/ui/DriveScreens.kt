@@ -158,6 +158,8 @@ fun PlayingScreen(
     onPause: () -> Unit,
     onStop: () -> Unit,
     progress: () -> Pair<Int, Int>? = { null },
+    /** Weather motion only when parked; while driving the backdrop stands still. */
+    animate: Boolean = true,
 ) {
     var pos by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Pair<Int, Int>?>(null) }
     androidx.compose.runtime.LaunchedEffect(playing?.capsule?.id) {
@@ -165,6 +167,12 @@ fun PlayingScreen(
     }
     BoxWithConstraints(Modifier.fillMaxSize().background(Tc.Bg)) {
         val portrait = widthClass(maxWidth) == WidthClass.Portrait
+        playing?.capsule?.let { c ->
+            WeatherBackdrop(
+                app.timecapsule.tag.TheDay.sky(c.rawVehicleState), app.timecapsule.tag.TheDay.isNight(c.createdAt),
+                animate, Modifier.matchParentSize(),
+            )
+        }
         Column(Modifier.fillMaxSize().padding(Tc.Gutter)) {
             if (playing == null) {
                 Text("불러오는 중…", style = Type.BodyM, color = Tc.TextMute)

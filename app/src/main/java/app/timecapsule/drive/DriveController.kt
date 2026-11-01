@@ -66,12 +66,14 @@ class DriveController(
     private val settings: Settings,
     /** Uploads capsules left for friends; set once the sharing layer exists. */
     var sharing: app.timecapsule.social.CapsuleSharing? = null,
+    sky: StateFlow<app.timecapsule.weather.Sky?> = MutableStateFlow(null),
 ) {
     private fun today() = LocalDate.now()
 
     /** Car state plus the place fields that come from the navigation app (spec F-02). */
-    val car: StateFlow<VehicleSnapshot> = combine(vehicle.snapshot, navi.position, navi.route) { s, pos, route ->
+    val car: StateFlow<VehicleSnapshot> = combine(vehicle.snapshot, navi.position, navi.route, sky) { s, pos, route, sk ->
         s.copy(
+            sky = s.sky ?: sk?.name,
             placeName = s.placeName ?: PlaceName.shorten(pos?.address) ?: route?.destination?.name,
             onHighway = s.onHighway ?: pos?.address?.let(PlaceName::isHighway),
         )

@@ -587,6 +587,8 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                 RowDivider()
                 ListRow("녹음 알림음", "함께 탄 사람도 알 수 있게 끌 수 없어요") { ValueText("켜짐") }
                 RowDivider()
+                ListRow("날씨", "묻을 때 그날 날씨를 함께 남겨요 · 날씨 서버에는 대략 위치(약 10km)만 보내요") { ValueText("자동") }
+                RowDivider()
                 ListRow("저장 위치", "친구에게 공개한 캡슐만 서버에 올라가요 · 앨범에서 하나씩 바꿀 수 있어요") { ValueText("이 차 + 서버") }
             }
             Spacer(Modifier.height(8.dp))

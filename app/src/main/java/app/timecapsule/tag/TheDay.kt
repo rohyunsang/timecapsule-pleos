@@ -1,17 +1,29 @@
 package app.timecapsule.tag
 
+import app.timecapsule.weather.Sky
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.ZoneId
 
 /**
  * What the day was like when the capsule was buried, for whoever listens to it later.
- * Built from the raw vehicle values saved with the capsule (Capsule.rawVehicleState), so a
- * friend's car shows the same thing. Facts only, no mood words:
- *   screen: "금요일 밤 · 비 · 바깥 12도 · 셋이서"
- *   spoken: "그날은 비가 왔고, 셋이 타고 있었어요."
+ * Built from the raw values saved with the capsule (Capsule.rawVehicleState), so a friend's
+ * car shows the same thing. Facts only, no mood words:
+ *   screen: "금요일 밤 · 흐림 · 바깥 12도 · 셋이서"
+ *   spoken: "그날은 흐렸고, 셋이 타고 있었어요."
  */
 object TheDay {
+
+    /** The weather of that day: the saved sky, but a running wiper always means rain. */
+    fun sky(raw: String): Sky? {
+        val v = parse(raw)
+        val saved = v["sky"]?.let { s -> Sky.entries.firstOrNull { it.name == s } }
+        val wet = saved == Sky.RAIN || saved == Sky.SNOW || saved == Sky.STORM
+        return if (v["wiperOn"] == "true" && !wet) Sky.RAIN else saved
+    }
+
+    fun isNight(createdAt: Long, zone: ZoneId = ZoneId.systemDefault()) =
+        Instant.ofEpochMilli(createdAt).atZone(zone).hour.let { it >= 20 || it < 5 }
 
     /** Short facts for the screen, in order: when, weather, temperature, people, road. */
     fun facts(createdAt: Long, raw: String, zone: ZoneId = ZoneId.systemDefault()): List<String> {
@@ -19,7 +31,7 @@ object TheDay {
         val v = parse(raw)
         return listOfNotNull(
             "${dayName(t.dayOfWeek)} ${partOfDay(t.hour)}",
-            "비".takeIf { v["wiperOn"] == "true" },
+            sky(raw)?.let(::label),
             v["outsideTempC"]?.toFloatOrNull()?.let { "바깥 ${Math.round(it)}도" },
             v["occupiedSeats"]?.toIntOrNull()?.let(::people),
             "창문 열고".takeIf { v["anyWindowOpen"] == "true" },
@@ -30,15 +42,36 @@ object TheDay {
     /** One plain sentence after the narration, or null when there is nothing worth saying. */
     fun spoken(raw: String): String? {
         val v = parse(raw)
-        val rain = v["wiperOn"] == "true"
+        val sky = sky(raw)
         val seats = v["occupiedSeats"]?.toIntOrNull()?.takeIf { it >= 2 }
-        val who = seats?.let { "${count(it)} 타고 있었어요" }
+        val who = seats?.let { "${count(it)} 타고 있었" }
         return when {
-            rain && who != null -> "그날은 비가 왔고, $who."
-            rain -> "그날은 비가 왔어요."
-            who != null -> "그날은 $who."
+            sky != null && who != null -> "그날은 ${verb(sky)}고, ${who}어요."
+            sky != null -> "그날은 ${verb(sky)}어요."
+            who != null -> "그날은 ${who}어요."
             else -> null
         }
+    }
+
+    fun label(s: Sky) = when (s) {
+        Sky.CLEAR -> "맑음"
+        Sky.PARTLY -> "구름 조금"
+        Sky.CLOUDY -> "흐림"
+        Sky.FOG -> "안개"
+        Sky.RAIN -> "비"
+        Sky.SNOW -> "눈"
+        Sky.STORM -> "천둥 번개"
+    }
+
+    /** Past stem, finished with "어요" or "고": 맑았어요 / 맑았고. */
+    private fun verb(s: Sky) = when (s) {
+        Sky.CLEAR -> "맑았"
+        Sky.PARTLY -> "구름이 조금 있었"
+        Sky.CLOUDY -> "흐렸"
+        Sky.FOG -> "안개가 꼈"
+        Sky.RAIN -> "비가 왔"
+        Sky.SNOW -> "눈이 왔"
+        Sky.STORM -> "천둥 번개가 쳤"
     }
 
     fun partOfDay(hour: Int) = when (hour) {

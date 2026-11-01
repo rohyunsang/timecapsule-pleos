@@ -25,4 +25,14 @@ class TheDayTest {
         assertEquals("그날은 둘이 타고 있었어요.", TheDay.spoken("""{"wiperOn":false,"occupiedSeats":2}"""))
         assertNull(TheDay.spoken("""{"headlightOn":true}"""))
     }
+
+    @Test fun savedSkyAndWiper() {
+        assertEquals(listOf("금요일 밤", "흐림", "둘이서"), TheDay.facts(fridayNight, """{"sky":"CLOUDY","occupiedSeats":2}""", zone))
+        assertEquals("그날은 맑았어요.", TheDay.spoken("""{"sky":"CLEAR"}"""))
+        assertEquals("그날은 흐렸고, 둘이 타고 있었어요.", TheDay.spoken("""{"sky":"CLOUDY","occupiedSeats":2}"""))
+        // The wiper is the car's own proof: a "clear" forecast with the wiper on was rain.
+        assertEquals(app.timecapsule.weather.Sky.RAIN, TheDay.sky("""{"sky":"CLEAR","wiperOn":true}"""))
+        assertEquals(app.timecapsule.weather.Sky.SNOW, TheDay.sky("""{"sky":"SNOW","wiperOn":true}"""))
+        assertEquals(app.timecapsule.weather.Sky.FOG, app.timecapsule.weather.Sky.fromWmo(45))
+    }
 }
