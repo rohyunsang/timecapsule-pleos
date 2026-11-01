@@ -185,6 +185,13 @@ class DriveController(
         discardRecording = true
         dispatch(DriveEvent.RecordingEnded)
     }
+    /** The alert whose spoken line has finished: a voice answer is welcome until it closes. */
+    private val _answerWindow = MutableStateFlow<Long?>(null)
+    val answerWindow: StateFlow<Long?> = _answerWindow.asStateFlow()
+
+    /** When the last playback ended; no new alert right after one (one at a time, then quiet). */
+    private var lastPlaybackEndAt = 0L
+
     fun listen() = dispatch(DriveEvent.PlayRequested)
     fun later() = dispatch(DriveEvent.Later)
     fun stopPlayback() = dispatch(DriveEvent.PlaybackFinished)
@@ -260,6 +267,7 @@ class DriveController(
 
     private fun apply(t: Transition) {
         _state.value = t.state
+        if (t.state !is DriveState.ApproachAlert) _answerWindow.value = null
         t.effects.forEach(::run)
     }
 
@@ -275,6 +283,7 @@ class DriveController(
             is Effect.StartPlayback -> startPlayback(effect.capsuleId)
             Effect.PausePlayback -> player.pause()
             Effect.StopPlayback -> {
+                lastPlaybackEndAt = SystemClock.elapsedRealtime()
                 player.stop()
                 _playing.value = null
                 _userPaused.value = false
@@ -348,7 +357,8 @@ class DriveController(
             _alert.value = AlertUi(c, line, dist)
             repo.logNotify(id, today(), "shown")
             beeper.alert()
-            player.say(line)
+            // Once the line has been read out, the driver may answer by voice (VoiceAnswer).
+            player.say(line) { if (_state.value == DriveState.ApproachAlert(id)) _answerWindow.value = id }
             alertTimeout?.cancel()
             alertTimeout = scope.launch {
                 delay(Rules.ALERT_TIMEOUT_MS)
@@ -381,6 +391,7 @@ class DriveController(
     private suspend fun checkApproach() {
         if (_state.value != DriveState.Idle || signals.value.isNotEmpty()) return
         if (SystemClock.elapsedRealtime() - lastSignalClearAt < DriveStateMachine.RESUME_ALERT_MS) return
+        if (SystemClock.elapsedRealtime() - lastPlaybackEndAt < DriveStateMachine.QUIET_AFTER_PLAYBACK_MS) return
         val here = navi.position.value?.point ?: return
         val hit = ApproachDetector.next(here, capsules.value, locks.value, repo.notifiedToday(today()), today()) ?: return
         if (_state.value == DriveState.Idle) dispatch(DriveEvent.CapsuleWithinRange(hit.capsule.id))

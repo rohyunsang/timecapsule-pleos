@@ -87,6 +87,8 @@ dependencies {
 
     implementation(libs.pleos.vehicle)
     implementation(libs.pleos.navihelper)
+    implementation(libs.pleos.tts)
+    implementation(libs.pleos.stt)
 
     // Friends and shared capsules. Only Auth (anonymous) + Firestore: both work without
     // Google Play services, which Pleos head units do not have. Audio goes into Firestore

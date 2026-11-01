@@ -43,6 +43,8 @@ data class Transition(val state: DriveState, val effects: List<Effect> = emptyLi
 object DriveStateMachine {
     const val RESUME_PLAYBACK_MS = 2_000L
     const val RESUME_ALERT_MS = 10_000L
+    /** After a capsule has played, the road stays quiet for a minute before the next alert. */
+    const val QUIET_AFTER_PLAYBACK_MS = 60_000L
 
     fun reduce(state: DriveState, event: DriveEvent): Transition = when (state) {
         DriveState.Idle -> when (event) {

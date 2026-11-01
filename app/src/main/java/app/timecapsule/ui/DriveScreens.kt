@@ -113,13 +113,13 @@ fun RecordingScreen(since: Long?, place: String?, tags: List<MoodTag>, onStop: (
  * posted as a real heads-up notification instead (AlertNotifier), so it shows over navigation.
  */
 @Composable
-fun AlertCard(alert: AlertUi, onListen: () -> Unit, onLater: () -> Unit) {
+fun AlertCard(alert: AlertUi, onListen: () -> Unit, onLater: () -> Unit, hearing: Boolean = false) {
     val now = rememberNow(alert.shownAt)
     val leftMs = (Rules.ALERT_TIMEOUT_MS - (now - alert.shownAt)).coerceAtLeast(0)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         SystemNotice(
             title = alert.line,
-            description = alertDescription(alert),
+            description = alertDescription(alert) + if (hearing) " · 말로 해도 돼요: 들려줘 / 다음에" else "",
             modifier = Modifier.padding(16.dp).widthIn(max = 760.dp),
             cta = "들려줘" to onListen, ctaIcon = Icons.Rounded.PlayArrow,
             sub = "다음에" to onLater,
@@ -245,5 +245,6 @@ fun SafetySignal.korean() = when (this) {
     SafetySignal.SAFETY_WARNING -> "안전 경고"
     SafetySignal.HARD_BRAKE -> "제동"
     SafetySignal.TURN_SIGNAL -> "방향지시등"
+    SafetySignal.SHARP_TURN -> "회전"
     SafetySignal.NAVI_VOICE -> "길 안내 음성"
 }

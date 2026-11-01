@@ -159,7 +159,7 @@ fun HomeScreen(
 @Composable
 @Suppress("UNUSED_PARAMETER")
 private fun AppBar(onPleos: Boolean, restricted: Boolean, onDev: () -> Unit) {
-    Header("타임캡슐") { if (app.timecapsule.BuildConfig.DEBUG) IconBtn(Icons.Rounded.MoreHoriz, "개발 패널", onClick = onDev) }
+    Header("타임캡슐") { IconBtn(Icons.Rounded.MoreHoriz, "시연 패널", onClick = onDev) }
 }
 
 /**
@@ -583,7 +583,7 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             Section("개인정보")
             Panel {
-                ListRow("녹음은 직접 누를 때만", "마이크는 버튼을 눌렀을 때만 켜져요") { ValueText("항상") }
+                ListRow("녹음은 직접 누를 때만", "마이크는 버튼을 눌렀을 때와, 캡슐 알림에 말로 답할 때(몇 초)만 켜져요") { ValueText("항상") }
                 RowDivider()
                 ListRow("녹음 알림음", "함께 탄 사람도 알 수 있게 끌 수 없어요") { ValueText("켜짐") }
                 RowDivider()

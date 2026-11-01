@@ -105,7 +105,7 @@ class SocialSync(
         val r = RemoteCapsule(
             ownerUid = me.uid, ownerName = me.name, createdAt = fresh.createdAt,
             lat = fresh.lat, lng = fresh.lng, radiusM = fresh.radiusM, placeName = fresh.placeName,
-            durationSec = fresh.durationSec, tags = fresh.tags, rawVehicleState = fresh.rawVehicleState,
+            durationSec = fresh.durationSec, tags = fresh.tags, rawVehicleState = shareableState(fresh.rawVehicleState),
             openAfter = repo.lockFor(fresh.id)?.openAfter,
             audience = Audience.valueOf(fresh.audience),
             recipients = fresh.recipients.split(',').filter { it.isNotBlank() },
@@ -118,6 +118,7 @@ class SocialSync(
             if (announce) _messages.tryEmit("지금은 친구에게 보내지 못했어요. 연결되면 다시 보낼게요")
         }
     }
+
 
     private fun sentTo(c: Capsule, visible: List<String>): String {
         val names = backend.friends.value.filter { it.uid in visible }.map { it.name }
@@ -185,3 +186,7 @@ class SocialSync(
 
     private companion object { const val TAG = "SocialSync" }
 }
+
+/** What a friend gets of the car state: the day (weather, people), not my odometer or car model. */
+internal fun shareableState(raw: String): String =
+    raw.replace(Regex(""""(odometerKm|carModel)"\s*:\s*("(?:[^"\\]|\\.)*"|[^,}]+),?"""), "").replace(",}", "}")

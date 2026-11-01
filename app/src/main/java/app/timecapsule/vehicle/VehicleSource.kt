@@ -41,7 +41,8 @@ data class VehicleSnapshot(
 }
 
 /** Signals that must pause playback or end recording (spec F-05, F-13). */
-enum class SafetySignal { SAFETY_WARNING, HARD_BRAKE, TURN_SIGNAL, NAVI_VOICE }
+/** SHARP_TURN: the steering wheel turned far (a corner, a U-turn); nothing should start then. */
+enum class SafetySignal { SAFETY_WARNING, HARD_BRAKE, TURN_SIGNAL, SHARP_TURN, NAVI_VOICE }
 
 /**
  * Everything the app reads from the car. The Pleos implementation wraps Vehicle SDK and NaviHelper;

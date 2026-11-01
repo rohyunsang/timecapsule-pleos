@@ -12,6 +12,7 @@ coroutines = "1.8.1"
 junit = "4.13.2"
 pleosVehicle = "2.3.2"
 pleosNavi = "3.0.5"
+pleosSpeech = "3.3.1"
 firebaseBom = "33.7.0"
 zxing = "3.5.3"
 
@@ -34,6 +35,8 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 pleos-vehicle = { group = "ai.pleos.playground", name = "Vehicle", version.ref = "pleosVehicle" }
 pleos-navihelper = { group = "ai.pleos.playground", name = "NaviHelper", version.ref = "pleosNavi" }
+pleos-tts = { group = "ai.pleos.playground", name = "TextToSpeech", version.ref = "pleosSpeech" }
+pleos-stt = { group = "ai.pleos.playground", name = "SpeechToText", version.ref = "pleosSpeech" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
 firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore" }

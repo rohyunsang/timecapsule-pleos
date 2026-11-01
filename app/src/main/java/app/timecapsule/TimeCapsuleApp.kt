@@ -57,6 +57,8 @@ class TimeCapsuleApp : Application() {
 
     /** True while any activity of the app is started (on screen, also in a split window). */
     val visible = kotlinx.coroutines.flow.MutableStateFlow(false)
+    lateinit var voiceAnswer: app.timecapsule.drive.VoiceAnswer
+        private set
     private var started = 0
 
     /** True when running on a Pleos head unit (real Vehicle SDK and NaviHelper). */
@@ -115,6 +117,9 @@ class TimeCapsuleApp : Application() {
         })
         // Alerts over navigation when the app is not on screen.
         app.timecapsule.drive.AlertNotifier(this, scope, drive, visible).start()
+        // Steering wheel media keys and voice answers for the approach alert (Pleos SDK).
+        app.timecapsule.drive.MediaKeys(this, scope, drive).start()
+        voiceAnswer = app.timecapsule.drive.VoiceAnswer(this, scope, drive).also { it.start(this) }
     }
 
     /** Dev panel: switch between real Pleos and fake sources; takes effect on next start. */

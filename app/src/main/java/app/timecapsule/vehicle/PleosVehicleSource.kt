@@ -70,6 +70,7 @@ class PleosVehicleSource(context: Context, private val scope: CoroutineScope) : 
         subscribeTemperature()
         subscribeOdometer()
         subscribeTurnSignal()
+        subscribeSteering()
         subscribeBrake()
         subscribeTelltales()
     }
@@ -195,6 +196,21 @@ class PleosVehicleSource(context: Context, private val scope: CoroutineScope) : 
         sub("Odometer", { odo.registerDistanceDriven(l) }) { odo.unregisterDistanceDriven(l) }
     }
 
+    /** Big steering angle = turning: on above 90 degrees, off again below 45 (no flicker). */
+    private fun subscribeSteering() {
+        val l = object : ai.pleos.playground.vehicle.listener.SteeringWheelAngleListener {
+            override fun onSteeringWheelAngleUpdated(angle: Float?) {
+                val a = kotlin.math.abs(angle ?: 0f)
+                val on = SafetySignal.SHARP_TURN in _signals.value
+                if (!on && a >= SHARP_TURN_ON_DEG) setSignal(SafetySignal.SHARP_TURN, true)
+                else if (on && a <= SHARP_TURN_OFF_DEG) setSignal(SafetySignal.SHARP_TURN, false)
+            }
+            override fun onFailed(e: Exception) = failed("Steering")(e)
+        }
+        val wheel = vehicle.getSteeringWheel()
+        sub("Steering", { wheel.registerSteeringWheelAngle(l) }) { wheel.unregisterSteeringWheelAngle(l) }
+    }
+
     private fun subscribeTurnSignal() {
         val l = object : TurnSignalStateListener {
             override fun onTurnSignalStateUpdated(value: TurnSignalValue?) {
@@ -249,6 +265,8 @@ class PleosVehicleSource(context: Context, private val scope: CoroutineScope) : 
     companion object {
         private const val TAG = "PleosVehicle"
         private const val BRAKE_PULSE_MS = 1_500L
+        private const val SHARP_TURN_ON_DEG = 90f
+        private const val SHARP_TURN_OFF_DEG = 45f
         private val WARNING_TELLTALES = setOf(
             TelltaleType.MASTER_WARNING, TelltaleType.ABS, TelltaleType.ESC, TelltaleType.AIRBAG,
             TelltaleType.ENGINE_OIL_PRESSURE, TelltaleType.ENGINE_TEMPERATURE, TelltaleType.POWER_DOWN,

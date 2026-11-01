@@ -167,7 +167,8 @@ private fun Root(app: TimeCapsuleApp) {
                 Screen.FRIENDS -> FriendsScreen(app) { screen = Screen.HOME }
             }
         }
-        alert?.let { AlertCard(it, drive::listen, drive::later) }
+        val hearing by app.voiceAnswer.listening.collectAsState()
+        alert?.let { AlertCard(it, drive::listen, drive::later, hearing) }
         if (dev && s != DriveState.Recording) DevPanel(app) { dev = false }
     }
 }

@@ -7,18 +7,15 @@ import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.util.Locale
 
 /**
  * F-05 playback: spoken narration, then the original voice.
  *
- * Narration uses Android TextToSpeech because the Pleos TTS SDK is not released yet; when no
+ * Narration uses the Pleos on-device TTS on a car (Android TTS elsewhere, see Speech); when no
  * engine is installed the narration is skipped and only shown on screen.
  *
  * Audio focus doubles as the "navigation is speaking" signal: when the navigation app takes
@@ -33,18 +30,9 @@ class Player(context: Context) {
         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
         .build()
 
-    private var ttsReady = false
-
-    // The init callback can fire synchronously inside the constructor (engine missing),
-    // before `tts` is assigned, so handle it on the next main-loop tick.
-    private val tts: TextToSpeech = TextToSpeech(app) { status -> main.post { onTtsInit(status) } }
-
-    private fun onTtsInit(status: Int) {
-        val lang = if (status == TextToSpeech.SUCCESS) tts.setLanguage(Locale.KOREAN) else TextToSpeech.LANG_NOT_SUPPORTED
-        ttsReady = lang >= TextToSpeech.LANG_AVAILABLE
-        Log.i(TAG, "TTS status=$status korean=$lang ready=$ttsReady")
-        if (ttsReady) tts.setAudioAttributes(attrs)
-    }
+    /** Pleos on-device TTS on a car, Android TTS elsewhere (see Speech). */
+    private val speech: Speech = Speeches.create(app, attrs)
+    val speechName get() = speech.name
 
     private val _navigationSpeaking = MutableStateFlow(false)
     val navigationSpeaking: StateFlow<Boolean> = _navigationSpeaking.asStateFlow()
@@ -64,17 +52,6 @@ class Player(context: Context) {
             AudioManager.AUDIOFOCUS_GAIN -> _navigationSpeaking.value = false
             AudioManager.AUDIOFOCUS_LOSS -> { _navigationSpeaking.value = false; stop() }
         }
-    }
-
-    init {
-        tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(id: String?) {}
-            override fun onDone(id: String?) {
-                if (id == NARRATION_ID) main.post { if (phase == Phase.NARRATION) startVoice(0) }
-            }
-            @Deprecated("Deprecated in Java")
-            override fun onError(id: String?) = onDone(id)
-        })
     }
 
     val isActive get() = phase != Phase.IDLE
@@ -97,7 +74,7 @@ class Player(context: Context) {
 
     fun pause() {
         when (phase) {
-            Phase.NARRATION -> { tts.stop(); phase = Phase.PAUSED_NARRATION }
+            Phase.NARRATION -> { phase = Phase.PAUSED_NARRATION; speech.stop() }
             Phase.VOICE -> { media?.pause(); phase = Phase.PAUSED_VOICE }
             else -> {}
         }
@@ -120,19 +97,19 @@ class Player(context: Context) {
     }
 
     /** One-off spoken line (confirmations, F-03 forecast, F-04 alert). */
-    fun say(text: String) {
-        if (ttsReady && phase == Phase.IDLE) tts.speak(text, TextToSpeech.QUEUE_ADD, null, "say")
+    fun say(text: String, onDone: () -> Unit = {}) {
+        if (speech.ready && phase == Phase.IDLE) speech.speak(text, onDone) else onDone()
     }
 
     fun release() {
         stop()
-        tts.shutdown()
+        speech.release()
     }
 
     private fun startNarration() {
-        if (ttsReady && narration.isNotBlank()) {
+        if (speech.ready && narration.isNotBlank()) {
             phase = Phase.NARRATION
-            tts.speak(narration, TextToSpeech.QUEUE_FLUSH, null, NARRATION_ID)
+            speech.speak(narration) { if (phase == Phase.NARRATION) startVoice(0) }
         } else {
             startVoice(0)
         }
@@ -164,7 +141,7 @@ class Player(context: Context) {
     }
 
     private fun stopInternal() {
-        if (phase == Phase.NARRATION) tts.stop()
+        if (phase == Phase.NARRATION) speech.stop()
         media?.release()
         media = null
         phase = Phase.IDLE
@@ -188,6 +165,5 @@ class Player(context: Context) {
 
     companion object {
         private const val TAG = "Player"
-        private const val NARRATION_ID = "narration"
     }
 }
