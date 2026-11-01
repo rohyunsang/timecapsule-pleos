@@ -50,18 +50,28 @@ class TimeCapsuleApp : Application() {
         settings = Settings(this)
         repo = CapsuleRepository(db)
 
-        onPleos = isInstalled(PLEOS_CAR_SERVICE)
+        // Dev: a "force_fake" file switches to fake car + navi even on a Pleos unit (for demos).
+        val forceFake = java.io.File(filesDir, FORCE_FAKE).exists()
+        onPleos = !forceFake && isInstalled(PLEOS_CAR_SERVICE)
         vehicle = if (onPleos) {
             runCatching { PleosVehicleSource(this, scope).also { it.start() } }.getOrNull()
                 ?: fakeVehicle().also { onPleos = false }
         } else fakeVehicle()
-        navi = if (isInstalled(PLEOS_NAVI_SERVICE)) {
+        navi = if (!forceFake && isInstalled(PLEOS_NAVI_SERVICE)) {
             PleosNaviSource(this, scope).also { it.start() }
         } else FakeNaviSource(NaviPosition(GeoPoint(37.7519, 128.8761), "강원특별자치도 강릉시 7번 국도"))
 
         val beeper = Beeper()
         drive = DriveController(scope, vehicle, navi, repo, Recorder(this, beeper), Player(this), beeper, settings)
     }
+
+    /** Dev panel: switch between real Pleos and fake sources; takes effect on next start. */
+    fun setForceFake(on: Boolean) {
+        val f = java.io.File(filesDir, FORCE_FAKE)
+        if (on) f.createNewFile() else f.delete()
+    }
+
+    val forceFake get() = java.io.File(filesDir, FORCE_FAKE).exists()
 
     private fun fakeVehicle() = FakeVehicleSource(VehicleSnapshot(occupiedSeats = 1, outsideTempC = 18f, gearInPark = true))
 
@@ -75,5 +85,6 @@ class TimeCapsuleApp : Application() {
     private companion object {
         const val PLEOS_CAR_SERVICE = "ai.pleos.service.car"
         const val PLEOS_NAVI_SERVICE = "ai.pleos.playground.service.navi"
+        const val FORCE_FAKE = "force_fake"
     }
 }

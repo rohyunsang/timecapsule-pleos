@@ -32,6 +32,7 @@ import app.timecapsule.ui.PlayingScreen
 import app.timecapsule.ui.RecordingScreen
 import app.timecapsule.ui.Screen
 import app.timecapsule.ui.SettingsScreen
+import app.timecapsule.ui.Tc
 import app.timecapsule.ui.TimeCapsuleTheme
 
 class MainActivity : ComponentActivity() {
@@ -48,7 +49,7 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             TimeCapsuleTheme {
-                Surface(Modifier.fillMaxSize()) { Root(app) }
+                Surface(Modifier.fillMaxSize(), color = Tc.Bg) { Root(app) }
             }
         }
     }

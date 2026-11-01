@@ -8,10 +8,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PauseCircle
+import androidx.compose.material.icons.rounded.Place
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Replay
+import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -21,9 +30,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.timecapsule.capsule.Rules
 import app.timecapsule.drive.AlertUi
 import app.timecapsule.drive.PlayingUi
@@ -35,7 +44,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-/** Screen 04: recording. One big stop button, live countdown, the tags being captured. */
+/** Screen 04: recording. One action, a countdown you can read at a glance. */
 @Composable
 fun RecordingScreen(since: Long?, tags: List<MoodTag>, onStop: () -> Unit) {
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
@@ -49,35 +58,41 @@ fun RecordingScreen(since: Long?, tags: List<MoodTag>, onStop: () -> Unit) {
     val left = (Rules.MAX_RECORD_SEC - elapsed).coerceAtLeast(0)
 
     Column(
-        Modifier.fillMaxSize().padding(48.dp),
+        Modifier.fillMaxSize().padding(Tc.Gutter),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(Tc.Gap, Alignment.CenterVertically),
     ) {
-        Text("● 녹음 중", fontSize = 30.sp, color = MaterialTheme.colorScheme.error)
-        Text("$left", fontSize = 120.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Dot(Tc.Rec, 14.dp)
+            Text("  녹음 중", style = Type.Title, color = Tc.Rec)
+        }
+        Text("$left", style = Type.Display, color = Tc.Text)
         LinearProgressIndicator(
             progress = { elapsed / Rules.MAX_RECORD_SEC.toFloat() },
-            modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth(),
+            modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+            color = Tc.Accent,
+            trackColor = Tc.Surface2,
+            drawStopIndicator = {},
         )
-        Caption(if (elapsed < Rules.MIN_RECORD_SEC) "3초 이상 말해 주세요" else "\"그만\" 하거나 버튼을 누르면 묻어요")
+        Body(if (elapsed < Rules.MIN_RECORD_SEC) "3초 이상 말해 주세요" else "다 말했으면 버튼을 누르세요. 30초가 되면 자동으로 묻혀요")
         TagRow(tags)
-        BigButton("끝내고 묻기", Modifier.widthIn(min = 360.dp), onClick = onStop)
+        Btn("끝내고 묻기", Modifier.widthIn(min = 400.dp), icon = Icons.Rounded.Stop, style = BtnStyle.Primary, onClick = onStop)
     }
 }
 
-/** Screen 05: approach alert card. */
+/** Screen 05: approach alert. */
 @Composable
 fun AlertCard(alert: AlertUi, onListen: () -> Unit, onLater: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(Color(0x99000000)), contentAlignment = Alignment.Center) {
-        Panel(Modifier.widthIn(max = 760.dp).padding(32.dp), highlight = true) {
-            Caption("${formatDistance(alert.distanceM)} 앞")
-            Text(alert.line, fontSize = 32.sp)
+    Box(Modifier.fillMaxSize().background(Color(0xB30F1012)), contentAlignment = Alignment.Center) {
+        Card(Modifier.widthIn(max = 720.dp).padding(Tc.Gutter), accent = true) {
+            Eyebrow("${formatDistance(alert.distanceM)} 앞", Icons.Rounded.Place, Tc.Accent)
+            Headline(alert.line)
             TagRow(MoodTagEngine.fromStored(alert.capsule.tags))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                BigButton("들려줘", Modifier.weight(1f), onClick = onListen)
-                BigButton("다음에", Modifier.weight(1f), primary = false, onClick = onLater)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Btn("들려줘", Modifier.weight(1f), icon = Icons.Rounded.PlayArrow, style = BtnStyle.Primary, onClick = onListen)
+                Btn("다음에", Modifier.weight(1f), onClick = onLater)
             }
-            Caption("10초 동안 답이 없으면 다음 정차 때 다시 알려 드려요")
+            Meta("10초 동안 답이 없으면 다음에 차를 세웠을 때 다시 알려 드려요")
         }
     }
 }
@@ -93,8 +108,8 @@ fun PlayingScreen(
     onStop: () -> Unit,
 ) {
     Column(
-        Modifier.fillMaxSize().padding(48.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
+        Modifier.fillMaxSize().padding(horizontal = 72.dp, vertical = Tc.Gutter),
+        verticalArrangement = Arrangement.spacedBy(Tc.Gap, Alignment.CenterVertically),
     ) {
         if (playing == null) {
             Body("불러오는 중…")
@@ -103,20 +118,25 @@ fun PlayingScreen(
         val c = playing.capsule
         val date = Instant.ofEpochMilli(c.createdAt).atZone(ZoneId.systemDefault())
             .format(DateTimeFormatter.ofPattern("yyyy년 M월 d일 a h:mm"))
-        val seats = MoodTagEngine.fromStored(c.tags).firstOrNull { it.label.endsWith("이서") }?.label ?: "혼자"
-        Caption("$date · ${c.placeName ?: "장소 기록 없음"} · $seats")
-        Text("“${playing.narration}”", fontSize = 36.sp, lineHeight = 48.sp)
-        TagRow(MoodTagEngine.fromStored(c.tags))
+        val tags = MoodTagEngine.fromStored(c.tags)
+        val seats = tags.firstOrNull { it.label.endsWith("이서") }?.label ?: "혼자"
+        Eyebrow("$date  ·  ${c.placeName ?: "장소 기록 없음"}  ·  $seats")
+        Text(playing.narration, style = Type.Headline.copy(fontSize = Type.Headline.fontSize * 1.2f, lineHeight = Type.Headline.lineHeight * 1.2f), color = Tc.Text)
+        TagRow(tags)
         if (safetyPaused != null) {
-            Panel(highlight = true) {
-                Body("잠시 멈췄어요 · ${safetyPaused.joinToString { it.korean() }}")
-                Caption("신호가 끝나고 2초 뒤에 이어서 들려 드려요")
+            Card(accent = true) {
+                Eyebrow("잠시 멈춤", Icons.Rounded.PauseCircle, Tc.Accent)
+                Body("${safetyPaused.joinToString(", ") { it.korean() }} 때문에 멈췄어요. 끝나고 2초 뒤에 이어서 들려 드려요", Tc.Text)
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            BigButton("처음부터", Modifier.weight(1f), primary = false, onClick = onRestart)
-            BigButton(if (userPaused) "이어 듣기" else "일시정지", Modifier.weight(1f), onClick = onPause)
-            BigButton("그만", Modifier.weight(1f), primary = false, onClick = onStop)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Btn("처음부터", Modifier.weight(1f), icon = Icons.Rounded.Replay, onClick = onRestart)
+            Btn(
+                if (userPaused) "이어 듣기" else "일시정지", Modifier.weight(1f),
+                icon = if (userPaused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                style = BtnStyle.Primary, onClick = onPause,
+            )
+            Btn("그만", Modifier.weight(1f), icon = Icons.Rounded.Stop, onClick = onStop)
         }
     }
 }
