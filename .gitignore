@@ -1,0 +1,27 @@
+# Android / Gradle
+.gradle/
+build/
+*/build/
+captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+*.iml
+.idea/
+.DS_Store
+Thumbs.db
+
+# Signing & secrets
+*.jks
+*.keystore
+keystore.properties
+secrets.properties
+google-services.json
+
+# Logs
+*.log
+
+# APK: only the final release file in apk/ is committed
+*.apk
+*.aab
+!apk/*_release.apk

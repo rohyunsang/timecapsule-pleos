@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>타임캡슐 기능 기획서</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column, spec tables as the main material; amber marks priority P0 and IDs. */
+:root {
+  --bg: #f2f4f7; --surface: #ffffff; --ink: #17202c; --muted: #566172; --rule: #d9dee6;
+  --accent: #a86400; --accent-soft: #fbefd9; --p0: #a86400; --p1: #2f6aa8; --p2: #6b7480;
+  --display: "Noto Serif KR", Georgia, serif;
+  --body: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0e141c; --surface: #151d28; --ink: #e7ebf1; --muted: #9aa5b5; --rule: #2a3544; --accent: #f2a93b; --accent-soft: #2c2215; --p0: #f2a93b; --p1: #7fb4ea; --p2: #9aa5b5; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0e141c; --surface: #151d28; --ink: #e7ebf1; --muted: #9aa5b5; --rule: #2a3544; --accent: #f2a93b; --accent-soft: #2c2215; --p0: #f2a93b; --p1: #7fb4ea; --p2: #9aa5b5; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.75; word-break: keep-all;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+.wrap { max-width: 860px; margin: 0 auto; display: grid; gap: 52px; }
+header { padding-top: 52px; display: grid; gap: 14px; }
+.eyebrow { font-family: var(--mono); font-size: 12.5px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+h1 { font-family: var(--display); font-size: clamp(34px, 7vw, 52px); line-height: 1.15; margin: 0; }
+.lead { margin: 0; color: var(--muted); max-width: 66ch; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding-block: 12px; }
+nav.toc a { color: var(--muted); text-decoration: none; } nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+section { display: grid; gap: 16px; min-width: 0; }
+h2 { font-family: var(--display); font-size: 25px; margin: 0; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { font-family: var(--mono); font-size: 14px; color: var(--accent); font-weight: 500; }
+h3 { font-size: 17px; margin: 6px 0 0; }
+p { margin: 0; max-width: 68ch; }
+ul, ol { margin: 0; padding-left: 1.3em; display: grid; gap: 4px; }
+a { color: var(--accent); }
+.table { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+th { font-size: 12.5px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.id { font-family: var(--mono); font-size: 13px; color: var(--accent); white-space: nowrap; }
+td.nm { font-weight: 500; white-space: nowrap; }
+.p { display: inline-block; font-family: var(--mono); font-size: 12px; font-weight: 500; padding: 0 8px; border-radius: 99px; border: 1px solid currentColor; }
+.p.p0 { color: var(--p0); } .p.p1 { color: var(--p1); } .p.p2 { color: var(--p2); }
+.spec { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 18px 20px; display: grid; gap: 10px; }
+.spec-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; }
+.spec-head code { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+.spec-head b { font-size: 17px; }
+.spec dl { margin: 0; display: grid; grid-template-columns: 6.5em 1fr; gap: 6px 14px; font-size: 14.5px; line-height: 1.65; }
+.spec dt { color: var(--muted); }
+.spec dd { margin: 0; min-width: 0; }
+.flow { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 18px; overflow-x: auto; }
+.flow svg { display: block; min-width: 640px; width: 100%; height: auto; }
+.flow text { font-family: var(--body); }
+code.inline { font-family: var(--mono); font-size: 13.5px; background: var(--accent-soft); padding: 1px 6px; border-radius: 4px; }
+.team { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.member { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 16px; display: grid; gap: 6px; align-content: start; }
+.member small { font-family: var(--mono); color: var(--accent); font-size: 12px; }
+.member b { font-size: 16px; }
+.member ul { font-size: 14px; }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 16px; }
+@media (max-width: 520px) { .spec dl { grid-template-columns: 1fr; gap: 2px; } .spec dt { margin-top: 6px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="eyebrow">타임캡슐 · 기능 기획서 v0.1 · 2026.11.01</div>
+  <h1>타임캡슐 기능 기획서</h1>
+  <p class="lead">Pleos Connect 차량 앱 “타임캡슐”의 기능 단위 명세입니다. 기능마다 트리거, 동작, 쓰는 데이터, 예외를 정했고, 12/3 PT 데모 범위(P0)를 먼저 표시했습니다. 화면은 UI/UX 캔버스의 01~06번과 짝을 이룹니다.</p>
+</header>
+
+<nav class="toc" aria-label="목차">
+  <a href="#scope">범위와 우선순위</a><a href="#list">기능 목록</a><a href="#detail">기능 상세</a><a href="#rules">태그·알림 규칙</a><a href="#state">상태 흐름</a><a href="#data">데이터 모델</a><a href="#nfr">비기능 요구사항</a><a href="#team">역할 분담</a>
+</nav>
+
+<section id="scope">
+  <h2><span class="n">01</span>범위와 우선순위</h2>
+  <div class="table"><table>
+    <thead><tr><th>등급</th><th>의미</th><th>기준</th></tr></thead>
+    <tbody>
+      <tr><td><span class="p p0">P0</span></td><td>11/15 접수 영상과 12/3 PT 데모에 반드시 동작</td><td>지금 쓸 수 있는 Vehicle SDK(조회)·NaviHelper만으로 구현 가능</td></tr>
+      <tr><td><span class="p p1">P1</span></td><td>PT 전까지 넣으면 점수가 오르는 기능</td><td>설명회 답변에 따라 SDK가 열리면 구현</td></tr>
+      <tr><td><span class="p p2">P2</span></td><td>비전. 발표 슬라이드·영상으로 제시</td><td>차량 제어 API, 클라우드 계정 등 공모전 기간 밖 의존</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="list">
+  <h2><span class="n">02</span>기능 목록</h2>
+  <div class="table"><table>
+    <thead><tr><th>ID</th><th>기능</th><th>한 줄 설명</th><th>등급</th><th>화면</th></tr></thead>
+    <tbody>
+      <tr><td class="id">F-01</td><td class="nm">캡슐 묻기</td><td>음성 명령·핸들 버튼·화면 버튼으로 최대 30초 녹음</td><td><span class="p p0">P0</span></td><td>01, 04</td></tr>
+      <tr><td class="id">F-02</td><td class="nm">분위기 태그</td><td>녹음 순간의 차량 상태로 태그 자동 생성</td><td><span class="p p0">P0</span></td><td>04</td></tr>
+      <tr><td class="id">F-03</td><td class="nm">경로 예고</td><td>출발 시 오늘 경로에 묻힌 캡슐 안내</td><td><span class="p p0">P0</span></td><td>01</td></tr>
+      <tr><td class="id">F-04</td><td class="nm">접근 알림</td><td>캡슐 반경 안에 들어오면 열기 제안</td><td><span class="p p0">P0</span></td><td>05</td></tr>
+      <tr><td class="id">F-05</td><td class="nm">캡슐 재생</td><td>내레이션 + 원본 목소리, 안전 신호에 자동 일시정지</td><td><span class="p p0">P0</span></td><td>06</td></tr>
+      <tr><td class="id">F-06</td><td class="nm">편지 캡슐</td><td>열리는 날짜를 잠근 캡슐. 받는 사람 지정은 P1</td><td><span class="p p0">P0</span></td><td>02</td></tr>
+      <tr><td class="id">F-07</td><td class="nm">추억 경로</td><td>지난 여행의 캡슐 지점을 경유지로 내비 설정</td><td><span class="p p0">P0</span></td><td>03</td></tr>
+      <tr><td class="id">F-08</td><td class="nm">여행 앨범</td><td>여행 시작·끝을 감지해 캡슐을 묶음</td><td><span class="p p1">P1</span></td><td>03</td></tr>
+      <tr><td class="id">F-09</td><td class="nm">도착 순간 제안</td><td>처음 온 장소에 도착하면 한마디 남기기 제안</td><td><span class="p p1">P1</span></td><td>-</td></tr>
+      <tr><td class="id">F-10</td><td class="nm">폰으로 보내기</td><td>앨범을 링크로 폰에 공유</td><td><span class="p p2">P2</span></td><td>03</td></tr>
+      <tr><td class="id">F-11</td><td class="nm">가족 계정 동기화</td><td>차를 바꿔도 캡슐이 이어짐</td><td><span class="p p2">P2</span></td><td>-</td></tr>
+      <tr><td class="id">F-12</td><td class="nm">그날처럼</td><td>재생 시 창문·온도·조명을 그날처럼 재현</td><td><span class="p p2">P2</span></td><td>-</td></tr>
+      <tr><td class="id">F-13</td><td class="nm">개인정보 관리</td><td>녹음 알림음, 삭제, 저장 위치 설정</td><td><span class="p p0">P0</span></td><td>01 설정</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="detail">
+  <h2><span class="n">03</span>기능 상세</h2>
+
+  <div class="spec"><div class="spec-head"><code>F-01</code><b>캡슐 묻기</b><span class="p p0">P0</span></div><dl>
+    <dt>트리거</dt><dd>“타임캡슐, 묻어줘”(Gleo 연동 시), 핸들 음성 버튼, 홈의 묻기 버튼(정차 시)</dd>
+    <dt>동작</dt><dd>시작 알림음 → 최대 30초 녹음 → 종료 알림음 → F-02 태그 생성 → 저장 → “○○ 캡슐을 묻었어요” 음성 확인</dd>
+    <dt>종료</dt><dd>“그만” 발화, 끝내기 버튼, 30초 도달, 안전 신호 발생(녹음분은 저장할지 묻지 않고 저장)</dd>
+    <dt>데이터</dt><dd>마이크 오디오, 위치(위도·경도), NaviHelper 목적지 이름, 시각</dd>
+    <dt>예외</dt><dd>마이크 권한 없음 → 안내 후 종료. 3초 미만 녹음 → 저장하지 않음. 위치 없음 → 마지막 위치로 저장하고 “위치 불확실” 표시</dd>
+  </dl></div>
+
+  <div class="spec"><div class="spec-head"><code>F-02</code><b>분위기 태그</b><span class="p p0">P0</span></div><dl>
+    <dt>트리거</dt><dd>F-01 녹음 시작 시점의 차량 상태 스냅샷</dd>
+    <dt>동작</dt><dd>각 도메인 값을 규칙표(04장)로 태그화, 최대 5개. 내레이션 문장 템플릿에 넣을 순서로 정렬(시간 → 날씨 → 사람 → 장소)</dd>
+    <dt>데이터</dt><dd>Wiper, Light, Seat, HVAC(외기온도), Window, Door, DrivingMode, Toll, CarInfo, Odometer</dd>
+    <dt>예외</dt><dd>값을 못 읽은 도메인은 태그를 만들지 않음. 원시값은 함께 저장해 나중에 규칙이 바뀌어도 다시 계산</dd>
+  </dl></div>
+
+  <div class="spec"><div class="spec-head"><code>F-03</code><b>경로 예고</b><span class="p p0">P0</span></div><dl>
+    <dt>트리거</dt><dd>NaviHelper 경로 안내 시작</dd>
+    <dt>동작</dt><dd>경로 선(polyline)에서 300m 안에 있는 캡슐을 찾아 “오늘 길에 캡슐이 n개 묻혀 있어요” 1회 안내. 홈 카드에 가장 오래된 캡슐과 남은 거리 표시</dd>
+    <dt>예외</dt><dd>잠긴 편지 캡슐(날짜 전)은 존재만 알리고 내용은 숨김. 받는 사람이 아니면 아예 알리지 않음(P1)</dd>
+  </dl></div>
+
+  <div class="spec"><div class="spec-head"><code>F-04</code><b>접근 알림</b><span class="p p0">P0</span></div><dl>
+    <dt>트리거</dt><dd>캡슐까지 남은 거리 1.2km 이하. FusedLocation 근접 알림이 열리면 그것으로, 아니면 NaviHelper 남은 거리로 판단</dd>
+    <dt>동작</dt><dd>알림음 + 카드(화면 05) + 음성 “○년 전, ○○ 캡슐이 있어요”. 선택지 “들려줘”/“다음에”, 음성으로도 응답</dd>
+    <dt>억제</dt><dd>내비 음성 안내 중, 방향지시등 켜짐, 안전 경고 중에는 띄우지 않고 해제 후 10초 뒤 표시. 같은 캡슐은 하루 1회</dd>
+    <dt>예외</dt><dd>“다음에” 또는 무응답 10초 → 다음 정차(P단) 때 홈에 다시 표시</dd>
+  </dl></div>
+
+  <div class="spec"><div class="spec-head"><code>F-05</code><b>캡슐 재생</b><span class="p p0">P0</span></div><dl>
+    <dt>동작</dt><dd>내레이션(TTS 또는 미리 녹음된 문장 조합) → 원본 목소리. 화면 06에 날짜·장소·탑승 자리 표시</dd>
+    <dt>일시정지</dt><dd>Safety 경고, 급제동(Brake), 방향지시등(TurnSignal), 내비 음성 안내. 해제 2초 뒤 자동 재개</dd>
+    <dt>조작</dt><dd>처음부터, 일시정지, 앨범에 담기. 음성 “다시”, “멈춰”</dd>
+  </dl></div>
+
+  <div class="spec"><div class="spec-head"><code>F-06</code><b>편지 캡슐</b><span class="p p0">P0</span></div><dl>
+    <dt>트리거</dt><dd>정차 중 홈 → 편지 메뉴(화면 02). 주행 중에는 만들 수 없음</dd>
+    <dt>입력</dt><dd>받는 사람(P1: 가족 프로필), 열리는 날(1년 뒤 / 10년 뒤 / 기념일 / 직접), 장소(현재 위치, 반경 300m), 녹음</dd>
+    <dt>동작</dt><dd>열리는 날 전에는 F-03·F-04에서 내용 숨김. 날짜가 지나고 받는 사람이 그 길을 지나면 일반 캡슐처럼 열림</dd>
+    <dt>예외</dt><dd>받는 사람 구분 API가 없으면 날짜 잠금만 제공</dd>
+  </dl></div>
+
+  <div class="spec"><div class="spec-head"><code>F-07</code><b>추억 경로</b><span class="p p0">P0</span></div><dl>
+    <dt>트리거</dt><dd>앨범의 “이 길 다시 달리기”(화면 03) 또는 음성 “그때 그 길로 가줘”</dd>
+    <dt>동작</dt><dd>앨범의 캡슐 지점을 시간순으로 골라 NaviHelper 경유지로 설정(경유지 수 제한은 SDK 확인). 주행 중 각 지점에서 F-04 실행</dd>
+  </dl></div>
+
+  <div class="spec"><div class="spec-head"><code>F-08</code><b>여행 앨범</b><span class="p p1">P1</span></div><dl>
+    <dt>시작 감지</dt><dd>내비 안내 시작 또는 톨게이트 진입</dd>
+    <dt>종료 감지</dt><dd>시동 종료 + 사이드미러 접힘, 또는 내비 도착 후 6시간 이상 주행 없음</dd>
+    <dt>동작</dt><dd>그 사이 캡슐을 묶고, 달린 거리(Odometer 차이)·탑승 인원·경로를 기록. “캡슐 n개를 앨범으로 묶었어요” 안내</dd>
+  </dl></div>
+
+  <div class="spec"><div class="spec-head"><code>F-09</code><b>도착 순간 제안</b><span class="p p1">P1</span></div><dl>
+    <dt>트리거</dt><dd>내비 도착 + P단 + 문 열림, 그리고 캡슐이 없는 장소(반경 300m)</dd>
+    <dt>동작</dt><dd>“도착 한마디 남길까요?” 1회. 대답 없으면 넘어감. 하루 최대 2회</dd>
+  </dl></div>
+
+  <div class="spec"><div class="spec-head"><code>F-13</code><b>개인정보 관리</b><span class="p p0">P0</span></div><dl>
+    <dt>규칙</dt><dd>명시적 호출로만 녹음. 상시 청취 없음. 녹음 시작·끝 알림음은 끌 수 없음</dd>
+    <dt>설정</dt><dd>캡슐 개별·전체 삭제, 저장 위치(차량만 / 계정 동기화), 도착 제안 끄기</dd>
+    <dt>차량 판매</dt><dd>“차량에서 모두 지우기” 실행 시 기기 데이터 삭제, 계정 사본만 유지(P2)</dd>
+  </dl></div>
+</section>
+
+<section id="rules">
+  <h2><span class="n">04</span>태그·알림 규칙</h2>
+  <h3>분위기 태그 규칙</h3>
+  <div class="table"><table>
+    <thead><tr><th>도메인</th><th>조건</th><th>태그</th></tr></thead>
+    <tbody>
+      <tr><td>Wiper</td><td>작동 중(간헐 이상)</td><td>비 오던</td></tr>
+      <tr><td>Light</td><td>전조등 켜짐</td><td>밤길</td></tr>
+      <tr><td>Seat</td><td>탑승 좌석 수 2 / 3 / 4+</td><td>둘이서 / 셋이서 / 넷이서</td></tr>
+      <tr><td>HVAC 외기온도</td><td>5℃ 이하 / 28℃ 이상</td><td>추운 날 / 더운 날</td></tr>
+      <tr><td>Window</td><td>한 곳 이상 열림</td><td>창문 열고</td></tr>
+      <tr><td>Door + DrivingMode</td><td>P단에서 문 열림</td><td>도착한 순간</td></tr>
+      <tr><td>Toll</td><td>고속도로 구간 진입 후</td><td>고속도로를 달리던</td></tr>
+      <tr><td>NaviHelper</td><td>목적지 또는 현재 도로 이름</td><td>장소 태그(예: 7번 국도)</td></tr>
+    </tbody>
+  </table></div>
+  <p>온도 기준값과 Toll·Light 도메인이 주는 실제 값은 SDK 문서 확인 후 확정합니다.</p>
+  <h3>내레이션 템플릿</h3>
+  <p><code class="inline">{경과}년 전 {오늘?}, {날씨/시간 태그}. {인원 태그} 이 길을 지나며 남긴 목소리예요.</code></p>
+  <p>예: “18년 전 오늘, 비 오던 밤. 셋이서 이 길을 지나며 남긴 목소리예요.” 1년 미만이면 “○달 전”, 같은 날짜면 “오늘”을 넣습니다.</p>
+  <h3>알림 수치</h3>
+  <div class="table"><table>
+    <thead><tr><th>항목</th><th>값</th></tr></thead>
+    <tbody>
+      <tr><td>캡슐 반경</td><td>300m</td></tr>
+      <tr><td>접근 알림 시작</td><td>남은 거리 1.2km</td></tr>
+      <tr><td>녹음 길이</td><td>3초 이상, 30초 이하</td></tr>
+      <tr><td>같은 캡슐 알림</td><td>하루 1회</td></tr>
+      <tr><td>도착 제안</td><td>하루 2회</td></tr>
+      <tr><td>안전 신호 해제 후 재개</td><td>2초(재생), 10초(알림)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="state">
+  <h2><span class="n">05</span>상태 흐름 (주행 중)</h2>
+  <p>주행 중 앱은 다섯 상태만 가집니다. 안전 신호는 어느 상태에서든 일시정지로 보냅니다.</p>
+  <div class="flow">
+    <svg viewBox="0 0 760 250" role="img" aria-label="대기에서 녹음과 알림, 재생으로 가는 상태 흐름">
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"></path></marker></defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.3" style="color: var(--muted)">
+        <path d="M150 70 H 270" marker-end="url(#ar)"></path>
+        <path d="M270 90 H 150" marker-end="url(#ar)"></path>
+        <path d="M100 105 V 165 H 270" marker-end="url(#ar)"></path>
+        <path d="M410 180 H 520" marker-end="url(#ar)"></path>
+        <path d="M340 205 V 232 H 90 V 105" marker-end="url(#ar)"></path>
+        <path d="M600 160 V 105" marker-end="url(#ar)"></path>
+        <path d="M600 60 V 30 H 100 V 50" marker-end="url(#ar)"></path>
+      </g>
+      <g font-size="14" fill="currentColor" style="color: var(--ink)">
+        <rect x="40" y="50" width="110" height="56" rx="10" fill="var(--surface)" stroke="var(--muted)"></rect><text x="95" y="83" text-anchor="middle" font-weight="700">대기</text>
+        <rect x="270" y="50" width="140" height="56" rx="10" fill="var(--surface)" stroke="var(--muted)"></rect><text x="340" y="83" text-anchor="middle" font-weight="700">녹음 중</text>
+        <rect x="270" y="152" width="140" height="56" rx="10" fill="var(--surface)" stroke="var(--muted)"></rect><text x="340" y="185" text-anchor="middle" font-weight="700">접근 알림</text>
+        <rect x="520" y="152" width="160" height="56" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"></rect><text x="600" y="185" text-anchor="middle" font-weight="700">재생</text>
+        <rect x="530" y="50" width="140" height="56" rx="10" fill="var(--surface)" stroke="var(--muted)" stroke-dasharray="4 3"></rect><text x="600" y="76" text-anchor="middle" font-weight="700">일시정지</text><text x="600" y="95" text-anchor="middle" font-size="12" fill="var(--muted)">안전 신호</text>
+      </g>
+      <g font-size="12" fill="var(--muted)">
+        <text x="210" y="62" text-anchor="middle">묻어줘</text>
+        <text x="210" y="108" text-anchor="middle">끝·30초</text>
+        <text x="180" y="158" text-anchor="middle">1.2km 이내</text>
+        <text x="465" y="172" text-anchor="middle">들려줘</text>
+        <text x="215" y="226" text-anchor="middle">다음에·10초 무응답</text>
+        <text x="614" y="138">신호</text>
+        <text x="350" y="24" text-anchor="middle">재생 끝 → 대기</text>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<section id="data">
+  <h2><span class="n">06</span>데이터 모델</h2>
+  <div class="table"><table>
+    <thead><tr><th>엔티티</th><th>필드</th><th>비고</th></tr></thead>
+    <tbody>
+      <tr><td>Capsule</td><td>id, createdAt, lat, lng, radiusM(300), placeName, audioPath, durationSec, transcript?, tags[], rawVehicleState{}, tripId?, carModel, odometerKm</td><td>rawVehicleState는 태그 재계산용</td></tr>
+      <tr><td>LetterLock</td><td>capsuleId, openAfter(date), recipientProfileId?</td><td>없으면 일반 캡슐</td></tr>
+      <tr><td>Trip</td><td>id, startAt, endAt, startOdometer, endOdometer, occupants, routePolyline?, capsuleIds[]</td><td>routePolyline은 앨범 켠 경우만</td></tr>
+      <tr><td>Profile</td><td>id, name, relation</td><td>운전자 구분 API 확인 후(P1)</td></tr>
+      <tr><td>NotifyLog</td><td>capsuleId, date, result(played / later / ignored)</td><td>하루 1회 제한 판단</td></tr>
+    </tbody>
+  </table></div>
+  <p>저장은 기기 안 Room(SQLite) + 오디오 파일. 계정 동기화(P2)는 공모전 범위 밖입니다.</p>
+</section>
+
+<section id="nfr">
+  <h2><span class="n">07</span>비기능 요구사항</h2>
+  <ul>
+    <li><b>주행 제한</b>: Distraction Optimization을 선언하고, 주행 중 화면은 04·05·06번만 씁니다. 스크롤·키보드 입력 없음, 버튼 높이 72px 이상.</li>
+    <li><b>응답 속도</b>: 버튼 누른 뒤 녹음 시작까지 0.5초 안, 태그 생성 1초 안(목표치).</li>
+    <li><b>오프라인</b>: 네트워크 없이 모든 P0 기능 동작.</li>
+    <li><b>환경</b>: Android Studio, minSdk 28, Pleos Connect 에뮬레이터(API 34) + Virtual Console, Kotlin.</li>
+    <li><b>권한</b>: 사용하는 Vehicle 도메인의 읽기 권한만 선언. 제어 권한(CONTROL_CAR_*)은 F-12 구현 때만.</li>
+    <li><b>제출</b>: APK는 <code class="inline">apk/팀명_타임캡슐_release.apk</code>.</li>
+  </ul>
+</section>
+
+<section id="team">
+  <h2><span class="n">08</span>역할 분담 (3인 제안)</h2>
+  <div class="team">
+    <div class="member"><small>A · 차량 데이터</small><b>태그 엔진·SDK 연동</b><ul><li>Vehicle SDK 구독(F-02)</li><li>NaviHelper 경로·경유지(F-03, F-07)</li><li>안전 신호 일시정지(F-05)</li></ul></div>
+    <div class="member"><small>B · 오디오·위치</small><b>녹음·재생·근접</b><ul><li>녹음·저장(F-01)</li><li>접근 판단·알림(F-04)</li><li>내레이션 조합(F-05)</li></ul></div>
+    <div class="member"><small>C · 화면·발표</small><b>UI·앨범·영상</b><ul><li>화면 01~06 구현</li><li>편지 캡슐·앨범(F-06, F-08)</li><li>시연 영상·숏폼·PT 자료</li></ul></div>
+  </div>
+</section>
+
+<footer>기준: Pleos 개발 문서와 공모전 공지(2026.11.01 확인). “준비 중” SDK와 도메인 세부 값은 설명회·문서 확인 후 갱신합니다.</footer>
+</div>
+</body>
+</html>
