@@ -11,10 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.width
-import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,26 +39,25 @@ import app.timecapsule.ui.TimeCapsuleTheme
 class MainActivity : ComponentActivity() {
     private val app get() = application as TimeCapsuleApp
 
-    private val askMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted) Toast.makeText(this, "마이크 권한이 없으면 캡슐을 묻을 수 없어요", Toast.LENGTH_LONG).show()
+    private val askPerms = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result[Manifest.permission.RECORD_AUDIO] == false) {
+            Toast.makeText(this, "마이크 권한이 없으면 캡슐을 묻을 수 없어요", Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            askMic.launch(Manifest.permission.RECORD_AUDIO)
-        }
+        // Mic for capsules; notifications so approach alerts can show over navigation.
+        val wanted = buildList {
+            add(Manifest.permission.RECORD_AUDIO)
+            if (android.os.Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+        }.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
+        if (wanted.isNotEmpty()) askPerms.launch(wanted.toTypedArray())
         setContent {
             // Day/night follows the car (AAOS night mode); the dev panel can pin one for demos.
             val pinned by app.nightOverride.collectAsState()
             TimeCapsuleTheme(night = pinned ?: isSystemInDarkTheme()) {
-                val half by app.halfPreview.collectAsState()
-                Surface(Modifier.fillMaxSize(), color = if (half) androidx.compose.ui.graphics.Color.Black else Tc.Bg) {
-                    // Surface passes its min size down; an outer Box lets the half preview be narrower.
-                    Box(Modifier.fillMaxSize()) {
-                        Box(if (half) Modifier.fillMaxHeight().width(840.dp) else Modifier.fillMaxSize()) { Root(app) }
-                    }
-                }
+                Surface(Modifier.fillMaxSize(), color = Tc.Bg) { Root(app) }
             }
         }
     }
@@ -112,6 +108,7 @@ private fun Root(app: TimeCapsuleApp) {
             s == DriveState.Recording ->
                 RecordingScreen(
                     recordingSince,
+                    car.placeName,
                     MoodTagEngine.tagsFor(car).filter { it.label != car.placeName },
                     onStop = drive::stopRecording,
                     onCancel = drive::cancelRecording,

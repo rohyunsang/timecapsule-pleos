@@ -43,8 +43,9 @@ class TimeCapsuleApp : Application() {
     /** Dev panel override for day/night: null follows the car (system night mode). */
     val nightOverride = kotlinx.coroutines.flow.MutableStateFlow<Boolean?>(null)
 
-    /** Dev panel: preview the 1:1 split window (half width next to navigation). */
-    val halfPreview = kotlinx.coroutines.flow.MutableStateFlow(false)
+    /** True while any activity of the app is started (on screen, also in a split window). */
+    val visible = kotlinx.coroutines.flow.MutableStateFlow(false)
+    private var started = 0
 
     /** True when running on a Pleos head unit (real Vehicle SDK and NaviHelper). */
     var onPleos = false
@@ -74,6 +75,18 @@ class TimeCapsuleApp : Application() {
 
         val beeper = Beeper()
         drive = DriveController(scope, vehicle, navi, repo, Recorder(this, beeper), Player(this), beeper, settings)
+
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityStarted(a: android.app.Activity) { started++; visible.value = true }
+            override fun onActivityStopped(a: android.app.Activity) { started--; visible.value = started > 0 }
+            override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {}
+            override fun onActivityResumed(a: android.app.Activity) {}
+            override fun onActivityPaused(a: android.app.Activity) {}
+            override fun onActivitySaveInstanceState(a: android.app.Activity, b: android.os.Bundle) {}
+            override fun onActivityDestroyed(a: android.app.Activity) {}
+        })
+        // Alerts over navigation when the app is not on screen.
+        app.timecapsule.drive.AlertNotifier(this, scope, drive, visible).start()
     }
 
     /** Dev panel: switch between real Pleos and fake sources; takes effect on next start. */

@@ -1,8 +1,9 @@
 package app.timecapsule.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -22,23 +23,23 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MailOutline
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.RadioButtonChecked
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.Settings
@@ -54,13 +55,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.timecapsule.TimeCapsuleApp
 import app.timecapsule.capsule.RouteForecast
@@ -86,14 +84,16 @@ import java.time.format.DateTimeFormatter
 
 enum class Screen { HOME, LETTER, ALBUM, SETTINGS }
 
-private fun Capsule.date(): LocalDate = Instant.ofEpochMilli(createdAt).atZone(ZoneId.systemDefault()).toLocalDate()
-private val dayFmt = DateTimeFormatter.ofPattern("yyyy년 M월 d일")
+internal fun Capsule.date(): LocalDate = Instant.ofEpochMilli(createdAt).atZone(ZoneId.systemDefault()).toLocalDate()
+internal val dayFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy년 M월 d일")
+private val shortFmt = DateTimeFormatter.ofPattern("yyyy. M. d.")
 
 // ---- Home (screen 01) ---------------------------------------------------------------------
 
 /**
- * Home. Glanceable in 1-2 s (Pleos): one big voice button, one "now" message, three ways out.
- * Wide (full window) puts "now" on the right; compact (1:1 next to navigation) stacks it.
+ * Home. Portrait (one window next to navigation) is the main layout:
+ *   header · main action bar · "now" notice · recent capsules · menu bar.
+ * Landscape keeps that column on the left and adds the full capsule list on the right.
  */
 @Composable
 fun HomeScreen(
@@ -104,223 +104,209 @@ fun HomeScreen(
     onLocked: () -> Unit,
     onDev: () -> Unit,
 ) {
-    val car by drive.car.collectAsState()
     val capsules by drive.capsules.collectAsState()
+    val locks by drive.locks.collectAsState()
+    val today = LocalDate.now()
+    val playable = capsules.filterNot { locks[it.id].isLocked(today) }.sortedByDescending { it.createdAt }
+
+    BoxWithConstraints(Modifier.fillMaxSize().background(Tc.Bg)) {
+        val portrait = widthClass(maxWidth) == WidthClass.Portrait
+        if (portrait) {
+            Column(Modifier.fillMaxSize().padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
+                AppBar(onPleos, restricted, onDev)
+                VoiceBar(drive)
+                NowNotice(drive, restricted, today)
+                // The list takes what is left (only whole rows); the menu stays pinned to the bottom.
+                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                    val fits = ((maxHeight - 72.dp) / (Tc.Row + 1.dp)).toInt().coerceIn(1, 4)
+                    CapsuleList(
+                        playable.take(fits), capsules.size, restricted, today, Modifier,
+                        onMore = { if (restricted) onLocked() else go(Screen.ALBUM) },
+                    ) { drive.playCapsule(it) }
+                }
+                MenuBar(restricted, go, onLocked)
+            }
+        } else {
+            Row(Modifier.fillMaxSize().padding(Tc.Gutter), horizontalArrangement = Arrangement.spacedBy(Tc.Gutter)) {
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
+                    AppBar(onPleos, restricted, onDev)
+                    VoiceBar(drive)
+                    NowNotice(drive, restricted, today)
+                    Spacer(Modifier.weight(1f))
+                    MenuBar(restricted, go, onLocked)
+                }
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
+                    Spacer(Modifier.height(Tc.Touch - Tc.Gap))
+                    CapsuleList(
+                        playable.take(6), capsules.size, restricted, today, Modifier,
+                        onMore = { if (restricted) onLocked() else go(Screen.ALBUM) },
+                    ) { drive.playCapsule(it) }
+                }
+            }
+        }
+    }
+}
+
+/** App bar like Pleos settings: app icon + name, a plain status line, dev entry. */
+@Composable
+private fun AppBar(onPleos: Boolean, restricted: Boolean, onDev: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = Tc.Touch), verticalAlignment = Alignment.CenterVertically) {
+        AppMark(48.dp)
+        Spacer(Modifier.width(16.dp))
+        Text("타임캡슐", style = Type.TitleM, color = Tc.Text)
+        Spacer(Modifier.width(20.dp))
+        val (dot, label) = when {
+            restricted -> Tc.Info to "주행 중"
+            onPleos -> Tc.TextMute to "차량 연결됨"
+            else -> Tc.TextMute to "가짜 차량"
+        }
+        Dot(dot, 10.dp)
+        Text("  $label", style = Type.LabelM, color = Tc.TextMute)
+        Spacer(Modifier.weight(1f))
+        IconBtn(Icons.Rounded.Tune, "개발 패널", onClick = onDev)
+    }
+}
+
+/**
+ * The one main action, shaped like navigation's "어디로 갈까요?" bar: a solid dark bar with a
+ * mic, the verb, and what will be saved with it (place and mood) on the second line.
+ */
+@Composable
+private fun VoiceBar(drive: DriveController) {
+    val car by drive.car.collectAsState()
+    val tags = MoodTagEngine.tagsFor(car).filter { it.label != car.placeName }.map { it.label }
+    val p = Tc.P
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    Surface(
+        onClick = clickWithSound { drive.bury() },
+        modifier = Modifier.fillMaxWidth().heightIn(min = 152.dp),
+        shape = RoundedCornerShape(Tc.PanelRadius),
+        color = if (pressed) p.filled else p.strong,
+        contentColor = p.onStrong,
+        interactionSource = source,
+    ) {
+        Row(Modifier.padding(horizontal = 32.dp, vertical = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(88.dp).background(p.rec, CircleShape), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Mic, null, tint = Color.White, modifier = Modifier.size(48.dp))
+            }
+            Column(Modifier.padding(start = 28.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("목소리 남기기", style = Type.TitleM)
+                Text(
+                    (listOf(car.placeName ?: "위치 확인 중") + tags).joinToString(" · "),
+                    style = Type.LabelM, color = p.onStrongSub, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/** The single most relevant "now" message, in the Pleos notification shape (flat, in-page). */
+@Composable
+private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalDate) {
     val forecast by drive.forecast.collectAsState()
     val reprompt by drive.reprompt.collectAsState()
     val arrival by drive.arrivalPrompt.collectAsState()
     val position by drive.position.collectAsState()
-    val locks by drive.locks.collectAsState()
-    val today = LocalDate.now()
-
-    val notices = buildList<@Composable (Modifier) -> Unit> {
-        if (arrival) add { m ->
-            Notice(Icons.Rounded.Flag, "도착했어요. 한마디 남길까요?", "이곳엔 아직 캡슐이 없어요", m, accent = true, actions = { b ->
-                Btn("괜찮아요", b) { drive.answerArrival(false) }
-                Btn("남기기", b, icon = Icons.Rounded.Mic, style = BtnStyle.Primary) { drive.answerArrival(true) }
-            })
-        }
-        val again = reprompt
-        if (again != null && !restricted) add { m ->
-            Notice(Icons.Rounded.History, "아까 지나친 캡슐", "${Narration.elapsed(again.date(), today)}, ${again.placeName ?: "이 길"}", m, accent = true, actions = { b ->
-                Btn("닫기", b) { drive.dismissReprompt() }
-                Btn("들려줘", b, icon = Icons.Rounded.PlayArrow, style = BtnStyle.Primary) { drive.playCapsule(again.id) }
-            })
-        }
-        val f = forecast
-        if (f != null && f.total > 0) add { m -> ForecastNotice(f, position?.point, today, m) }
-    }
-
-    BoxWithConstraints(Modifier.fillMaxSize().background(Tc.Bg)) {
-        val compact = widthClass(maxWidth) == WidthClass.Compact
-        val bar: @Composable () -> Unit = { TopBar(onPleos, restricted, onDev) }
-        val hero: @Composable (Modifier) -> Unit = { m -> VoiceHero(drive, compact, m) }
-        val nav: @Composable () -> Unit = {
-            NavRow(restricted, go, onLocked)
-        }
-        if (compact) {
-            Column(Modifier.fillMaxSize().padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
-                bar()
-                // Half window: only the most important "now" message.
-                notices.firstOrNull()?.invoke(Modifier)
-                hero(Modifier.weight(1f))
-                nav()
-            }
-        } else {
-            Row(Modifier.fillMaxSize().padding(Tc.Gutter), horizontalArrangement = Arrangement.spacedBy(Tc.Gutter)) {
-                Column(Modifier.weight(1.2f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
-                    bar()
-                    hero(Modifier.weight(1f))
-                    nav()
-                }
-                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
-                    Spacer(Modifier.height(Tc.Touch - Tc.Gap))
-                    notices.take(2).forEach { it(Modifier) }
-                    if (notices.isEmpty()) {
-                        Notice(Icons.Rounded.Route, "오늘 길", "길 안내를 시작하면 이 길에 묻힌 캡슐을 알려 드려요")
-                    }
-                    MyCapsules(capsules, { locks[it.id].isLocked(today) }, today, restricted, Modifier.weight(1f, fill = false)) { drive.playCapsule(it) }
-                }
-            }
+    val again = reprompt
+    val f = forecast
+    when {
+        arrival -> SystemNotice(
+            "도착했어요. 한마디 남길까요?", "이곳엔 아직 캡슐이 없어요", elevated = false,
+            cta = "남기기" to { drive.answerArrival(true) }, ctaIcon = Icons.Rounded.Mic,
+            sub = "괜찮아요" to { drive.answerArrival(false) },
+        )
+        again != null && !restricted -> SystemNotice(
+            "아까 지나친 캡슐", "${Narration.elapsed(again.date(), today)} · ${again.placeName ?: "이 길"}", elevated = false,
+            cta = "들려줘" to { drive.playCapsule(again.id) }, ctaIcon = Icons.Rounded.PlayArrow,
+            sub = "닫기" to { drive.dismissReprompt() },
+        )
+        f != null && f.total > 0 -> Panel { ForecastRow(f, position?.point, today) }
+        else -> Panel {
+            ListRow("오늘 길", "길 안내를 시작하면 이 길의 캡슐을 알려 드려요", leading = Icons.Rounded.Route, leadingTint = Tc.TextMute)
         }
     }
 }
 
 @Composable
-private fun TopBar(onPleos: Boolean, restricted: Boolean, onDev: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = Tc.Touch), verticalAlignment = Alignment.CenterVertically) {
-        Text("타임캡슐", style = Type.TitleL, color = Tc.Text)
-        Spacer(Modifier.width(20.dp))
-        val (dot, label) = when {
-            restricted -> Tc.Info to "주행 중"
-            onPleos -> Tc.Accent to "차량 연결됨"
-            else -> Tc.TextMute to "가짜 차량"
-        }
-        Row(
-            Modifier.background(Tc.Surface2, RoundedCornerShape(50)).padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Dot(dot, 12.dp)
-            Text("  $label", style = Type.LabelM, color = Tc.TextSub)
-        }
-        Spacer(Modifier.weight(1f))
-        IconBtn(Icons.Rounded.Tune, "개발 패널", style = BtnStyle.Quiet, onClick = onDev)
-    }
-}
-
-/** The one main action: a big round voice button, like a voice-assistant key. */
-@Composable
-private fun VoiceHero(drive: DriveController, compact: Boolean, modifier: Modifier) {
-    val car by drive.car.collectAsState()
-    val tags = MoodTagEngine.tagsFor(car).filter { it.label != car.placeName }
-    Card(modifier, fill = true) {
-        Column(
-            Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
-        ) {
-            val size: Dp = if (compact) 200.dp else 240.dp
-            // The circle and its label are one button, so tapping the words works too.
-            Column(
-                Modifier.clip(RoundedCornerShape(32.dp))
-                    .clickable(onClickLabel = "목소리 묻기", onClick = clickWithSound { drive.bury() })
-                    .semantics(mergeDescendants = true) {}
-                    .padding(horizontal = 40.dp, vertical = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(24.dp),
-            ) {
-                Surface(
-                    modifier = Modifier.size(size),
-                    shape = CircleShape,
-                    color = Tc.Accent,
-                    contentColor = Tc.OnAccent,
-                    shadowElevation = if (Tc.P.isDark) 0.dp else 8.dp,
-                ) {
-                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Mic, null, Modifier.size(size * 0.42f)) }
-                }
-                Text("목소리 묻기", style = Type.TitleL, color = Tc.Text)
-            }
-            Text(
-                "지금 · ${car.placeName ?: "위치 확인 중"}",
-                style = Type.BodyM, color = Tc.TextSub, textAlign = TextAlign.Center,
-            )
-            TagRow(tags, center = true)
-            Meta("누르면 바로 녹음돼요 · 최대 30초", align = TextAlign.Center)
-        }
-    }
-}
-
-@Composable
-private fun NavRow(restricted: Boolean, go: (Screen) -> Unit, onLocked: () -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        val tile: @Composable (ImageVector, String, Screen) -> Unit = { icon, label, screen ->
-            NavTile(icon, label, restricted, Modifier.weight(1f)) { if (restricted) onLocked() else go(screen) }
-        }
-        tile(Icons.Rounded.MailOutline, "편지 캡슐", Screen.LETTER)
-        tile(Icons.Rounded.PhotoLibrary, "여행 앨범", Screen.ALBUM)
-        tile(Icons.Rounded.Settings, "설정", Screen.SETTINGS)
-    }
-}
-
-/** Big navigation tile. When driving it stays tappable but shows a lock and says why on tap. */
-@Composable
-private fun NavTile(icon: ImageVector, label: String, locked: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Surface(
-        onClick = clickWithSound(onClick),
-        modifier = modifier.heightIn(min = 128.dp),
-        shape = RoundedCornerShape(Tc.Radius),
-        color = Tc.Surface,
-        border = if (!Tc.P.isDark) BorderStroke(1.dp, Tc.Line) else null,
-    ) {
-        val fg = if (locked) Tc.TextMute else Tc.Text
-        Column(
-            Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
-        ) {
-            Box {
-                Icon(icon, null, tint = fg, modifier = Modifier.size(40.dp))
-                if (locked) {
-                    Icon(
-                        Icons.Rounded.Lock, "잠김", tint = Tc.Text,
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(start = 28.dp, top = 28.dp).size(22.dp)
-                            .background(Tc.Surface, CircleShape).padding(2.dp),
-                    )
-                }
-            }
-            Text(label, style = Type.BodyStrong, color = fg, maxLines = 1)
-        }
-    }
-}
-
-@Composable
-private fun ForecastNotice(f: RouteForecast, here: GeoPoint?, today: LocalDate, modifier: Modifier) {
+private fun ForecastRow(f: RouteForecast, here: GeoPoint?, today: LocalDate) {
     val oldest = f.open.firstOrNull()
     val desc = oldest?.let { o ->
         val dist = here?.let { Geo.distanceM(it, GeoPoint(o.lat, o.lng)) }
         "가장 오래된 건 ${Narration.elapsed(o.date(), today)} ${o.placeName ?: ""}" + (dist?.let { " · ${formatDistance(it)} 남음" } ?: "")
     }
-    Notice(Icons.Rounded.Route, f.message() ?: "오늘 길에 캡슐이 있어요", desc, modifier)
+    ListRow(f.message() ?: "오늘 길에 캡슐이 있어요", desc, leading = Icons.Rounded.Route)
+}
+
+/** Recent capsules as a list panel. Hidden while driving: capsules come to you as alerts. */
+@Composable
+private fun CapsuleList(
+    recent: List<Capsule>,
+    total: Int,
+    driving: Boolean,
+    today: LocalDate,
+    modifier: Modifier,
+    onMore: () -> Unit,
+    onPlay: (Long) -> Unit,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Section("내 캡슐 $total") {
+            if (total > 0 && !driving) {
+                Btn("전체", icon = null, style = BtnStyle.Quiet, height = 56.dp, onClick = onMore)
+            }
+        }
+        Panel {
+            when {
+                total == 0 -> ListRow("아직 묻은 캡슐이 없어요", "위의 버튼을 누르고 말하면 첫 캡슐이 생겨요", leading = Icons.Rounded.Mic, leadingTint = Tc.TextMute)
+                driving -> ListRow("목록은 차를 세우면 보여요", "운전 중에는 캡슐이 알림으로 찾아와요", leading = Icons.Rounded.Lock, leadingTint = Tc.TextMute)
+                else -> recent.forEachIndexed { i, c ->
+                    if (i > 0) RowDivider()
+                    ListRow(
+                        c.placeName ?: "장소 기록 없음",
+                        "${c.date().format(shortFmt)} · ${Narration.elapsed(c.date(), today)}",
+                        leading = Icons.Rounded.PlayArrow,
+                        onClick = { onPlay(c.id) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Bottom menu, like navigation's icon row: one panel split by dividers. While driving the
+ * items stay tappable, show a lock and explain why.
+ */
+@Composable
+private fun MenuBar(restricted: Boolean, go: (Screen) -> Unit, onLocked: () -> Unit) {
+    Panel {
+        Row(Modifier.fillMaxWidth().height(120.dp), verticalAlignment = Alignment.CenterVertically) {
+            val item: @Composable (ImageVector, String, Screen) -> Unit = { icon, label, screen ->
+                MenuItem(icon, label, restricted, Modifier.weight(1f)) { if (restricted) onLocked() else go(screen) }
+            }
+            item(Icons.Rounded.MailOutline, "편지", Screen.LETTER)
+            Box(Modifier.width(1.dp).height(56.dp).background(Tc.Line))
+            item(Icons.Rounded.PhotoLibrary, "앨범", Screen.ALBUM)
+            Box(Modifier.width(1.dp).height(56.dp).background(Tc.Line))
+            item(Icons.Rounded.Settings, "설정", Screen.SETTINGS)
+        }
+    }
 }
 
 @Composable
-private fun MyCapsules(capsules: List<Capsule>, locked: (Capsule) -> Boolean, today: LocalDate, driving: Boolean, modifier: Modifier, onPlay: (Long) -> Unit) {
-    Card(modifier) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text("내 캡슐 ", style = Type.TitleS, color = Tc.Text, modifier = Modifier.padding(bottom = 6.dp))
-            Text("${capsules.size}", style = Type.TitleL, color = Tc.AccentInk)
-            Text("개", style = Type.TitleS, color = Tc.Text, modifier = Modifier.padding(bottom = 6.dp))
-        }
-        if (capsules.isEmpty()) {
-            Body("목소리를 묻으면 여기에 쌓여요")
-            return@Card
-        }
-        if (driving) {
-            // No browsing while driving (spec 07); capsules come to you through approach alerts.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Lock, null, tint = Tc.TextMute, modifier = Modifier.size(28.dp))
-                Text("  목록은 차를 세우면 보여요", style = Type.BodyM, color = Tc.TextSub)
-            }
-            return@Card
-        }
-        Meta("최근에 묻은 캡슐")
-        capsules.filterNot(locked).sortedByDescending { it.createdAt }.take(3).forEach { c ->
-            Surface(
-                onClick = clickWithSound { onPlay(c.id) },
-                shape = RoundedCornerShape(20.dp),
-                color = Tc.Bg,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
-            ) {
-                Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(56.dp).background(Tc.Surface2, CircleShape), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.PlayArrow, "듣기", tint = Tc.Text, modifier = Modifier.size(32.dp))
-                    }
-                    Column(Modifier.padding(start = 16.dp).weight(1f)) {
-                        Text(c.placeName ?: "장소 기록 없음", style = Type.BodyStrong, color = Tc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("${c.date().format(dayFmt)} · ${Narration.elapsed(c.date(), today)}", style = Type.LabelM, color = Tc.TextMute, maxLines = 1)
-                    }
-                }
-            }
+private fun MenuItem(icon: ImageVector, label: String, locked: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    Surface(
+        onClick = clickWithSound(onClick),
+        modifier = modifier.fillMaxHeight(),
+        color = if (pressed) Tc.Basic else Color.Transparent,
+        interactionSource = source,
+    ) {
+        val fg = if (locked) Tc.TextMute else Tc.Text
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
+            Icon(if (locked) Icons.Rounded.Lock else icon, contentDescription = if (locked) "잠김" else null, tint = fg, modifier = Modifier.size(40.dp))
+            Text(label, style = Type.LabelStrong, color = fg, maxLines = 1)
         }
     }
 }
@@ -329,6 +315,7 @@ private fun MyCapsules(capsules: List<Capsule>, locked: (Capsule) -> Boolean, to
 
 private enum class LetterPick { YEAR1, YEAR10, DAY100, CUSTOM }
 
+/** A radio list (Pleos radio component), then one confirming action at the bottom. */
 @Composable
 fun LetterScreen(drive: DriveController, back: () -> Unit) {
     val today = LocalDate.now()
@@ -340,67 +327,52 @@ fun LetterScreen(drive: DriveController, back: () -> Unit) {
         LetterPick.DAY100 -> today.plusDays(99)
         LetterPick.CUSTOM -> custom
     }
-    BoxWithConstraints(Modifier.fillMaxSize().background(Tc.Bg)) {
-        val compact = widthClass(maxWidth) == WidthClass.Compact
-        Column(Modifier.fillMaxSize().padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
-            Header("편지 캡슐", back)
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Title("언제 열어 볼까요?")
-                Body("정한 날 전에는 이 길을 지나도 열리지 않아요")
-            }
-            val choices = listOf(
-                Triple(LetterPick.YEAR1, "1년 뒤", today.plusYears(1).format(dayFmt)),
-                Triple(LetterPick.YEAR10, "10년 뒤", today.plusYears(10).format(dayFmt)),
-                Triple(LetterPick.DAY100, "100일 되는 날", today.plusDays(99).format(dayFmt)),
-                Triple(LetterPick.CUSTOM, "직접 고르기", if (pick == LetterPick.CUSTOM) custom.format(dayFmt) else "달력에서"),
-            )
-            val rows = if (compact) choices.chunked(2) else listOf(choices)
-            rows.forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    row.forEach { (p, label, sub) ->
-                        Choice(label, sub, pick == p, if (p == LetterPick.CUSTOM) Icons.Rounded.CalendarMonth else null, Modifier.weight(1f)) { pick = p }
+    Column(Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
+        Header("편지 캡슐", back)
+        Column(
+            Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth().align(Alignment.CenterHorizontally).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("언제 열어 볼까요?", style = Type.TitleS, color = Tc.Text, modifier = Modifier.padding(start = 8.dp))
+            Text("정한 날 전에는 이 길을 지나도 열리지 않아요", style = Type.BodyS, color = Tc.TextMute, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
+            Panel {
+                val opt: @Composable (LetterPick, String, String) -> Unit = { p, label, sub ->
+                    ListRow(
+                        label, sub,
+                        leading = if (pick == p) Icons.Rounded.RadioButtonChecked else Icons.Rounded.RadioButtonUnchecked,
+                        leadingTint = if (pick == p) Tc.Info else Tc.TextMute,
+                        onClick = { pick = p },
+                    )
+                }
+                opt(LetterPick.YEAR1, "1년 뒤", today.plusYears(1).format(dayFmt))
+                RowDivider()
+                opt(LetterPick.YEAR10, "10년 뒤", today.plusYears(10).format(dayFmt))
+                RowDivider()
+                opt(LetterPick.DAY100, "100일 되는 날", today.plusDays(99).format(dayFmt))
+                RowDivider()
+                opt(LetterPick.CUSTOM, "직접 고르기", if (pick == LetterPick.CUSTOM) custom.format(dayFmt) else "한 달 단위로 정해요")
+                if (pick == LetterPick.CUSTOM) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(start = 92.dp, end = 28.dp, bottom = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        IconBtn(Icons.Rounded.Remove, "한 달 앞으로", style = BtnStyle.Basic) { if (custom.minusMonths(1).isAfter(today)) custom = custom.minusMonths(1) }
+                        Text(custom.format(dayFmt), style = Type.BodyStrong, color = Tc.Text, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                        IconBtn(Icons.Rounded.Add, "한 달 뒤로", style = BtnStyle.Basic) { custom = custom.plusMonths(1) }
                     }
                 }
             }
-            if (pick == LetterPick.CUSTOM) {
-                Card {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        IconBtn(Icons.Rounded.Remove, "한 달 앞으로") { if (custom.minusMonths(1).isAfter(today)) custom = custom.minusMonths(1) }
-                        Text(custom.format(dayFmt), style = Type.TitleM, color = Tc.Text, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-                        IconBtn(Icons.Rounded.Add, "한 달 뒤로") { custom = custom.plusMonths(1) }
-                        if (!compact) Btn("1년", icon = Icons.Rounded.Add) { custom = custom.plusYears(1) }
-                    }
-                }
+        }
+        Column(Modifier.widthIn(max = 960.dp).fillMaxWidth().align(Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 8.dp)) {
+                Icon(Icons.Rounded.Lock, null, tint = Tc.TextMute, modifier = Modifier.size(28.dp))
+                Text("  ${openOn.format(dayFmt)}에 열려요", style = Type.BodyS, color = Tc.TextSub)
             }
-            Spacer(Modifier.weight(1f))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Lock, null, tint = Tc.AccentInk, modifier = Modifier.size(28.dp))
-                Text("  ${openOn.format(dayFmt)}에 열려요", style = Type.BodyStrong, color = Tc.Text)
-            }
-            Btn("녹음하고 묻기", Modifier.fillMaxWidth(), icon = Icons.Rounded.Mic, style = BtnStyle.Primary, height = Tc.TouchLarge) {
+            Btn("녹음하고 묻기", Modifier.fillMaxWidth(), icon = Icons.Rounded.Mic, style = BtnStyle.Filled, height = Tc.TouchLarge) {
                 drive.bury(openOn)
                 back()
             }
-        }
-    }
-}
-
-/** Selectable option card. Selection is shown by border + check color, not color alone. */
-@Composable
-private fun Choice(label: String, sub: String, selected: Boolean, icon: ImageVector?, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(
-        onClick = clickWithSound(onClick),
-        modifier = modifier.heightIn(min = 120.dp),
-        shape = RoundedCornerShape(Tc.Radius),
-        color = if (selected) Tc.AccentSoft else Tc.Surface,
-        border = BorderStroke(if (selected) 3.dp else 1.dp, if (selected) Tc.Accent else Tc.Line),
-    ) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (icon != null) Icon(icon, null, tint = Tc.Text, modifier = Modifier.size(30.dp).padding(end = 6.dp))
-                Text(label, style = Type.TitleS, color = Tc.Text, maxLines = 1)
-            }
-            Text(sub, style = Type.LabelM, color = if (selected) Tc.AccentInk else Tc.TextMute, maxLines = 1)
         }
     }
 }
@@ -419,27 +391,35 @@ fun AlbumScreen(drive: DriveController, back: () -> Unit) {
     val groups = capsules.groupBy { c -> c.tripId?.let { "trip:$it" } ?: "day:${c.date()}" }
         .entries.sortedByDescending { e -> e.value.maxOf { it.createdAt } }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(Tc.Bg)) {
-        val compact = widthClass(maxWidth) == WidthClass.Compact
-        Column(Modifier.fillMaxSize().padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
-            Header("여행 앨범", back) { if (capsules.isNotEmpty()) Meta("캡슐 ${capsules.size}개") }
-            if (capsules.isEmpty()) {
-                EmptyState(back)
-                return@Column
-            }
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
-                items(groups, key = { it.key }) { (key, list) ->
-                    val trip = if (key.startsWith("trip:")) tripById[key.removePrefix("trip:").toLong()] else null
-                    Card(pad = 28.dp) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(groupTitle(trip, list), style = Type.TitleS, color = Tc.Text)
-                                Meta("${Narration.elapsed(list.first().date(), today)} · 캡슐 ${list.size}개" + (trip?.let { tripSummary(it) } ?: ""))
-                            }
-                            Btn(if (compact) "다시 달리기" else "이 길 다시 달리기", icon = Icons.Rounded.Route) { drive.driveMemoryRoute(list) }
+    Column(Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
+        Header("여행 앨범", back) { if (capsules.isNotEmpty()) Text("캡슐 ${capsules.size}개", style = Type.LabelM, color = Tc.TextMute) }
+        if (capsules.isEmpty()) {
+            EmptyState(back)
+            return@Column
+        }
+        LazyColumn(
+            Modifier.widthIn(max = 1100.dp).fillMaxWidth().align(Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            groups.forEach { (key, list) ->
+                val trip = if (key.startsWith("trip:")) tripById[key.removePrefix("trip:").toLong()] else null
+                item(key = key) {
+                    Row(Modifier.fillMaxWidth().padding(start = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(groupTitle(trip, list), style = Type.BodyStrong, color = Tc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                "${Narration.elapsed(list.first().date(), today)} · ${list.size}개" + (trip?.let { tripSummary(it) } ?: ""),
+                                style = Type.LabelM, color = Tc.TextMute, maxLines = 1,
+                            )
                         }
-                        list.sortedBy { it.createdAt }.forEach { c ->
-                            CapsuleRow(c, locks[c.id]?.openAfter?.takeIf { locks[c.id].isLocked(today) }, compact, { drive.playCapsule(c.id) }) { deleting = c }
+                        Btn("다시 달리기", icon = Icons.Rounded.Route, height = 72.dp) { drive.driveMemoryRoute(list) }
+                    }
+                }
+                item(key = "$key:rows") {
+                    Panel {
+                        list.sortedBy { it.createdAt }.forEachIndexed { i, c ->
+                            if (i > 0) RowDivider()
+                            CapsuleRow(c, locks[c.id]?.openAfter?.takeIf { locks[c.id].isLocked(today) }, { drive.playCapsule(c.id) }) { deleting = c }
                         }
                     }
                 }
@@ -462,56 +442,32 @@ private fun ColumnScope.EmptyState(back: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().weight(1f),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
     ) {
-        IconBadge(Icons.Rounded.Inventory2, tint = Tc.TextSub, bg = Tc.Surface2, size = 112.dp)
-        Title("아직 묻은 캡슐이 없어요", align = TextAlign.Center)
-        Body("홈에서 목소리 묻기를 누르면 첫 캡슐이 생겨요", align = TextAlign.Center)
-        Btn("홈으로", icon = Icons.Rounded.Mic, style = BtnStyle.Primary, onClick = back)
+        Icon(Icons.Rounded.PhotoLibrary, null, tint = Tc.TextMute, modifier = Modifier.size(72.dp))
+        Text("아직 묻은 캡슐이 없어요", style = Type.TitleS, color = Tc.Text, textAlign = TextAlign.Center)
+        Text("홈에서 목소리 남기기를 누르면 첫 캡슐이 생겨요", style = Type.BodyS, color = Tc.TextMute, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(8.dp))
+        Btn("홈으로", style = BtnStyle.Filled, onClick = back)
     }
 }
 
-/** One capsule: the whole row plays it (big target); delete is a separate, confirmed action. */
+/** One capsule: the whole row plays it; delete is a separate, confirmed action. */
 @Composable
-private fun CapsuleRow(c: Capsule, lockedUntil: Long?, compact: Boolean, onPlay: () -> Unit, onDelete: () -> Unit) {
+private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onDelete: () -> Unit) {
     val locked = lockedUntil != null
-    Surface(
-        onClick = clickWithSound(onPlay),
+    val time = Instant.ofEpochMilli(c.createdAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("a h:mm"))
+    val tags = MoodTagEngine.fromStored(c.tags).filter { it.label != c.placeName }.joinToString(" · ") { it.label }
+    ListRow(
+        title = "${c.placeName ?: "장소 기록 없음"} · ${c.durationSec}초",
+        sub = if (locked) "${LocalDate.ofEpochDay(lockedUntil!!).format(dayFmt)}에 열리는 편지"
+        else listOf(time, tags, if (c.locationUncertain) "위치 불확실" else "").filter { it.isNotEmpty() }.joinToString(" · "),
+        leading = if (locked) Icons.Rounded.Lock else Icons.Rounded.PlayArrow,
+        leadingTint = if (locked) Tc.TextMute else Tc.Text,
         enabled = !locked,
-        shape = RoundedCornerShape(20.dp),
-        color = Tc.Bg,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 112.dp),
+        onClick = onPlay,
     ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            Box(
-                Modifier.size(72.dp).background(if (locked) Tc.Surface2 else Tc.Accent, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    if (locked) Icons.Rounded.Lock else Icons.Rounded.PlayArrow,
-                    contentDescription = if (locked) "잠긴 편지" else "듣기",
-                    tint = if (locked) Tc.TextSub else Tc.OnAccent,
-                    modifier = Modifier.size(40.dp),
-                )
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    "${c.placeName ?: "장소 기록 없음"} · ${c.durationSec}초" + (if (c.locationUncertain) " · 위치 불확실" else ""),
-                    style = Type.BodyStrong, color = Tc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-                if (locked) {
-                    Text("${LocalDate.ofEpochDay(lockedUntil!!).format(dayFmt)}에 열리는 편지", style = Type.LabelM, color = Tc.AccentInk)
-                } else {
-                    val tags = MoodTagEngine.fromStored(c.tags).filter { it.label != c.placeName }
-                    Text(
-                        Instant.ofEpochMilli(c.createdAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("a h:mm")) +
-                            (if (tags.isNotEmpty()) " · " + tags.joinToString(" · ") { it.label } else ""),
-                        style = Type.LabelM, color = Tc.TextMute, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            IconBtn(Icons.Rounded.DeleteOutline, "삭제", style = BtnStyle.Quiet, onClick = onDelete)
-        }
+        IconBtn(Icons.Rounded.DeleteOutline, "삭제", onClick = onDelete)
     }
 }
 
@@ -530,19 +486,7 @@ private fun tripSummary(t: Trip): String {
 // ---- Settings (F-13, parked only) -------------------------------------------------------
 
 @Composable
-private fun SettingRow(title: String, sub: String, trailing: @Composable () -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().heightIn(min = Tc.Touch), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = Type.BodyStrong, color = Tc.Text)
-            Text(sub, style = Type.LabelM, color = Tc.TextMute)
-        }
-        Spacer(Modifier.width(24.dp))
-        trailing()
-    }
-}
-
-@Composable
-private fun ValueText(text: String) = Text(text, style = Type.BodyM, color = Tc.TextSub)
+private fun ValueText(text: String) = Text(text, style = Type.BodyS, color = Tc.TextMute)
 
 @Composable
 fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
@@ -552,26 +496,26 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
         Header("설정", back)
         Column(
             Modifier.widthIn(max = 1100.dp).fillMaxWidth().align(Alignment.CenterHorizontally).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Eyebrow("개인정보")
-            Card {
-                SettingRow("녹음은 직접 누를 때만", "마이크는 버튼을 눌렀을 때만 켜져요") { ValueText("항상") }
-                Divider()
-                SettingRow("녹음 알림음", "함께 탄 사람도 알 수 있게 끌 수 없어요") { ValueText("켜짐") }
-                Divider()
-                SettingRow("저장 위치", "캡슐은 이 차 안에만 저장돼요") { ValueText("이 차") }
+            Section("개인정보")
+            Panel {
+                ListRow("녹음은 직접 누를 때만", "마이크는 버튼을 눌렀을 때만 켜져요") { ValueText("항상") }
+                RowDivider()
+                ListRow("녹음 알림음", "함께 탄 사람도 알 수 있게 끌 수 없어요") { ValueText("켜짐") }
+                RowDivider()
+                ListRow("저장 위치", "캡슐은 이 차 안에만 저장돼요") { ValueText("이 차") }
             }
             Spacer(Modifier.height(8.dp))
-            Eyebrow("알림")
-            Card {
-                SettingRow("도착 제안", "처음 온 곳에 도착하면 물어봐요 · 하루 2번까지") { TcSwitch(arrival, app.settings::setArrivalPrompt) }
+            Section("알림")
+            Panel {
+                ListRow("도착 제안", "처음 온 곳에 도착하면 물어봐요 · 하루 2번까지") { TcSwitch(arrival, app.settings::setArrivalPrompt) }
             }
             Spacer(Modifier.height(8.dp))
-            Eyebrow("차를 넘길 때")
-            Card {
-                SettingRow("모두 지우기", "모든 캡슐과 녹음을 지워요") {
-                    Btn("지우기", icon = Icons.Rounded.DeleteOutline) { confirm = true }
+            Section("차를 넘길 때")
+            Panel {
+                ListRow("모두 지우기", "모든 캡슐과 녹음을 지워요", onClick = { confirm = true }) {
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tc.TextMute, modifier = Modifier.size(36.dp))
                 }
             }
         }
@@ -590,19 +534,8 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
 // ---- Dev panel (demo only) -------------------------------------------------------------
 
 @Composable
-private fun Toggle(label: String, on: Boolean, onClick: () -> Unit) {
-    Surface(
-        onClick = clickWithSound(onClick),
-        shape = RoundedCornerShape(16.dp),
-        color = if (on) Tc.AccentSoft else Tc.Surface2,
-        border = BorderStroke(2.dp, if (on) Tc.Accent else Tc.Surface2),
-        modifier = Modifier.heightIn(min = 64.dp),
-    ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
-            Text(label, style = Type.LabelM, color = Tc.Text)
-        }
-    }
-}
+private fun Toggle(label: String, on: Boolean, onClick: () -> Unit) =
+    Btn(label, style = if (on) BtnStyle.Filled else BtnStyle.Basic, height = 64.dp, onClick = onClick)
 
 /** Dev panel for demos: fake car state, safety signals, day/night, approach and route. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -613,32 +546,30 @@ fun DevPanel(app: TimeCapsuleApp, close: () -> Unit) {
     val night by app.nightOverride.collectAsState()
     val fakeCar = app.vehicle as? FakeVehicleSource
     val fakeNavi = app.navi as? FakeNaviSource
-    Box(Modifier.fillMaxSize().background(Tc.Scrim), contentAlignment = Alignment.CenterEnd) {
+    Box(Modifier.fillMaxSize().background(Color(0x66131417)), contentAlignment = Alignment.CenterEnd) {
         Surface(Modifier.fillMaxHeight().widthIn(max = 840.dp).fillMaxWidth(), color = Tc.Surface) {
             Column(
                 Modifier.padding(Tc.Gutter).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Header("개발 패널") { Btn("닫기", style = BtnStyle.Quiet, onClick = close) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("가짜 차량·내비 모드", style = Type.BodyStrong, color = Tc.Text)
-                        Meta("앱을 다시 켜면 적용돼요")
+                        Text("앱을 다시 켜면 적용돼요", style = Type.LabelM, color = Tc.TextMute)
                     }
                     var fake by remember { mutableStateOf(app.forceFake) }
                     TcSwitch(fake) { fake = it; app.setForceFake(it) }
                 }
-                Eyebrow("화면")
+                Section("화면")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Toggle("차량 따라", night == null) { app.nightOverride.value = null }
                     Toggle("낮", night == false) { app.nightOverride.value = false }
                     Toggle("밤", night == true) { app.nightOverride.value = true }
-                    val half by app.halfPreview.collectAsState()
-                    Toggle("반쪽 화면(내비 옆)", half) { app.halfPreview.value = !half }
                 }
                 if (fakeCar != null) {
                     val s by fakeCar.snapshot.collectAsState()
-                    Eyebrow("차량 상태")
+                    Section("차량 상태")
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Toggle("P단", s.gearInPark == true) { fakeCar.set { it.copy(gearInPark = it.gearInPark != true) } }
                         Toggle("문 열림", s.anyDoorOpen == true) { fakeCar.set { it.copy(anyDoorOpen = it.anyDoorOpen != true) } }
@@ -649,7 +580,7 @@ fun DevPanel(app: TimeCapsuleApp, close: () -> Unit) {
                         Toggle("탑승 ${s.occupiedSeats}명", false) { fakeCar.set { it.copy(occupiedSeats = ((it.occupiedSeats ?: 1) % 4) + 1) } }
                         Toggle("${s.outsideTempC?.toInt()}℃", false) { fakeCar.set { it.copy(outsideTempC = if ((it.outsideTempC ?: 18f) > 5f) 2f else 18f) } }
                     }
-                    Eyebrow("안전 신호")
+                    Section("안전 신호")
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         SafetySignal.entries.filter { it != SafetySignal.NAVI_VOICE }.forEach { sig ->
                             Toggle(sig.korean(), sig in signals) { fakeCar.setSignal(sig, sig !in signals) }
@@ -666,13 +597,16 @@ fun DevPanel(app: TimeCapsuleApp, close: () -> Unit) {
                         }
                     }
                 } else {
-                    Meta("차량 값은 Virtual Console(127.0.0.1:8088)에서 바꾸세요")
+                    Text("차량 값은 Virtual Console(127.0.0.1:8088)에서 바꾸세요", style = Type.LabelM, color = Tc.TextMute)
                 }
-                Eyebrow("시연")
+                Section("시연")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     val newest = capsules.maxByOrNull { it.createdAt }
                     Btn("최근 캡슐을 18년 전으로", enabled = newest != null, height = 72.dp) { newest?.let { app.drive.backdate(it.id, 18) } }
                     Btn("1.2km 접근", enabled = newest != null, height = 72.dp) { newest?.let { app.drive.simulateApproach(it.id); close() } }
+                    Btn("10초 뒤 접근(앱 밖에서 보기)", enabled = newest != null, height = 72.dp) {
+                        newest?.let { c -> close(); app.scope.launch { kotlinx.coroutines.delay(10_000); app.drive.simulateApproach(c.id) } }
+                    }
                     if (fakeNavi != null) {
                         Btn("캡슐 지나는 경로 시작", enabled = capsules.isNotEmpty(), height = 72.dp) {
                             val c = capsules.first()

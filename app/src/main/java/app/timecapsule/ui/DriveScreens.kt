@@ -23,7 +23,6 @@ import androidx.compose.material.icons.rounded.PauseCircle
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.Stop
-import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -63,86 +62,88 @@ private fun rememberNow(key: Any?): Long {
 }
 
 /**
- * Screen 04: recording. One glance: big seconds left. Two clear ways out: keep it (main) or
- * throw it away. No animation (Pleos: no moving elements while driving).
+ * Screen 04: recording, laid out like a voice recorder / call screen: status on top, a big
+ * timer in the middle, the two ways out in a fixed bar at the bottom. No animation.
  */
 @Composable
-fun RecordingScreen(since: Long?, tags: List<MoodTag>, onStop: () -> Unit, onCancel: () -> Unit) {
+fun RecordingScreen(since: Long?, place: String?, tags: List<MoodTag>, onStop: () -> Unit, onCancel: () -> Unit) {
     val now = rememberNow(since)
     val elapsed = since?.let { ((now - it) / 1000).toInt() } ?: 0
-    val left = (Rules.MAX_RECORD_SEC - elapsed).coerceAtLeast(0)
+    val shown = elapsed.coerceAtMost(Rules.MAX_RECORD_SEC)
     val tooShort = elapsed < Rules.MIN_RECORD_SEC
 
-    Column(
-        Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterVertically),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Dot(Tc.Rec, 18.dp)
-            Text("  녹음 중", style = Type.TitleM, color = Tc.Rec)
+    Column(Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter)) {
+        Row(Modifier.fillMaxWidth().padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Dot(Tc.Rec, 16.dp)
+            Text("  녹음 중", style = Type.TitleS, color = Tc.Text)
+            Spacer(Modifier.weight(1f))
+            Text("최대 ${Rules.MAX_RECORD_SEC}초", style = Type.LabelM, color = Tc.TextMute)
         }
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text("$left", style = Type.Display.copy(fontFeatureSettings = "tnum"), color = Tc.Text)
-            Text("초", style = Type.TitleL, color = Tc.TextSub, modifier = Modifier.padding(bottom = 24.dp, start = 8.dp))
-        }
-        LinearProgressIndicator(
-            progress = { elapsed / Rules.MAX_RECORD_SEC.toFloat() },
-            modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)),
-            color = Tc.Rec,
-            trackColor = Tc.Surface2,
-            drawStopIndicator = {},
-        )
-        Body(if (tooShort) "3초 이상 말해 주세요" else "다 말했으면 묻기를 누르세요", align = TextAlign.Center)
-        TagRow(tags, center = true)
-        Row(Modifier.widthIn(max = 760.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Btn("지우기", Modifier.weight(1f), icon = Icons.Rounded.Close, height = Tc.TouchLarge, onClick = onCancel)
-            Btn(
-                "묻기", Modifier.weight(2f), icon = Icons.Rounded.Check, style = BtnStyle.Primary,
-                enabled = !tooShort, height = Tc.TouchLarge, onClick = onStop,
+        Column(
+            Modifier.weight(1f).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
+        ) {
+            Text("0:%02d".format(shown), style = Type.Display.copy(fontFeatureSettings = "tnum"), color = Tc.Text)
+            LinearProgressIndicator(
+                progress = { shown / Rules.MAX_RECORD_SEC.toFloat() },
+                modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                color = Tc.Rec, trackColor = Tc.Basic, drawStopIndicator = {},
+            )
+            Text(
+                (listOf(place ?: "위치 확인 중") + tags.map { it.label }).joinToString(" · "),
+                style = Type.BodyS, color = Tc.TextMute, textAlign = TextAlign.Center, maxLines = 2,
             )
         }
-        Meta("30초가 되면 자동으로 묻혀요")
+        Text(
+            if (tooShort) "3초 이상 말해 주세요" else "다 말했으면 묻기를 누르세요",
+            style = Type.BodyM, color = Tc.TextSub, textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Btn("지우기", Modifier.weight(1f), icon = Icons.Rounded.Close, height = Tc.TouchLarge, onClick = onCancel)
+            Btn("묻기", Modifier.weight(1f), icon = Icons.Rounded.Check, style = BtnStyle.Filled, enabled = !tooShort, height = Tc.TouchLarge, onClick = onStop)
+        }
     }
 }
 
 /**
- * Screen 05: approach alert, in the Pleos System Notification shape and anchored to the top
- * like system notifications, so the road-relevant part of the screen behind stays visible.
+ * Screen 05: approach alert. Same shape and place as a Pleos system notification (top, white,
+ * shadow, no dimming of the screen behind). When the app is not on screen the same alert is
+ * posted as a real heads-up notification instead (AlertNotifier), so it shows over navigation.
  */
 @Composable
 fun AlertCard(alert: AlertUi, onListen: () -> Unit, onLater: () -> Unit) {
     val now = rememberNow(alert.shownAt)
     val leftMs = (Rules.ALERT_TIMEOUT_MS - (now - alert.shownAt)).coerceAtLeast(0)
-    Box(Modifier.fillMaxSize().background(Tc.Scrim), contentAlignment = Alignment.TopCenter) {
-        Column(Modifier.padding(Tc.Gutter).widthIn(max = 880.dp)) {
-            val tags = MoodTagEngine.fromStored(alert.capsule.tags).filter { it.label != alert.capsule.placeName }
-            Notice(
-                icon = Icons.Rounded.Inventory2,
-                title = alert.line,
-                description = (listOf(if (alert.distanceM < 100) "바로 이 근처" else "${formatDistance(alert.distanceM)} 앞") + tags.map { it.label }).joinToString(" · "),
-                accent = true,
-                elevated = true,
-                actions = { m ->
-                    Btn("다음에", m, height = Tc.TouchLarge, onClick = onLater)
-                    Btn("들려줘", m, icon = Icons.Rounded.PlayArrow, style = BtnStyle.Primary, height = Tc.TouchLarge, onClick = onListen)
-                },
-                footer = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        LinearProgressIndicator(
-                            progress = { leftMs / Rules.ALERT_TIMEOUT_MS.toFloat() },
-                            modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)),
-                            color = Tc.Accent, trackColor = Tc.Surface2, drawStopIndicator = {},
-                        )
-                        Text("  ${(leftMs + 999) / 1000}초 뒤 닫혀요", style = Type.LabelM, color = Tc.TextMute)
-                    }
-                },
-            )
-        }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        SystemNotice(
+            title = alert.line,
+            description = alertDescription(alert),
+            modifier = Modifier.padding(24.dp).widthIn(max = 760.dp),
+            cta = "들려줘" to onListen, ctaIcon = Icons.Rounded.PlayArrow,
+            sub = "다음에" to onLater,
+            footer = {
+                LinearProgressIndicator(
+                    progress = { leftMs / Rules.ALERT_TIMEOUT_MS.toFloat() },
+                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                    color = Tc.TextMute, trackColor = Tc.Basic, drawStopIndicator = {},
+                )
+            },
+        )
     }
 }
 
-/** Screen 06: playback. The narration is the content; controls are three big, fixed slots. */
+fun alertDescription(alert: AlertUi): String {
+    val tags = MoodTagEngine.fromStored(alert.capsule.tags).filter { it.label != alert.capsule.placeName }.map { it.label }
+    val where = if (alert.distanceM < 100) "바로 이 근처" else "${formatDistance(alert.distanceM)} 앞"
+    return (listOf(where) + tags).joinToString(" · ")
+}
+
+/**
+ * Screen 06: playback, like a Now Playing template: what (place, date), the narration as the
+ * content, and a fixed three-button control bar at the bottom.
+ */
 @Composable
 fun PlayingScreen(
     playing: PlayingUi?,
@@ -153,49 +154,49 @@ fun PlayingScreen(
     onStop: () -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize().background(Tc.Bg)) {
-        val compact = widthClass(maxWidth) == WidthClass.Compact
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = if (compact) Tc.Gutter else 80.dp, vertical = Tc.Gutter),
-            verticalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterVertically),
-        ) {
+        val portrait = widthClass(maxWidth) == WidthClass.Portrait
+        Column(Modifier.fillMaxSize().padding(Tc.Gutter)) {
             if (playing == null) {
-                Body("불러오는 중…")
+                Text("불러오는 중…", style = Type.BodyM, color = Tc.TextMute)
                 return@Column
             }
             val c = playing.capsule
             val date = Instant.ofEpochMilli(c.createdAt).atZone(ZoneId.systemDefault())
                 .format(DateTimeFormatter.ofPattern("yyyy년 M월 d일 a h:mm"))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconBadge(Icons.Rounded.Inventory2, size = 56.dp)
-                Column(Modifier.padding(start = 20.dp)) {
-                    Text(c.placeName ?: "장소 기록 없음", style = Type.TitleS, color = Tc.Text)
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                AppMark(64.dp)
+                Column(Modifier.padding(start = 20.dp).weight(1f)) {
+                    Text(c.placeName ?: "장소 기록 없음", style = Type.TitleS, color = Tc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(date, style = Type.LabelM, color = Tc.TextMute)
                 }
             }
-            Text(
-                playing.narration,
-                style = if (compact) Type.TitleL else Type.HeadlineS,
-                color = Tc.Text, maxLines = 4, overflow = TextOverflow.Ellipsis,
-            )
-            TagRow(MoodTagEngine.fromStored(c.tags).filter { it.label != c.placeName })
+            Column(
+                Modifier.weight(1f).fillMaxWidth().widthIn(max = 1200.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
+            ) {
+                Text(
+                    playing.narration,
+                    style = if (portrait) Type.TitleL else Type.HeadlineS,
+                    color = Tc.Text, maxLines = 5, overflow = TextOverflow.Ellipsis,
+                )
+                val tags = MoodTagEngine.fromStored(c.tags).filter { it.label != c.placeName }
+                if (tags.isNotEmpty()) Text(tags.joinToString(" · ") { it.label }, style = Type.BodyS, color = Tc.TextMute)
+            }
             if (safetyPaused != null) {
-                Row(
-                    Modifier.fillMaxWidth().background(Tc.AccentSoft, RoundedCornerShape(20.dp)).padding(24.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Rounded.PauseCircle, null, tint = Tc.AccentInk, modifier = Modifier.size(40.dp))
-                    Column(Modifier.padding(start = 16.dp)) {
-                        Text("${safetyPaused.joinToString(", ") { it.korean() }} 때문에 잠시 멈췄어요", style = Type.BodyStrong, color = Tc.Text)
-                        Text("끝나면 2초 뒤 이어서 들려 드려요", style = Type.LabelM, color = Tc.TextSub)
-                    }
+                Panel(Modifier.padding(bottom = 16.dp)) {
+                    ListRow(
+                        "${safetyPaused.joinToString(", ") { it.korean() }} 때문에 잠시 멈췄어요",
+                        "끝나면 2초 뒤 이어서 들려 드려요",
+                        leading = Icons.Rounded.PauseCircle,
+                    )
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Btn("처음부터", Modifier.weight(1f), icon = Icons.Rounded.Replay, height = Tc.TouchLarge, onClick = onRestart)
                 Btn(
-                    if (userPaused) "이어 듣기" else "일시정지", Modifier.weight(1.4f),
+                    if (userPaused) "이어 듣기" else "일시정지", Modifier.weight(1f),
                     icon = if (userPaused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
-                    style = BtnStyle.Primary, height = Tc.TouchLarge, onClick = onPause,
+                    style = BtnStyle.Filled, height = Tc.TouchLarge, onClick = onPause,
                 )
                 Btn("그만", Modifier.weight(1f), icon = Icons.Rounded.Stop, height = Tc.TouchLarge, onClick = onStop)
             }

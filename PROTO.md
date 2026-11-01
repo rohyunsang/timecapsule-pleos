@@ -42,15 +42,17 @@ Pleos 에뮬레이터에서는 Vehicle SDK·NaviHelper를 실제로 쓰고, 그 
 - **에뮬레이터에 한국어 TTS 엔진이 없습니다.** 내레이션은 화면에 글로 보이고 원본 목소리는 재생됩니다. Pleos TTS SDK가 나오면 교체합니다.
 - 좌석 감지는 에뮬레이터 기준 2열 중앙·3열은 지원하지 않습니다(오류 없이 무시).
 
-## UI 기준 (Pleos Connect UI Design Guide)
+## UI 기준
 
-화면은 [Pleos Connect UI Design Guide](https://document.pleos.ai/en/docs/connect/guide/docs-design/Introduction/intro)와 [운전 안전 설계 문서](https://document.pleos.ai/en/docs/pleos-only/vehicle-app-planning-guide/driver-distraction-guideline)에 맞췄습니다.
+레퍼런스는 **Pleos 시스템 앱 자체**(내비, 전화, 설정, 주행 정보)와 [Pleos Connect UI Design Guide](https://document.pleos.ai/en/docs/connect/guide/docs-design/Introduction/intro) 컴포넌트, Android Automotive/CarPlay 리스트 템플릿입니다.
 
-- **글꼴**: 시스템 UI와 같은 Asta Sans(42dot, SIL OFL, `res/font/asta_sans.ttf` 가변 글꼴).
-- **글자 크기**: 가이드 스케일 그대로. Pleos 화면은 160dpi라 px = sp. 본문 26~30, 제목 32~40, 헤드라인 48~56.
-- **색**: Pleos 시스템 토큰의 낮/밤 팔레트. 차량 야간 모드(uiMode)를 따라 바뀌고, 강조색은 앰버 하나만 주 동작에 씁니다.
-- **창 정책**: Pleos는 내비 옆 1:1(세로 반쪽)이 기본이라 가로 고정을 풀고 넓은 화면/반쪽 화면 두 배치를 둡니다. 개발 패널의 "반쪽 화면"으로 미리 볼 수 있습니다.
-- **주행 제한**: `CarUxRestrictionsManager`의 distraction optimization 또는 P단이 아닐 때 편지·앨범·설정과 캡슐 목록을 잠급니다.
-- **알림**: 시스템 알림 모양(아이콘, 제목, 한 줄 설명, 같은 폭 버튼 두 개)으로 화면 위쪽에 띄우고, 닫히기까지 남은 시간을 보여 줍니다.
-- **터치**: 버튼 88dp 이상, 주행 중 핵심 버튼 112dp. 누를 때마다 시스템 클릭음.
-- **앱 아이콘**: 어댑티브 아이콘(전경/배경 분리).
+- **주 화면은 세로 한 창.** [앱 구조 문서](https://document.pleos.ai/en/docs/pleos-only/vehicle-app-planning-guide/app-structure-screen-model)대로 `screenOrientation`을 두지 않아 기본이 portrait(내비 옆 한 창)입니다. Connect-S는 내비와 1:1, Connect-W는 내비 2 : 앱 1. 가로(두 창)일 때만 오른쪽에 캡슐 목록을 더 보여 줍니다.
+- **모노톤.** Pleos 버튼 위계 그대로 Basic(연회색)과 Filled(진회색). 패널은 1px 선의 평평한 흰 면. 브랜드 앰버는 앱 아이콘에만 쓰고, 빨강은 녹음, 파랑은 스위치에만 씁니다.
+- **주 동작은 진한 바 하나.** 내비의 "어디로 갈까요?" 바와 같은 모양으로 "목소리 남기기".
+- **목록은 행.** 아이콘, 제목, 한 줄 설명, 구분선. 카드 쌓기 대신 시스템 리스트 모양.
+- **메뉴는 내비 하단 아이콘 줄처럼** 한 패널을 세로선으로 나눕니다. 주행 중엔 자물쇠로 바뀌고 누르면 이유를 알려 줍니다.
+- **알림은 Pleos System Notification 모양**(앱 아이콘, 제목, 설명, 같은 폭 버튼 두 개). 앱이 화면에 있으면 위쪽 오버레이로, 없으면 시스템 알림으로 올립니다(`drive/AlertNotifier.kt`).
+  - 확인한 제약: 에뮬레이터의 Pleos 알림 서비스는 privileged/플랫폼 서명 앱에만 헤드업 팝업을 띄웁니다(`isSystemImportantNotification`). 일반 앱 알림은 알림 센터에만 들어갑니다. 내비 위에 바로 띄우려면 Pleos 쪽 허용이 필요합니다.
+- **글꼴** Asta Sans(시스템 글꼴), 가이드 글자 스케일(160dpi라 px = sp), 한국어는 단어 단위 줄바꿈.
+- **낮/밤**은 Pleos 색 토큰으로 차량 야간 모드를 따릅니다.
+- **주행 제한**은 `CarUxRestrictionsManager` + P단 여부.
