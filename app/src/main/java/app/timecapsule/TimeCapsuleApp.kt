@@ -20,6 +20,7 @@ import app.timecapsule.vehicle.UxRestrictions
 import app.timecapsule.vehicle.VehicleSnapshot
 import app.timecapsule.vehicle.VehicleSource
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
 
 /** Manual dependency graph. On a Pleos head unit the real SDKs are used, elsewhere fakes. */
 class TimeCapsuleApp : Application() {
@@ -39,9 +40,20 @@ class TimeCapsuleApp : Application() {
         private set
     lateinit var ux: UxRestrictions
         private set
+    /** Friends and shared capsules: Firebase when keys are set, otherwise an in-memory fake. */
+    lateinit var social: app.timecapsule.social.SocialBackend
+        private set
+    lateinit var sync: app.timecapsule.social.SocialSync
+        private set
 
     /** Dev panel override for day/night: null follows the car (system night mode). */
     val nightOverride = kotlinx.coroutines.flow.MutableStateFlow<Boolean?>(null)
+
+    /** A screen to open from outside the UI (friend QR link). */
+    val openScreen = kotlinx.coroutines.flow.MutableStateFlow<app.timecapsule.ui.Screen?>(null)
+
+    /** Friend code from a QR link opened before the user had a name; added after sign-up. */
+    var pendingFriendCode: String? = null
 
     /** True while any activity of the app is started (on screen, also in a split window). */
     val visible = kotlinx.coroutines.flow.MutableStateFlow(false)
@@ -76,6 +88,18 @@ class TimeCapsuleApp : Application() {
         val beeper = Beeper()
         drive = DriveController(scope, vehicle, navi, repo, Recorder(this, beeper), Player(this), beeper, settings)
 
+        val useFirebase = BuildConfig.FIREBASE_API_KEY.isNotBlank() && !java.io.File(filesDir, FAKE_SERVER).exists()
+        social = if (useFirebase) {
+            runCatching {
+                app.timecapsule.social.FirebaseBackend(
+                    this, scope, BuildConfig.FIREBASE_API_KEY, BuildConfig.FIREBASE_APP_ID, BuildConfig.FIREBASE_PROJECT_ID,
+                )
+            }.onFailure { android.util.Log.w("TimeCapsuleApp", "Firebase off", it) }.getOrNull()
+                ?: app.timecapsule.social.FakeBackend(this)
+        } else app.timecapsule.social.FakeBackend(this)
+        sync = app.timecapsule.social.SocialSync(this, scope, social, repo, settings).also { it.start() }
+        drive.sharing = sync
+
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(a: android.app.Activity) { started++; visible.value = true }
             override fun onActivityStopped(a: android.app.Activity) { started--; visible.value = started > 0 }
@@ -97,6 +121,21 @@ class TimeCapsuleApp : Application() {
 
     val forceFake get() = java.io.File(filesDir, FORCE_FAKE).exists()
 
+    /**
+     * "차를 넘길 때 모두 지우기": the car forgets everything, including who was signed in.
+     * Capsules left for friends stay on the server (they belong to the friends now too).
+     */
+    fun wipeCar() {
+        drive.deleteEverything(this)
+        scope.launch { social.signOut() }
+    }
+
+    /** Dev panel: play another person on this car. Local capsules go; the server keeps theirs. */
+    fun switchAccount(p: app.timecapsule.social.Profile?) {
+        drive.deleteEverything(this)
+        scope.launch { social.switchAccount(p) }
+    }
+
     private fun fakeVehicle() = FakeVehicleSource(VehicleSnapshot(occupiedSeats = 1, outsideTempC = 18f, gearInPark = true))
 
     private fun isInstalled(pkg: String) = try {
@@ -110,5 +149,7 @@ class TimeCapsuleApp : Application() {
         const val PLEOS_CAR_SERVICE = "ai.pleos.service.car"
         const val PLEOS_NAVI_SERVICE = "ai.pleos.playground.service.navi"
         const val FORCE_FAKE = "force_fake"
+        /** Dev: use the in-memory server even when Firebase keys are set. */
+        const val FAKE_SERVER = "fake_server"
     }
 }

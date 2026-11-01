@@ -44,7 +44,7 @@ class Recorder(private val context: Context, private val beeper: Beeper) {
             r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
             r.setAudioSamplingRate(44_100)
-            r.setAudioEncodingBitRate(96_000)
+            r.setAudioEncodingBitRate(64_000) // voice; keeps a 30 s clip ~240 KB for upload
             r.setMaxDuration(Rules.MAX_RECORD_SEC * 1000)
             r.setOutputFile(out.absolutePath)
             r.setOnInfoListener { _, what, _ ->

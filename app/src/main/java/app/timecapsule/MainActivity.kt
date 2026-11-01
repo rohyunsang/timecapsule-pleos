@@ -35,6 +35,9 @@ import app.timecapsule.ui.Screen
 import app.timecapsule.ui.SettingsScreen
 import app.timecapsule.ui.Tc
 import app.timecapsule.ui.TimeCapsuleTheme
+import app.timecapsule.ui.FriendsScreen
+import kotlinx.coroutines.launch
+import app.timecapsule.social.FriendCode
 
 class MainActivity : ComponentActivity() {
     private val app get() = application as TimeCapsuleApp
@@ -53,12 +56,33 @@ class MainActivity : ComponentActivity() {
             if (android.os.Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
         }.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (wanted.isNotEmpty()) askPerms.launch(wanted.toTypedArray())
+        handleFriendLink(intent)
         setContent {
             // Day/night follows the car (AAOS night mode); the dev panel can pin one for demos.
             val pinned by app.nightOverride.collectAsState()
             TimeCapsuleTheme(night = pinned ?: isSystemInDarkTheme()) {
                 Surface(Modifier.fillMaxSize(), color = Tc.Bg) { Root(app) }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleFriendLink(intent)
+    }
+
+    /** A friend QR code opened on this car (timecapsule://friend?code=...). */
+    private fun handleFriendLink(intent: android.content.Intent?) {
+        val code = intent?.dataString?.let(FriendCode::fromLink) ?: return
+        intent.data = null
+        app.openScreen.value = Screen.FRIENDS
+        if (app.social.me.value == null) {
+            app.pendingFriendCode = code
+            return
+        }
+        app.scope.launch {
+            val r = app.social.addFriend(code)
+            Toast.makeText(this@MainActivity, r.fold({ "${it.name}님과 친구가 됐어요" }, { it.message ?: "추가하지 못했어요" }), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -100,6 +124,11 @@ private fun Root(app: TimeCapsuleApp) {
     LaunchedEffect(Unit) {
         drive.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
     }
+    LaunchedEffect(Unit) {
+        app.sync.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    }
+    val open by app.openScreen.collectAsState()
+    LaunchedEffect(open) { open?.let { if (!restricted) screen = it; app.openScreen.value = null } }
     BackHandler(screen != Screen.HOME) { screen = Screen.HOME }
 
     Box(Modifier.fillMaxSize()) {
@@ -128,9 +157,10 @@ private fun Root(app: TimeCapsuleApp) {
                     onLocked = { Toast.makeText(context, "안전을 위해 차를 세우면 열려요", Toast.LENGTH_SHORT).show() },
                     onDev = { dev = !dev },
                 )
-                Screen.LETTER -> LetterScreen(drive) { screen = Screen.HOME }
+                Screen.LETTER -> LetterScreen(app) { screen = Screen.HOME }
                 Screen.ALBUM -> AlbumScreen(drive) { screen = Screen.HOME }
                 Screen.SETTINGS -> SettingsScreen(app) { screen = Screen.HOME }
+                Screen.FRIENDS -> FriendsScreen(app) { screen = Screen.HOME }
             }
         }
         alert?.let { AlertCard(it, drive::listen, drive::later) }

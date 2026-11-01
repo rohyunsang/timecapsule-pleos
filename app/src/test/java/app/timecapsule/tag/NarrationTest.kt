@@ -7,10 +7,10 @@ import java.time.LocalDate
 
 class NarrationTest {
 
-    @Test fun specExample() {
+    @Test fun plainLine() {
         val tags = MoodTagEngine.tagsFor(VehicleSnapshot(wiperOn = true, headlightOn = true, occupiedSeats = 3))
         val text = Narration.build(LocalDate.of(2027, 7, 30), LocalDate.of(2045, 7, 30), tags)
-        assertEquals("18년 전 오늘, 비 오던 밤. 셋이서 이 길을 지나며 남긴 목소리예요.", text)
+        assertEquals("18년 전 오늘 남긴 캡슐이에요.", text)
     }
 
     @Test fun elapsedPhrases() {
@@ -23,7 +23,7 @@ class NarrationTest {
 
     @Test fun noWeatherNoPeople() {
         val text = Narration.build(LocalDate.of(2026, 1, 1), LocalDate.of(2028, 6, 1), emptyList())
-        assertEquals("2년 전. 이 길을 지나며 남긴 목소리예요.", text)
+        assertEquals("2년 전 남긴 캡슐이에요.", text)
     }
 
     @Test fun coldDay() {

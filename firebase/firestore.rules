@@ -1,0 +1,44 @@
+rules_version = '2';
+// TimeCapsule: friends + shared capsules. Accounts are anonymous Firebase users.
+// Deploy: Firebase console > Firestore > Rules, paste this file.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+
+    // Profile: anyone signed in may read a name; only the owner writes.
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && me() == uid;
+
+      // Friendship is written on both sides at once by whoever adds the code.
+      match /friends/{fid} {
+        allow read: if signedIn() && me() == uid;
+        allow create, update, delete: if signedIn() && (me() == uid || me() == fid);
+      }
+    }
+
+    // Friend code -> account. Claimed once, never changed.
+    match /codes/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn() && request.resource.data.uid == me();
+    }
+
+    // A capsule is readable by its owner and by the people it was left for.
+    match /capsules/{id} {
+      allow read: if signedIn() && (resource.data.ownerUid == me() || me() in resource.data.visibleTo);
+      allow create: if signedIn() && request.resource.data.ownerUid == me();
+      allow update, delete: if signedIn() && resource.data.ownerUid == me();
+    }
+
+    // Voice, one document per capsule; same audience as the capsule.
+    match /audio/{id} {
+      allow read: if signedIn() && (resource.data.ownerUid == me() ||
+        me() in get(/databases/$(database)/documents/capsules/$(id)).data.visibleTo);
+      allow create, update: if signedIn() && request.resource.data.ownerUid == me()
+        && request.resource.data.data.size() < 1000000;
+      allow delete: if signedIn() && resource.data.ownerUid == me();
+    }
+  }
+}

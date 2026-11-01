@@ -137,7 +137,12 @@ fun AlertCard(alert: AlertUi, onListen: () -> Unit, onLater: () -> Unit) {
 fun alertDescription(alert: AlertUi): String {
     val tags = MoodTagEngine.fromStored(alert.capsule.tags).filter { it.label != alert.capsule.placeName }.map { it.label }
     val where = if (alert.distanceM < 100) "바로 이 근처" else "${formatDistance(alert.distanceM)} 앞"
-    return (listOf(where) + tags).joinToString(" · ")
+    val c = alert.capsule
+    // Own capsule: the title already says when and where. A friend's: say it here.
+    val about = if (c.ownerName != null) listOfNotNull(
+        app.timecapsule.tag.Narration.elapsed(c.date(), java.time.LocalDate.now()), c.placeName,
+    ) else tags
+    return (listOf(where) + about).joinToString(" · ")
 }
 
 /**
@@ -165,7 +170,7 @@ fun PlayingScreen(
                 .format(DateTimeFormatter.ofPattern("yyyy년 M월 d일 a h:mm"))
             Column(Modifier.fillMaxWidth().padding(start = Tc.Inset, top = 16.dp)) {
                 Text(c.placeName ?: "장소 기록 없음", style = Type.TitleS, color = Tc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(date, style = Type.LabelM, color = Tc.TextMute)
+                Text(c.ownerName?.let { "${it}님이 남김 · $date" } ?: date, style = Type.LabelM, color = Tc.TextMute)
             }
             Column(
                 Modifier.weight(1f).fillMaxWidth().widthIn(max = 1200.dp).padding(horizontal = Tc.Inset),

@@ -78,7 +78,7 @@ class AlertNotifier(
     private fun postPlaying(p: PlayingUi) {
         val n = NotificationCompat.Builder(context, CHANNEL_PLAYING)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
-            .setContentTitle("캡슐 듣는 중 · ${p.capsule.placeName ?: "이 길"}")
+            .setContentTitle("캡슐 듣는 중 · " + (p.capsule.ownerName?.let { "${it}님의 " } ?: "") + (p.capsule.placeName ?: "이 길"))
             .setContentText(p.narration)
             .setOngoing(true)
             .setContentIntent(openApp())

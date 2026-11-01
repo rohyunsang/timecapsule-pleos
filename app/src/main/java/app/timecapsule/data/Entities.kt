@@ -10,7 +10,12 @@ import androidx.room.Query
 import androidx.room.RoomDatabase
 import kotlinx.coroutines.flow.Flow
 
-/** Data model from feature-spec section 06. Everything stays on the device (Room + audio files). */
+/**
+ * Data model from feature-spec section 06, plus sharing: a capsule is left either for
+ * yourself (stays in this car), for all friends, or for chosen friends (letter capsule
+ * recipients). Shared capsules also live on the server; friends' capsules are cached here so
+ * approach alerts and playback work offline.
+ */
 @Entity(tableName = "capsule")
 data class Capsule(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -30,7 +35,18 @@ data class Capsule(
     val carModel: String?,
     val odometerKm: Double?,
     val locationUncertain: Boolean = false,
-)
+    /** Who left it. null = me (also before signing in). */
+    val ownerUid: String? = null,
+    val ownerName: String? = null,
+    /** Audience.name: SELF / FRIENDS / SOME. */
+    val audience: String = "FRIENDS",
+    /** For SOME: recipient uids joined with ','. */
+    val recipients: String = "",
+    /** Server document id once uploaded (or for friends' capsules, the source id). */
+    val remoteId: String? = null,
+) {
+    val isMine get() = ownerUid == null
+}
 
 @Entity(tableName = "letter_lock")
 data class LetterLock(
@@ -70,6 +86,15 @@ interface CapsuleDao {
 
     @Query("SELECT * FROM capsule WHERE id = :id")
     suspend fun get(id: Long): Capsule?
+
+    @Query("SELECT * FROM capsule WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun byRemoteId(remoteId: String): Capsule?
+
+    @Query("SELECT * FROM capsule")
+    suspend fun all(): List<Capsule>
+
+    @Query("UPDATE capsule SET remoteId = :remoteId WHERE id = :id")
+    suspend fun setRemoteId(id: Long, remoteId: String)
 
     /** Demo only: move a capsule back in time so the narration has years to count. */
     @Query("UPDATE capsule SET createdAt = :createdAt WHERE id = :id")
@@ -124,7 +149,7 @@ interface CapsuleDao {
     suspend fun deleteAllTrips()
 }
 
-@Database(entities = [Capsule::class, LetterLock::class, Trip::class, NotifyLog::class], version = 1)
+@Database(entities = [Capsule::class, LetterLock::class, Trip::class, NotifyLog::class], version = 2)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun capsuleDao(): CapsuleDao
 }

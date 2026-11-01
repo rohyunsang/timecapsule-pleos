@@ -16,7 +16,10 @@ import kotlinx.coroutines.flow.map
 import java.io.File
 import java.time.LocalDate
 
-/** All capsule data stays on the device: Room for records, app-private files for audio (spec 06). */
+/**
+ * Room for records, app-private files for audio (spec 06). Capsules left for friends are also
+ * uploaded by [app.timecapsule.social.SocialSync]; friends' capsules are cached here.
+ */
 class CapsuleRepository(private val db: AppDatabase) {
     private val dao = db.capsuleDao()
 
@@ -33,6 +36,8 @@ class CapsuleRepository(private val db: AppDatabase) {
         at: GeoPoint?,
         lastKnown: GeoPoint?,
         openOn: LocalDate?,
+        audience: String = "FRIENDS",
+        recipients: List<String> = emptyList(),
     ): Capsule {
         val where = at ?: lastKnown
         val trip = dao.openTrip()
@@ -51,11 +56,25 @@ class CapsuleRepository(private val db: AppDatabase) {
             odometerKm = snapshot.odometerKm,
             // Spec F-01: no fix at all -> keep the last one and flag it.
             locationUncertain = at == null,
+            audience = audience,
+            recipients = recipients.joinToString(","),
         )
         val id = dao.insert(capsule)
         if (openOn != null) dao.insertLock(LetterLock(id, openOn.toEpochDay()))
         trip?.let { t -> snapshot.occupiedSeats?.let { dao.raiseOccupants(t.id, it) } }
         return capsule.copy(id = id)
+    }
+
+    suspend fun byRemoteId(remoteId: String) = dao.byRemoteId(remoteId)
+    suspend fun all() = dao.all()
+    suspend fun lockFor(id: Long) = dao.lockFor(id)
+    suspend fun setRemoteId(id: Long, remoteId: String) = dao.setRemoteId(id, remoteId)
+
+    /** Stores a capsule that came from the server (a friend's, or mine from another car). */
+    suspend fun insertFromServer(capsule: Capsule, openAfter: Long?): Long {
+        val id = dao.insert(capsule)
+        if (openAfter != null) dao.insertLock(LetterLock(id, openAfter))
+        return id
     }
 
     suspend fun backdate(id: Long, years: Long) {

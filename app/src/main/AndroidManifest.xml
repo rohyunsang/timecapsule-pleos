@@ -17,6 +17,9 @@
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Friends and shared capsules (Firebase). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Detect the Pleos services; otherwise the app falls back to fake car data. -->
     <queries>
@@ -42,12 +45,20 @@
             android:name=".MainActivity"
             android:exported="true"
             android:resizeableActivity="true"
+            android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|density|uiMode">
             <!-- Screens 04-06 are usable while driving (spec 07). -->
             <meta-data android:name="distractionOptimized" android:value="true" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Friend QR code: timecapsule://friend?code=ABC234 adds that friend. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="timecapsule" android:host="friend" />
             </intent-filter>
         </activity>
         <receiver android:name=".drive.AlertActionReceiver" android:exported="false" />

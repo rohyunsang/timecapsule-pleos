@@ -64,8 +64,9 @@ data class Approach(val capsule: Capsule, val distanceM: Double)
 object ApproachDetector {
     /**
      * F-04: nearest openable capsule within 1.2 km that has not been offered today.
-     * Locked letter capsules never trigger an alert, and neither do capsules buried today
-     * (driving away from the spot you just recorded at should not ping you).
+     * Locked letter capsules never trigger an alert, and neither do my own capsules buried
+     * today (driving away from the spot you just recorded at should not ping you). A friend's
+     * capsule from today does: that is the point of leaving one for them.
      */
     fun next(
         here: GeoPoint,
@@ -74,7 +75,7 @@ object ApproachDetector {
         notifiedToday: Set<Long>,
         today: LocalDate,
     ): Approach? = capsules.asSequence()
-        .filter { it.id !in notifiedToday && !locks[it.id].isLocked(today) && it.createdAt < startOfDayMs(today) }
+        .filter { it.id !in notifiedToday && !locks[it.id].isLocked(today) && (!it.isMine || it.createdAt < startOfDayMs(today)) }
         .map { Approach(it, Geo.distanceM(here, GeoPoint(it.lat, it.lng))) }
         .filter { it.distanceM <= Rules.APPROACH_ALERT_M }
         .minByOrNull { it.distanceM }

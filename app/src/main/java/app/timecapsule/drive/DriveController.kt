@@ -64,6 +64,8 @@ class DriveController(
     private val player: Player,
     private val beeper: Beeper,
     private val settings: Settings,
+    /** Uploads capsules left for friends; set once the sharing layer exists. */
+    var sharing: app.timecapsule.social.CapsuleSharing? = null,
 ) {
     private fun today() = LocalDate.now()
 
@@ -84,6 +86,8 @@ class DriveController(
     val locks: StateFlow<Map<Long, LetterLock>> = repo.locks.stateIn(scope, SharingStarted.Eagerly, emptyMap())
     val trips = repo.trips.stateIn(scope, SharingStarted.Eagerly, emptyList())
     val position = navi.position
+    /** Who a capsule is for when nobody picks (shown on the main bar). */
+    val defaultAudience = settings.defaultAudience
     val route = navi.route
 
     private val _state = MutableStateFlow<DriveState>(DriveState.Idle)
@@ -117,6 +121,8 @@ class DriveController(
     val messages = _messages.asSharedFlow()
 
     private var pendingOpenOn: LocalDate? = null
+    private var pendingAudience = "FRIENDS"
+    private var pendingRecipients = emptyList<String>()
     private var recordSnapshot: VehicleSnapshot? = null
     private var recordPosition: GeoPoint? = null
     private var micFailed = false
@@ -150,10 +156,15 @@ class DriveController(
 
     // ---- user actions -------------------------------------------------------------------
 
-    /** F-01 (and F-06 when [openOn] is set: a letter capsule). */
-    fun bury(openOn: LocalDate? = null) {
+    /**
+     * F-01 (and F-06 when [openOn] is set: a letter capsule). [audience] null = the default
+     * from settings (all friends, or only me); while driving there is no picking.
+     */
+    fun bury(openOn: LocalDate? = null, audience: String? = null, recipients: List<String> = emptyList()) {
         if (_state.value != DriveState.Idle) return
         pendingOpenOn = openOn
+        pendingAudience = audience ?: settings.defaultAudience.value
+        pendingRecipients = recipients
         dispatch(DriveEvent.BuryRequested)
     }
 
@@ -208,7 +219,10 @@ class DriveController(
         say(if (skipped > 0) "그때 그 길로 안내할게요. 경유지는 두 곳까지라 ${skipped}곳은 빼고 넣었어요" else "그때 그 길로 안내할게요")
     }
 
-    fun delete(capsule: Capsule) = scope.launch { repo.delete(capsule) }
+    fun delete(capsule: Capsule) = scope.launch {
+        repo.delete(capsule)
+        sharing?.onDeleted(capsule)
+    }
 
     fun deleteEverything(context: Context) = scope.launch {
         player.stop()
@@ -301,9 +315,10 @@ class DriveController(
         }
         scope.launch {
             val tags = MoodTagEngine.tagsFor(snap)
-            val c = repo.bury(rec, snap, tags, recordPosition, navi.position.value?.point, openOn)
+            val c = repo.bury(rec, snap, tags, recordPosition, navi.position.value?.point, openOn, pendingAudience, pendingRecipients)
             val name = c.placeName ?: tags.firstOrNull()?.label ?: "오늘의"
             say(if (openOn != null) "편지 캡슐을 묻었어요. ${openOn.year}년 ${openOn.monthValue}월 ${openOn.dayOfMonth}일에 열려요" else "$name 캡슐을 묻었어요")
+            sharing?.onBuried(c)
         }
     }
 
@@ -313,7 +328,9 @@ class DriveController(
             val here = navi.position.value?.point
             val dist = here?.let { app.timecapsule.geo.Geo.distanceM(it, GeoPoint(c.lat, c.lng)) } ?: Rules.APPROACH_ALERT_M
             val elapsed = Narration.elapsed(dateOf(c), today())
-            val line = "$elapsed, ${c.placeName ?: "이 길"} 캡슐이 있어요"
+            // A friend's capsule says who left it first: that is what makes it worth hearing.
+            val line = if (c.ownerName != null) "${c.ownerName}님이 남긴 캡슐이 있어요"
+            else "$elapsed, ${c.placeName ?: "이 길"} 캡슐이 있어요"
             _alert.value = AlertUi(c, line, dist)
             repo.logNotify(id, today(), "shown")
             beeper.alert()
@@ -333,7 +350,7 @@ class DriveController(
         }
         scope.launch {
             val c = repo.get(id) ?: return@launch dispatch(DriveEvent.PlaybackFinished)
-            val narration = Narration.build(dateOf(c), today(), MoodTagEngine.fromStored(c.tags))
+            val narration = Narration.build(dateOf(c), today(), MoodTagEngine.fromStored(c.tags), from = c.ownerName)
             _playing.value = PlayingUi(c, narration)
             _userPaused.value = false
             if (_reprompt.value?.id == id) _reprompt.value = null

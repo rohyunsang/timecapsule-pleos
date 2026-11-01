@@ -32,6 +32,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MailOutline
@@ -65,6 +66,9 @@ import app.timecapsule.capsule.RouteForecast
 import app.timecapsule.capsule.isLocked
 import app.timecapsule.data.Capsule
 import app.timecapsule.data.Trip
+import app.timecapsule.social.FakeBackend
+import app.timecapsule.social.Friend
+import app.timecapsule.social.FriendCode
 import app.timecapsule.drive.DriveController
 import app.timecapsule.geo.Geo
 import app.timecapsule.geo.GeoPoint
@@ -82,7 +86,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-enum class Screen { HOME, LETTER, ALBUM, SETTINGS }
+enum class Screen { HOME, LETTER, ALBUM, FRIENDS, SETTINGS }
 
 internal fun Capsule.date(): LocalDate = Instant.ofEpochMilli(createdAt).atZone(ZoneId.systemDefault()).toLocalDate()
 internal val dayFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy년 M월 d일")
@@ -165,6 +169,7 @@ private fun AppBar(onPleos: Boolean, restricted: Boolean, onDev: () -> Unit) {
 @Composable
 private fun VoiceBar(drive: DriveController) {
     val car by drive.car.collectAsState()
+    val audience by drive.defaultAudience.collectAsState()
     val tags = MoodTagEngine.tagsFor(car).filter { it.label != car.placeName }.map { it.label }
     val p = Tc.P
     val source = remember { MutableInteractionSource() }
@@ -181,8 +186,9 @@ private fun VoiceBar(drive: DriveController) {
             Icon(Icons.Rounded.Mic, null, tint = p.onStrong, modifier = Modifier.size(44.dp))
             Column(Modifier.padding(start = 24.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("목소리 남기기", style = Type.TitleM)
+                // Who hears it comes first: that is the point of leaving one.
                 Text(
-                    (listOf(car.placeName ?: "위치 확인 중") + tags).joinToString(" · "),
+                    (listOf(if (audience == "SELF") "나만" else "친구 모두에게", car.placeName ?: "위치 확인 중") + tags).joinToString(" · "),
                     style = Type.LabelM, color = p.onStrongSub, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -206,7 +212,8 @@ private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalD
             sub = "괜찮아요" to { drive.answerArrival(false) },
         )
         again != null && !restricted -> InlinePrompt(
-            "아까 지나친 캡슐이 있어요", "${Narration.elapsed(again.date(), today)} · ${again.placeName ?: "이 길"}",
+            again.ownerName?.let { "아까 지나친 ${it}님 캡슐이 있어요" } ?: "아까 지나친 캡슐이 있어요",
+            "${Narration.elapsed(again.date(), today)} · ${again.placeName ?: "이 길"}",
             cta = "들려줘" to { drive.playCapsule(again.id) }, ctaIcon = Icons.Rounded.PlayArrow,
             sub = "닫기" to { drive.dismissReprompt() },
         )
@@ -238,7 +245,7 @@ private fun CapsuleList(
     onPlay: (Long) -> Unit,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Section("내 캡슐 $total") {
+        Section("캡슐 $total") {
             if (total > 0 && !driving) {
                 Btn("전체", icon = null, style = BtnStyle.Quiet, height = 56.dp, onClick = onMore)
             }
@@ -250,7 +257,7 @@ private fun CapsuleList(
                 else -> recent.forEachIndexed { i, c ->
                     if (i > 0) RowDivider()
                     ListRow(
-                        c.placeName ?: "장소 기록 없음",
+                        (c.ownerName?.let { "${it}님 · " } ?: "") + (c.placeName ?: "장소 기록 없음"),
                         "${c.date().format(shortFmt)} · ${Narration.elapsed(c.date(), today)}",
                         leading = Icons.Rounded.PlayArrow,
                         onClick = { onPlay(c.id) },
@@ -262,7 +269,7 @@ private fun CapsuleList(
 }
 
 /**
- * Bottom menu, like navigation's icon row: a line above, three items split by dividers.
+ * Bottom menu, like navigation's icon row: a line above, four items split by dividers.
  * While driving the items stay tappable, show a lock and explain why.
  */
 @Composable
@@ -276,6 +283,8 @@ private fun MenuBar(restricted: Boolean, go: (Screen) -> Unit, onLocked: () -> U
             item(Icons.Rounded.MailOutline, "편지", Screen.LETTER)
             Box(Modifier.width(1.dp).height(56.dp).background(Tc.Line))
             item(Icons.Rounded.PhotoLibrary, "앨범", Screen.ALBUM)
+            Box(Modifier.width(1.dp).height(56.dp).background(Tc.Line))
+            item(Icons.Rounded.Group, "친구", Screen.FRIENDS)
             Box(Modifier.width(1.dp).height(56.dp).background(Tc.Line))
             item(Icons.Rounded.Settings, "설정", Screen.SETTINGS)
         }
@@ -304,9 +313,16 @@ private fun MenuItem(icon: ImageVector, label: String, locked: Boolean, modifier
 
 private enum class LetterPick { YEAR1, YEAR10, DAY100, CUSTOM }
 
-/** A radio list (Pleos radio component), then one confirming action at the bottom. */
+/**
+ * 기획서 F-06: a letter for someone, opening on a set day. Two radio lists (Pleos radio
+ * component): who it is for, then when. One confirming action at the bottom.
+ */
 @Composable
-fun LetterScreen(drive: DriveController, back: () -> Unit) {
+fun LetterScreen(app: TimeCapsuleApp, back: () -> Unit) {
+    val drive = app.drive
+    val friends by app.social.friends.collectAsState()
+    val me by app.social.me.collectAsState()
+    var to by remember { mutableStateOf<Friend?>(null) }
     val today = LocalDate.now()
     var pick by remember { mutableStateOf(LetterPick.YEAR1) }
     var custom by remember { mutableStateOf(today.plusMonths(6)) }
@@ -322,8 +338,35 @@ fun LetterScreen(drive: DriveController, back: () -> Unit) {
             Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth().align(Alignment.CenterHorizontally).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("언제 열어 볼까요?", style = Type.TitleS, color = Tc.Text, modifier = Modifier.padding(start = 8.dp))
-            Text("정한 날 전에는 이 길을 지나도 열리지 않아요", style = Type.BodyS, color = Tc.TextMute, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
+            Text("누구에게 남길까요?", style = Type.TitleS, color = Tc.Text, modifier = Modifier.padding(start = Tc.Inset))
+            Text("받는 사람이 이 길을 지날 때만 열려요. 다른 사람에게는 알리지 않아요", style = Type.BodyS, color = Tc.TextMute, modifier = Modifier.padding(start = Tc.Inset, bottom = 8.dp))
+            Panel {
+                val radio: @Composable (Boolean, String, String, () -> Unit) -> Unit = { on, label, sub, click ->
+                    ListRow(
+                        label, sub,
+                        leading = if (on) Icons.Rounded.RadioButtonChecked else Icons.Rounded.RadioButtonUnchecked,
+                        leadingTint = if (on) Tc.Info else Tc.TextMute,
+                        onClick = click,
+                    )
+                }
+                radio(to == null, "나", "이 차에서 내가 열어요") { to = null }
+                friends.forEach { f ->
+                    RowDivider()
+                    radio(to?.uid == f.uid, "${f.name}님", "${f.name}님 차가 이 길을 지나면 열려요") { to = f }
+                }
+                if (friends.isEmpty()) {
+                    RowDivider()
+                    ListRow(
+                        if (me == null) "친구에게 보내려면 친구를 추가하세요" else "아직 친구가 없어요",
+                        "친구 화면에서 코드나 QR로 추가해요",
+                        leading = Icons.Rounded.Group, leadingTint = Tc.TextMute,
+                        onClick = { app.openScreen.value = Screen.FRIENDS },
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text("언제 열어 볼까요?", style = Type.TitleS, color = Tc.Text, modifier = Modifier.padding(start = Tc.Inset))
+            Text("정한 날 전에는 이 길을 지나도 열리지 않아요", style = Type.BodyS, color = Tc.TextMute, modifier = Modifier.padding(start = Tc.Inset, bottom = 8.dp))
             Panel {
                 val opt: @Composable (LetterPick, String, String) -> Unit = { p, label, sub ->
                     ListRow(
@@ -356,10 +399,11 @@ fun LetterScreen(drive: DriveController, back: () -> Unit) {
         Column(Modifier.widthIn(max = 960.dp).fillMaxWidth().align(Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 8.dp)) {
                 Icon(Icons.Rounded.Lock, null, tint = Tc.TextMute, modifier = Modifier.size(28.dp))
-                Text("  ${openOn.format(dayFmt)}에 열려요", style = Type.BodyS, color = Tc.TextSub)
+                Text("  ${to?.let { "${it.name}님에게 · " } ?: ""}${openOn.format(dayFmt)}에 열려요", style = Type.BodyS, color = Tc.TextSub)
             }
             Btn("녹음하고 묻기", Modifier.fillMaxWidth(), icon = Icons.Rounded.Mic, style = BtnStyle.Filled, height = Tc.TouchLarge) {
-                drive.bury(openOn)
+                val f = to
+                if (f == null) drive.bury(openOn, audience = "SELF") else drive.bury(openOn, audience = "SOME", recipients = listOf(f.uid))
                 back()
             }
         }
@@ -450,7 +494,7 @@ private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onDel
     ListRow(
         title = "${c.placeName ?: "장소 기록 없음"} · ${c.durationSec}초",
         sub = if (locked) "${LocalDate.ofEpochDay(lockedUntil!!).format(dayFmt)}에 열리는 편지"
-        else listOf(time, tags, if (c.locationUncertain) "위치 불확실" else "").filter { it.isNotEmpty() }.joinToString(" · "),
+        else listOf(whoOf(c), time, tags, if (c.locationUncertain) "위치 불확실" else "").filter { it.isNotEmpty() }.joinToString(" · "),
         leading = if (locked) Icons.Rounded.Lock else Icons.Rounded.PlayArrow,
         leadingTint = if (locked) Tc.TextMute else Tc.Text,
         enabled = !locked,
@@ -458,6 +502,14 @@ private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onDel
     ) {
         IconBtn(Icons.Rounded.DeleteOutline, "삭제", onClick = onDelete)
     }
+}
+
+/** Who left it (a friend), or who hears it (mine). */
+private fun whoOf(c: Capsule): String = when {
+    c.ownerName != null -> "${c.ownerName}님이 남김"
+    c.audience == "SELF" -> "나만"
+    c.audience == "SOME" -> "받는 사람 지정"
+    else -> "친구 모두"
 }
 
 private fun groupTitle(trip: Trip?, list: List<Capsule>): String {
@@ -480,6 +532,7 @@ private fun ValueText(text: String) = Text(text, style = Type.BodyS, color = Tc.
 @Composable
 fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
     val arrival by app.settings.arrivalPrompt.collectAsState()
+    val audience by app.settings.defaultAudience.collectAsState()
     var confirm by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
         Header("설정", back)
@@ -487,13 +540,28 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
             Modifier.widthIn(max = 1100.dp).fillMaxWidth().align(Alignment.CenterHorizontally).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            Section("목소리 남기기를 누르면")
+            Panel {
+                val radio: @Composable (String, String, String) -> Unit = { value, label, sub ->
+                    ListRow(
+                        label, sub,
+                        leading = if (audience == value) Icons.Rounded.RadioButtonChecked else Icons.Rounded.RadioButtonUnchecked,
+                        leadingTint = if (audience == value) Tc.Info else Tc.TextMute,
+                        onClick = { app.settings.setDefaultAudience(value) },
+                    )
+                }
+                radio("FRIENDS", "친구 모두에게", "친구가 그 길을 지나면 내 목소리가 나와요")
+                RowDivider()
+                radio("SELF", "나만", "이 차에만 남고 아무에게도 가지 않아요")
+            }
+            Spacer(Modifier.height(8.dp))
             Section("개인정보")
             Panel {
                 ListRow("녹음은 직접 누를 때만", "마이크는 버튼을 눌렀을 때만 켜져요") { ValueText("항상") }
                 RowDivider()
                 ListRow("녹음 알림음", "함께 탄 사람도 알 수 있게 끌 수 없어요") { ValueText("켜짐") }
                 RowDivider()
-                ListRow("저장 위치", "캡슐은 이 차 안에만 저장돼요") { ValueText("이 차") }
+                ListRow("저장 위치", "친구에게 남긴 캡슐만 서버에 올라가요") { ValueText("이 차 + 서버") }
             }
             Spacer(Modifier.height(8.dp))
             Section("알림")
@@ -503,7 +571,7 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             Section("차를 넘길 때")
             Panel {
-                ListRow("모두 지우기", "모든 캡슐과 녹음을 지워요", onClick = { confirm = true }) {
+                ListRow("모두 지우기", "이 차의 캡슐, 녹음, 내 이름을 지워요", onClick = { confirm = true }) {
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tc.TextMute, modifier = Modifier.size(36.dp))
                 }
             }
@@ -512,9 +580,9 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
     if (confirm) {
         ConfirmPopup(
             "모든 캡슐을 지울까요?",
-            "녹음까지 모두 지워지고 되돌릴 수 없어요.",
+            "이 차에서 녹음까지 모두 지워지고 되돌릴 수 없어요. 친구에게 이미 간 캡슐은 친구 차에 남아요.",
             "모두 지우기",
-            onConfirm = { confirm = false; app.drive.deleteEverything(app) },
+            onConfirm = { confirm = false; app.wipeCar() },
             onDismiss = { confirm = false },
         )
     }
@@ -588,6 +656,7 @@ fun DevPanel(app: TimeCapsuleApp, close: () -> Unit) {
                 } else {
                     Text("차량 값은 Virtual Console(127.0.0.1:8088)에서 바꾸세요", style = Type.LabelM, color = Tc.TextMute)
                 }
+                FriendDev(app, close)
                 Section("시연")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     val newest = capsules.maxByOrNull { it.createdAt }
@@ -610,5 +679,49 @@ fun DevPanel(app: TimeCapsuleApp, close: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/**
+ * Dev panel, friends: which server, and the one-emulator demo of "a friend left me a capsule
+ * on this road". With the fake server, 민수 (MNSU27) and 지영 (JYNG38) exist already.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FriendDev(app: TimeCapsuleApp, close: () -> Unit) {
+    val me by app.social.me.collectAsState()
+    val friends by app.social.friends.collectAsState()
+    val known by app.social.knownAccounts.collectAsState()
+    val fake = app.social as? FakeBackend
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Section("친구 · ${app.social.label}")
+    Text(
+        me?.let { "지금 이 차: ${it.name} (${spaced(it.code)}) · 친구 ${friends.size}명" } ?: "아직 이름을 정하지 않았어요",
+        style = Type.LabelM, color = Tc.TextMute, modifier = Modifier.padding(start = Tc.Inset),
+    )
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (fake != null) {
+            Btn("민수 친구 추가", enabled = me != null && friends.none { it.code == "MNSU27" }, height = 72.dp) {
+                app.scope.launch { app.social.addFriend("MNSU27") }
+            }
+            Btn("QR로 지영 추가", height = 72.dp) {
+                context.startActivity(
+                    android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(FriendCode.link("JYNG38")))
+                        .setPackage(context.packageName),
+                )
+                close()
+            }
+            val friend = friends.firstOrNull()
+            Btn("${friend?.name ?: "친구"}가 이 길에 캡슐 남김", enabled = friend != null, height = 72.dp) {
+                val here = app.navi.position.value
+                val at = here?.point?.let { GeoPoint(it.lat + 0.005, it.lng) } ?: GeoPoint(37.7569, 128.8761)
+                fake.friendLeavesCapsule(friend!!, at, app.drive.car.value.placeName ?: "7번 국도", daysAgo = 3)
+                close()
+            }
+        }
+        known.filter { it.uid != me?.uid }.forEach { p ->
+            Btn("${p.name}(으)로 바꾸기", height = 72.dp) { app.switchAccount(p) }
+        }
+        Btn("다른 사람으로 시작", height = 72.dp) { app.switchAccount(null) }
     }
 }

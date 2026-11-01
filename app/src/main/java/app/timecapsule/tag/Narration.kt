@@ -4,22 +4,15 @@ import java.time.LocalDate
 import java.time.Period
 
 /**
- * Builds the spoken intro from spec section 04:
- * "{경과}년 전 {오늘?}, {날씨/시간}. {인원} 이 길을 지나며 남긴 목소리예요."
- * e.g. "18년 전 오늘, 비 오던 밤. 셋이서 이 길을 지나며 남긴 목소리예요."
+ * The one line spoken before the voice. Plain on purpose: when, and who for a friend's.
+ * "18년 전 오늘 남긴 캡슐이에요." / "민수님이 3일 전 남긴 캡슐이에요."
+ * Weather and passengers are shown on screen as tags, not read out.
  */
 object Narration {
 
-    fun build(buriedOn: LocalDate, today: LocalDate, tags: List<MoodTag>): String {
-        val head = buildString {
-            append(elapsed(buriedOn, today))
-            weatherAndTime(tags)?.let { append(", ").append(it) }
-            append('.')
-        }
-        val people = tags.firstOrNull { it.category == TagCategory.PEOPLE }?.label
-        val tail = if (people != null) "$people 이 길을 지나며 남긴 목소리예요." else "이 길을 지나며 남긴 목소리예요."
-        return "$head $tail"
-    }
+    @Suppress("UNUSED_PARAMETER")
+    fun build(buriedOn: LocalDate, today: LocalDate, tags: List<MoodTag>, from: String? = null): String =
+        (from?.let { "${it}님이 " } ?: "") + "${elapsed(buriedOn, today)} 남긴 캡슐이에요."
 
     /** "18년 전 오늘", "3년 전", "5달 전", "오늘" ("오늘" is added when month and day match). */
     fun elapsed(buriedOn: LocalDate, today: LocalDate): String {
