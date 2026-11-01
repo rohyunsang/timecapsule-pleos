@@ -19,10 +19,17 @@ import kotlinx.coroutines.launch
  * The title also shows on the cluster's media area: "지영님의 캡슐 · 7번 국도".
  */
 class MediaKeys(context: Context, private val scope: CoroutineScope, private val drive: DriveController) {
-    private val session = MediaSession(context.applicationContext, "TimeCapsule")
+    private val app = context.applicationContext
+    /**
+     * Created for an alert or playback and released right after. Android sends media keys to
+     * the last app that played sound even when its session is inactive, so a session left
+     * behind would swallow the music app's steering keys until that app plays again.
+     */
+    private var session: MediaSession? = null
 
-    fun start() {
-        session.setCallback(object : MediaSession.Callback() {
+    private fun open(): MediaSession = session ?: MediaSession(app, "TimeCapsule").also { s ->
+        session = s
+        s.setCallback(object : MediaSession.Callback() {
             override fun onMediaButtonEvent(intent: Intent): Boolean {
                 @Suppress("DEPRECATION")
                 val key = intent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT) ?: return false
@@ -31,6 +38,9 @@ class MediaKeys(context: Context, private val scope: CoroutineScope, private val
                 return handle(key.keyCode)
             }
         })
+    }
+
+    fun start() {
         scope.launch {
             combine(drive.state, drive.alert, drive.playing, drive.userPaused) { s, a, p, paused -> Triple(s, a ?: p, paused) }
                 .collect { (s, what, paused) -> update(s, what, paused) }
@@ -63,9 +73,11 @@ class MediaKeys(context: Context, private val scope: CoroutineScope, private val
         val alert = s is DriveState.ApproachAlert
         val playing = s is DriveState.Playing || s is DriveState.Paused
         if (!alert && !playing) {
-            if (session.isActive) session.isActive = false
+            session?.let { it.isActive = false; it.release() }
+            session = null
             return
         }
+        val session = open()
         val c = (what as? AlertUi)?.capsule ?: (what as? PlayingUi)?.capsule
         val title = (c?.ownerName?.let { "${it}님의 캡슐" } ?: "내 캡슐") + " · " + (c?.placeName ?: "이 길")
         session.setMetadata(
