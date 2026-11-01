@@ -34,6 +34,7 @@ Pleos 에뮬레이터에서는 Vehicle SDK·NaviHelper를 실제로 쓰고, 그 
 
 - 내레이션은 담백하게 한 줄: "18년 전 오늘 남긴 캡슐이에요." / "민수님이 3일 전 남긴 캡슐이에요." 날씨·인원은 화면 태그로만.
 - 서버는 Firebase 무료(Spark) 요금제: 익명 로그인 + Firestore만 씀. Pleos에는 구글 플레이 서비스가 없지만 이 둘은 없어도 동작함. 목소리(30초, 64kbps 약 240KB)는 Firestore 문서에 넣어서 유료인 Storage는 안 씀.
+- 연결된 프로젝트: `timecapsule-pleos-11020143` (lilmoohyun@gmail.com 계정, 서울 리전). 규칙·익명 로그인은 `firebase.json`으로 배포: `npx firebase-tools deploy --only firestore:rules,auth`.
 - 키가 없으면 앱 안의 가짜 서버로 돌아감. 가짜 친구: 민수 `MNSU27`, 지영 `JYNG38`.
 - 연결 방법
   1. Firebase 콘솔에서 프로젝트 만들기 → Android 앱 추가(패키지 `app.timecapsule.proto`)

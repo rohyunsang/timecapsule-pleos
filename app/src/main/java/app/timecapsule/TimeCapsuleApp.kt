@@ -97,6 +97,7 @@ class TimeCapsuleApp : Application() {
             }.onFailure { android.util.Log.w("TimeCapsuleApp", "Firebase off", it) }.getOrNull()
                 ?: app.timecapsule.social.FakeBackend(this)
         } else app.timecapsule.social.FakeBackend(this)
+        android.util.Log.i("TimeCapsuleApp", "server: ${social.label}")
         sync = app.timecapsule.social.SocialSync(this, scope, social, repo, settings).also { it.start() }
         drive.sharing = sync
 

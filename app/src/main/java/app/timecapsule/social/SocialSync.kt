@@ -130,7 +130,9 @@ class SocialSync(
             if (r.id in hidden || repo.byRemoteId(r.id) != null) continue
             val bytes = backend.audio(r.id) ?: continue
             val ext = if (bytes.size > 4 && String(bytes, 0, 4) == "RIFF") "wav" else "m4a"
-            val file = File(dir, "remote_${r.id}.$ext").apply { writeBytes(bytes) }
+            // The folder goes away with "모두 지우기"; a failed write skips this one, it is retried next time.
+            val file = runCatching { File(dir.apply { mkdirs() }, "remote_${r.id}.$ext").apply { writeBytes(bytes) } }
+                .onFailure { Log.w(TAG, "cannot save ${r.id}", it) }.getOrNull() ?: continue
             val mine = r.ownerUid == me.uid
             repo.insertFromServer(
                 Capsule(
