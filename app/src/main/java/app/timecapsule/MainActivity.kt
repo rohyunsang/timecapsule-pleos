@@ -9,8 +9,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,8 +52,16 @@ class MainActivity : ComponentActivity() {
             askMic.launch(Manifest.permission.RECORD_AUDIO)
         }
         setContent {
-            TimeCapsuleTheme {
-                Surface(Modifier.fillMaxSize(), color = Tc.Bg) { Root(app) }
+            // Day/night follows the car (AAOS night mode); the dev panel can pin one for demos.
+            val pinned by app.nightOverride.collectAsState()
+            TimeCapsuleTheme(night = pinned ?: isSystemInDarkTheme()) {
+                val half by app.halfPreview.collectAsState()
+                Surface(Modifier.fillMaxSize(), color = if (half) androidx.compose.ui.graphics.Color.Black else Tc.Bg) {
+                    // Surface passes its min size down; an outer Box lets the half preview be narrower.
+                    Box(Modifier.fillMaxSize()) {
+                        Box(if (half) Modifier.fillMaxHeight().width(840.dp) else Modifier.fillMaxSize()) { Root(app) }
+                    }
+                }
             }
         }
     }
@@ -78,15 +90,17 @@ private fun Root(app: TimeCapsuleApp) {
     val signals by drive.signals.collectAsState()
     val userPaused by drive.userPaused.collectAsState()
     val recordingSince by drive.recordingSince.collectAsState()
+    val uxRestricted by app.ux.restricted.collectAsState()
     var screen by remember { mutableStateOf(Screen.HOME) }
     var dev by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    // Unknown gear counts as parked so the app stays usable on a bench.
-    val parked = car.gearInPark != false
+    // Driving = the platform asks for distraction optimization (CarUxRestrictions, Pleos guide)
+    // or the gear is out of P. Unknown gear counts as parked so the app stays usable on a bench.
+    val restricted = (uxRestricted && !app.forceFake) || car.gearInPark == false
 
     // Spec 07: only screens 04-06 (and home) while driving.
-    LaunchedEffect(parked) { if (!parked) screen = Screen.HOME }
+    LaunchedEffect(restricted) { if (restricted) screen = Screen.HOME }
     LaunchedEffect(Unit) {
         drive.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
     }
@@ -96,7 +110,12 @@ private fun Root(app: TimeCapsuleApp) {
         val s = state
         when {
             s == DriveState.Recording ->
-                RecordingScreen(recordingSince, MoodTagEngine.tagsFor(car)) { drive.stopRecording() }
+                RecordingScreen(
+                    recordingSince,
+                    MoodTagEngine.tagsFor(car).filter { it.label != car.placeName },
+                    onStop = drive::stopRecording,
+                    onCancel = drive::cancelRecording,
+                )
             s is DriveState.Playing || (s is DriveState.Paused && s.resumeTo is DriveState.Playing) ->
                 PlayingScreen(
                     playing,
@@ -107,7 +126,11 @@ private fun Root(app: TimeCapsuleApp) {
                     onStop = drive::stopPlayback,
                 )
             else -> when (screen) {
-                Screen.HOME -> HomeScreen(drive, parked, app.onPleos, { screen = it }, { dev = !dev })
+                Screen.HOME -> HomeScreen(
+                    drive, restricted, app.onPleos, go = { screen = it },
+                    onLocked = { Toast.makeText(context, "안전을 위해 차를 세우면 열려요", Toast.LENGTH_SHORT).show() },
+                    onDev = { dev = !dev },
+                )
                 Screen.LETTER -> LetterScreen(drive) { screen = Screen.HOME }
                 Screen.ALBUM -> AlbumScreen(drive) { screen = Screen.HOME }
                 Screen.SETTINGS -> SettingsScreen(app) { screen = Screen.HOME }

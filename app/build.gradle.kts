@@ -8,6 +8,8 @@ plugins {
 android {
     namespace = "app.timecapsule"
     compileSdk = 35
+    // CarUxRestrictionsManager (driving restrictions). Provided by the AAOS platform at runtime.
+    useLibrary("android.car")
 
     defaultConfig {
         applicationId = "app.timecapsule.proto"

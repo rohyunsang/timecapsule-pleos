@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A tilted time capsule holding a voice: closed top, open bottom with a waveform. Sits inside the 66dp safe zone of the 108dp canvas. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:rotation="-38" android:pivotX="54" android:pivotY="54">
+        <path android:fillColor="#1E1505"
+            android:pathData="M37,55 L37,41 A17,17 0 0,1 71,41 L71,55 Z" />
+        <path android:fillColor="#FFF4DF"
+            android:pathData="M37,57 L71,57 L71,67 A17,17 0 0,1 37,67 Z" />
+        <!-- Voice inside: four waveform bars in the open half. -->
+        <path android:fillColor="#1E1505"
+            android:pathData="M44,61 h3 v6 h-3 Z M49.5,58.5 h3 v11 h-3 Z M55,60 h3 v8 h-3 Z M60.5,62 h3 v4 h-3 Z" />
+    </group>
+</vector>

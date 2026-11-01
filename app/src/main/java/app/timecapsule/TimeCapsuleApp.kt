@@ -16,6 +16,7 @@ import app.timecapsule.navi.NaviSource
 import app.timecapsule.navi.PleosNaviSource
 import app.timecapsule.vehicle.FakeVehicleSource
 import app.timecapsule.vehicle.PleosVehicleSource
+import app.timecapsule.vehicle.UxRestrictions
 import app.timecapsule.vehicle.VehicleSnapshot
 import app.timecapsule.vehicle.VehicleSource
 import kotlinx.coroutines.MainScope
@@ -36,6 +37,14 @@ class TimeCapsuleApp : Application() {
         private set
     lateinit var drive: DriveController
         private set
+    lateinit var ux: UxRestrictions
+        private set
+
+    /** Dev panel override for day/night: null follows the car (system night mode). */
+    val nightOverride = kotlinx.coroutines.flow.MutableStateFlow<Boolean?>(null)
+
+    /** Dev panel: preview the 1:1 split window (half width next to navigation). */
+    val halfPreview = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     /** True when running on a Pleos head unit (real Vehicle SDK and NaviHelper). */
     var onPleos = false
@@ -60,6 +69,8 @@ class TimeCapsuleApp : Application() {
         navi = if (!forceFake && isInstalled(PLEOS_NAVI_SERVICE)) {
             PleosNaviSource(this, scope).also { it.start() }
         } else FakeNaviSource(NaviPosition(GeoPoint(37.7519, 128.8761), "강원특별자치도 강릉시 7번 국도"))
+
+        ux = UxRestrictions(this).also { it.start() }
 
         val beeper = Beeper()
         drive = DriveController(scope, vehicle, navi, repo, Recorder(this, beeper), Player(this), beeper, settings)

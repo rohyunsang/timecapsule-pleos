@@ -42,7 +42,13 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-data class AlertUi(val capsule: Capsule, val line: String, val distanceM: Double)
+data class AlertUi(
+    val capsule: Capsule,
+    val line: String,
+    val distanceM: Double,
+    /** elapsedRealtime when shown, so the card can show how long until it closes itself. */
+    val shownAt: Long = SystemClock.elapsedRealtime(),
+)
 data class PlayingUi(val capsule: Capsule, val narration: String)
 
 /**
@@ -102,6 +108,8 @@ class DriveController(
     val arrivalPrompt: StateFlow<Boolean> = _arrivalPrompt.asStateFlow()
 
     /** elapsedRealtime when recording started, null when not recording. */
+    private var discardRecording = false
+
     private val _recordingSince = MutableStateFlow<Long?>(null)
     val recordingSince: StateFlow<Long?> = _recordingSince.asStateFlow()
 
@@ -150,6 +158,13 @@ class DriveController(
     }
 
     fun stopRecording() = dispatch(DriveEvent.RecordingEnded)
+
+    /** Throws the current recording away (pressed by mistake, or said something wrong). */
+    fun cancelRecording() {
+        if (_state.value != DriveState.Recording) return
+        discardRecording = true
+        dispatch(DriveEvent.RecordingEnded)
+    }
     fun listen() = dispatch(DriveEvent.PlayRequested)
     fun later() = dispatch(DriveEvent.Later)
     fun stopPlayback() = dispatch(DriveEvent.PlaybackFinished)
@@ -268,6 +283,13 @@ class DriveController(
 
     private fun saveRecording() {
         _recordingSince.value = null
+        if (discardRecording) {
+            discardRecording = false
+            recorder.cancel()
+            pendingOpenOn = null
+            say("녹음을 지웠어요")
+            return
+        }
         val rec = recorder.stop()
         val snap = recordSnapshot ?: car.value
         val openOn = pendingOpenOn
