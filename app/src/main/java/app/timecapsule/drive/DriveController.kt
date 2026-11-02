@@ -390,6 +390,30 @@ class DriveController(
     /** Dev panel: make [id] 18 years old for the PT demo narration. */
     fun backdate(id: Long, years: Long) = scope.launch { repo.backdate(id, years) }
 
+    /** Dev panel (demo mode only): play [id] without the server share check, to show its weather. */
+    private var devPreviewId: Long? = null
+    fun devPreview(id: Long) {
+        if (!demo()) return
+        devPreviewId = id
+        playCapsule(id)
+    }
+
+    /** Dev panel: the next recording is cut off by a navigation voice [afterMs] after it starts. */
+    fun simulateRecordingInterruption(afterMs: Long) = scope.launch {
+        _state.first { it == DriveState.Recording }
+        delay(afterMs)
+        if (_state.value == DriveState.Recording) dispatch(DriveEvent.SafetySignalOn)
+    }
+
+    /** Dev panel: ask "도착 한마디 남길까요?" now, without door, place or daily-limit checks. */
+    fun simulateArrivalPrompt() {
+        if (_state.value != DriveState.Idle) return
+        _arrivalPrompt.value = true
+        say("도착 한마디 남길까요?")
+        arrivalTimeout?.cancel()
+        arrivalTimeout = scope.launch { delay(Rules.ALERT_TIMEOUT_MS * 3); _arrivalPrompt.value = false }
+    }
+
     /** Dev panel: pretend the car is 1.2 km from [id]. */
     fun simulateApproach(id: Long) {
         if (demo() && _prepared.value && _state.value == DriveState.Idle) dispatch(DriveEvent.CapsuleWithinRange(id))
@@ -553,7 +577,7 @@ class DriveController(
             // Collection removes only the location requirement. A new shared replay must
             // still verify its recipient; only the current paused playback can resume offline.
             val resuming = _playing.value?.capsule?.id == id && player.isActive
-            if (!resuming && !authorizeShared(c)) {
+            if (!resuming && !(demo() && devPreviewId == c.id) && !authorizeShared(c)) {
                 if (epoch == operationEpoch) { stopPlayback(); say("공유 권한을 확인하지 못했어요. 연결 후 다시 시도해 주세요") }
                 return@launch
             }

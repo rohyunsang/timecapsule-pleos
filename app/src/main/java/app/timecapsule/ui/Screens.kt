@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import app.timecapsule.TimeCapsuleApp
 import app.timecapsule.capsule.RouteForecast
 import app.timecapsule.capsule.Rules
+import app.timecapsule.tag.TheDay
 import app.timecapsule.capsule.isLocked
 import app.timecapsule.data.Capsule
 import app.timecapsule.data.Trip
@@ -746,6 +747,24 @@ fun DevPanel(app: TimeCapsuleApp, close: () -> Unit) {
                     Text("차량 값은 Virtual Console(127.0.0.1:8088)에서 바꾸세요", style = Type.LabelM, color = Tc.TextMute)
                 }
                 FriendDev(app, close)
+                if (fakeNavi != null) {
+                    // One capsule per weather (and night): drive there and play it, to see its backdrop.
+                    val samples = capsules.filter { !it.draft && !it.locationUncertain }
+                        .groupBy { c ->
+                            val sky = TheDay.sky(c.rawVehicleState)?.let(TheDay::label) ?: "날씨 없음"
+                            sky + if (TheDay.isNight(c.createdAt)) " 밤" else ""
+                        }.toSortedMap().mapValues { it.value.first() }
+                    Section("날씨별 재생 (그 캡슐 자리로 옮겨서)")
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        samples.forEach { (label, c) ->
+                            Btn(label, height = 72.dp) {
+                                fakeNavi.moveTo(NaviPosition(GeoPoint(c.lat, c.lng), c.placeName))
+                                close()
+                                app.drive.devPreview(c.id)
+                            }
+                        }
+                    }
+                }
                 Section("시연")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     val newest = capsules.maxByOrNull { it.createdAt }
@@ -754,6 +773,8 @@ fun DevPanel(app: TimeCapsuleApp, close: () -> Unit) {
                     Btn("10초 뒤 접근(앱 밖에서 보기)", enabled = newest != null, height = 72.dp) {
                         newest?.let { c -> close(); app.scope.launch { kotlinx.coroutines.delay(10_000); app.drive.simulateApproach(c.id) } }
                     }
+                    Btn("도착 제안 띄우기", height = 72.dp) { close(); app.drive.simulateArrivalPrompt() }
+                    Btn("다음 녹음 5초 뒤 내비 안내로 끊기", height = 72.dp) { app.drive.simulateRecordingInterruption(5_000) }
                     if (fakeNavi != null) {
                         Btn("캡슐 지나는 경로 시작", enabled = capsules.isNotEmpty(), height = 72.dp) {
                             val c = capsules.first()

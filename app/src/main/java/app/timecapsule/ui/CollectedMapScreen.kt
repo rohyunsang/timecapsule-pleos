@@ -35,6 +35,9 @@ fun CollectedMapScreen(drive: DriveController, back: () -> Unit) {
     var ready by remember { mutableStateOf(false) }
     val web = remember {
         WebView(context).apply {
+            // Without an explicit size the page's viewport height follows its content (0), so
+            // the map stays an empty gray box although the tiles load.
+            layoutParams = android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
             settings.javaScriptEnabled = true
             settings.allowFileAccess = false
             settings.allowContentAccess = false
