@@ -61,7 +61,7 @@ private class Scene(val sky: Sky?, val night: Boolean) {
     private val rnd = Random(sky?.ordinal ?: 99)
     private val wet = sky == Sky.RAIN || sky == Sky.STORM
     private val beads = List(if (sky == Sky.STORM) 120 else if (wet) 90 else 0) { Bead(rnd) }
-    private val runners = List(if (sky == Sky.STORM) 24 else if (wet) 16 else 0) { Runner(rnd) }
+    private val runners = List(if (sky == Sky.STORM) 16 else if (wet) 11 else 0) { Runner(rnd) }
     private val mist = List(if (sky == Sky.STORM) 260 else if (wet) 200 else 0) { Mist(rnd) }
     private val streaks = List(if (sky == Sky.STORM) 170 else if (wet) 110 else 0) { Streak(rnd) }
     private val flakes = List(if (sky == Sky.SNOW) 230 else 0) { Flake(rnd) }
@@ -143,6 +143,11 @@ private class Runner(r: Random) {
     val start = r.nextFloat() * 50f
     val radius = 6f + r.nextFloat() * 4f
     val jerk = 1.5f + r.nextFloat() * 2f
+    val seed = r.nextFloat() * 100f
+
+    /** Where the drop is sideways at height y: glass is never even, so it wanders a little. */
+    private fun DrawScope.xAt(y: Float) =
+        x0 * size.width + 4f.dpPx() * sin(y / 31f.dpPx() + seed) + 1.6f.dpPx() * sin(y / 9f.dpPx() + seed * 2f)
 
     fun draw(d: DrawScope, t: Float, ink: Color, paper: Color) = with(d) {
         val h = size.height
@@ -151,19 +156,27 @@ private class Runner(r: Random) {
         val travel = speed.dpPx() * (tt - 0.8f * sin(tt * jerk) / jerk)
         val span = h * 1.3f
         val y = travel % span - h * 0.15f
-        val x = x0 * size.width + 3f.dpPx() * sin(y / 40f.dpPx())
-        val trail = (110f + speed * 2.2f).dpPx().coerceAtMost(y + h * 0.15f)
-        // The wet path fades out upwards; a couple of tiny drops are left behind on it.
-        drawLine(
-            Brush.verticalGradient(listOf(Color.Transparent, ink.copy(alpha = 0.16f)), y - trail, y),
-            Offset(x, y - trail), Offset(x, y), (radius * 0.6f).dpPx(), StrokeCap.Round,
+        val trail = (80f + speed * 1.6f).dpPx().coerceAtMost(y + h * 0.15f)
+        // The wet path is the drop's own wobbly route, very faint and fading upwards,
+        // with small beads left behind at uneven gaps (not a straight rod).
+        val path = androidx.compose.ui.graphics.Path()
+        var k = 0f
+        val step = 3f.dpPx()
+        path.moveTo(xAt(y), y)
+        while (k < trail) { k += step; path.lineTo(xAt(y - k), y - k) }
+        drawPath(
+            path,
+            Brush.verticalGradient(listOf(Color.Transparent, ink.copy(alpha = 0.11f)), y - trail, y),
+            style = androidx.compose.ui.graphics.drawscope.Stroke((radius * 0.45f).dpPx(), cap = StrokeCap.Round),
         )
-        var k = 30f.dpPx()
-        while (k < trail * 0.7f) {
-            drawDrop(Offset(x + 1.2f.dpPx() * sin(k), y - k), 1.3f.dpPx(), 0.6f, ink, paper)
-            k += 41f.dpPx()
+        k = 14f.dpPx()
+        var i = 0
+        while (k < trail * 0.85f) {
+            val fade = 1f - k / trail
+            drawDrop(Offset(xAt(y - k), y - k), (0.9f + 0.9f * hash(i, seed.toInt())).dpPx(), 0.7f * fade, ink, paper)
+            k += (12f + 26f * hash(seed.toInt(), i)).dpPx(); i++
         }
-        drawDrop(Offset(x, y), radius.dpPx(), 1f, ink, paper)
+        drawDrop(Offset(xAt(y), y), radius.dpPx(), 1f, ink, paper)
     }
 }
 
@@ -215,7 +228,7 @@ private class Streak(r: Random) {
         val h = size.height
         val y = frac(y0 + t * speed.dpPx() / h) * (h + len.dpPx()) - len.dpPx()
         val x = frac(x0 + y / size.width * 0.12f) * size.width
-        drawLine(ink.copy(alpha = 0.14f), Offset(x, y), Offset(x + len.dpPx() * 0.12f, y + len.dpPx()), 1.3f.dpPx(), StrokeCap.Round)
+        drawLine(ink.copy(alpha = 0.09f), Offset(x, y), Offset(x + len.dpPx() * 0.12f, y + len.dpPx()), 1f.dpPx(), StrokeCap.Round)
     }
 }
 
