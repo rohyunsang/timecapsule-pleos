@@ -119,6 +119,8 @@ class TimeCapsuleApp : Application() {
         app.timecapsule.drive.AlertNotifier(this, scope, drive, visible).start()
         // Steering wheel media keys and voice answers for the approach alert (Pleos SDK).
         app.timecapsule.drive.MediaKeys(this, scope, drive).start()
+        // Keep running behind navigation (and after the car starts: BootReceiver).
+        app.timecapsule.drive.DriveService.start(this, "app")
         voiceAnswer = app.timecapsule.drive.VoiceAnswer(this, scope, drive).also { it.start(this) }
     }
 

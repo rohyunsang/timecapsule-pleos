@@ -25,6 +25,10 @@
     <!-- Friends and shared capsules (Firebase). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Stays behind navigation so alerts come while the map is in front, also after the car starts. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Detect the Pleos services; otherwise the app falls back to fake car data. -->
     <queries>
@@ -67,5 +71,18 @@
             </intent-filter>
         </activity>
         <receiver android:name=".drive.AlertActionReceiver" android:exported="false" />
+        <service
+            android:name=".drive.DriveService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Location-triggered voice capsule alerts while driving with navigation in front" />
+        </service>
+        <receiver android:name=".drive.BootReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
