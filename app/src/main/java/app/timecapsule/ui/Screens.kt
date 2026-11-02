@@ -223,7 +223,7 @@ private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalD
     when {
         !prepared -> InlinePrompt("이번 주행 준비", "주차 중 권한과 동승자 동의를 확인해 주세요",
             cta = "준비하기" to { if (!restricted) preparing = true }, ctaIcon = Icons.Rounded.Mic,
-            sub = "" to {})
+            sub = null)
         arrival -> InlinePrompt(
             "도착했어요. 한마디 남길까요?", "이곳엔 아직 캡슐이 없어요",
             cta = "남기기" to { drive.answerArrival(true) }, ctaIcon = Icons.Rounded.Mic,

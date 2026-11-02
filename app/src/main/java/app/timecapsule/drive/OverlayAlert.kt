@@ -61,6 +61,48 @@ class OverlayAlert(context: Context) {
         runCatching { wm.addView(card, params); view = card }
     }
 
+    /**
+     * While a capsule plays with the map in front: a slim strip at the top of the map, so the
+     * driver can see what is talking and stop or pause it without opening the app.
+     */
+    fun showPlaying(title: String, paused: Boolean, onPause: () -> Unit, onStop: () -> Unit) {
+        if (!allowed) return
+        hide()
+        val d = ctx.resources.displayMetrics.density
+        fun px(v: Int) = (v * d).toInt()
+        fun round(color: Int, r: Int) = GradientDrawable().apply { setColor(color); cornerRadius = px(r).toFloat() }
+        fun button(label: String, click: () -> Unit) = TextView(ctx).apply {
+            text = label
+            textSize = 24f
+            gravity = Gravity.CENTER
+            setTextColor(0xFF1B1D21.toInt())
+            background = round(0xFFEEF0F3.toInt(), 12)
+            setOnClickListener { click() }
+        }
+        val bar = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(px(28), px(16), px(16), px(16))
+            background = round(0xFFFFFFFF.toInt(), 20)
+            elevation = px(12).toFloat()
+            addView(TextView(ctx).apply {
+                text = (if (paused) "멈춤   " else "듣는 중   ") + title
+                textSize = 24f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1B1D21.toInt())
+                maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            val lp = { LinearLayout.LayoutParams(px(150), px(72)).apply { marginStart = px(10) } }
+            addView(button(if (paused) "다시" else "일시정지", onPause), lp())
+            addView(button("그만") { hide(); onStop() }, lp())
+        }
+        val params = WindowManager.LayoutParams(
+            px(760), WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT,
+        ).apply { gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL; y = px(24) }
+        runCatching { wm.addView(bar, params); view = bar }
+    }
+
     fun hide() {
         view?.let { runCatching { wm.removeView(it) } }
         view = null
