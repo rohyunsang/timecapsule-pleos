@@ -223,6 +223,18 @@ class FirebaseBackend(
         }.onFailure { Log.w(TAG, "delete", it) }
     }
 
+    override suspend fun canOpen(id: String): Boolean = runCatching {
+        val uid = auth.currentUser?.uid ?: return false
+        val capsule = withTimeout(5_000) { db.collection("capsules").document(id).get(com.google.firebase.firestore.Source.SERVER).await() }
+        val owner = capsule.getString("ownerUid") ?: return false
+        val openAfter = capsule.getLong("openAfter")
+        if (openAfter != null && java.time.LocalDate.now().toEpochDay() < openAfter) return false
+        if (owner == uid) return true
+        val friend = withTimeout(5_000) { db.collection("users").document(uid).collection("friends").document(owner).get(com.google.firebase.firestore.Source.SERVER).await() }
+        friend.exists() && (capsule.getString("audience") == Audience.DEMO.name ||
+            (capsule.get("visibleTo") as? List<*>)?.contains(uid) == true)
+    }.getOrDefault(false)
+
     override suspend fun audio(id: String): ByteArray? = runCatching {
         withTimeout(WRITE_TIMEOUT_MS) { db.collection("audio").document(id).get().await() }.getBlob("data")?.toBytes()
     }.onFailure { Log.w(TAG, "audio", it) }.getOrNull()

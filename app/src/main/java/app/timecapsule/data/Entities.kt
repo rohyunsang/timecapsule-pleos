@@ -1,5 +1,6 @@
 package app.timecapsule.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -39,11 +40,12 @@ data class Capsule(
     val ownerUid: String? = null,
     val ownerName: String? = null,
     /** Audience.name: SELF / FRIENDS / SOME. */
-    val audience: String = "FRIENDS",
+    val audience: String = "SELF",
     /** For SOME: recipient uids joined with ','. */
     val recipients: String = "",
     /** Server document id once uploaded (or for friends' capsules, the source id). */
     val remoteId: String? = null,
+    @ColumnInfo(defaultValue = "0") val draft: Boolean = false,
 ) {
     val isMine get() = ownerUid == null
 }
@@ -99,6 +101,12 @@ interface CapsuleDao {
     @Query("UPDATE capsule SET audience = :audience, recipients = '', remoteId = NULL WHERE id = :id")
     suspend fun setAudience(id: Long, audience: String)
 
+    @Query("UPDATE capsule SET draft = 0 WHERE id = :id AND ownerUid IS NULL AND locationUncertain = 0")
+    suspend fun confirmDraft(id: Long)
+
+    @Query("UPDATE capsule SET audience = :audience, recipients = :recipients, remoteId = NULL WHERE id = :id")
+    suspend fun setSharing(id: Long, audience: String, recipients: String)
+
     /** Demo only: move a capsule back in time so the narration has years to count. */
     @Query("UPDATE capsule SET createdAt = :createdAt WHERE id = :id")
     suspend fun setCreatedAt(id: Long, createdAt: Long)
@@ -152,7 +160,7 @@ interface CapsuleDao {
     suspend fun deleteAllTrips()
 }
 
-@Database(entities = [Capsule::class, LetterLock::class, Trip::class, NotifyLog::class], version = 2)
+@Database(entities = [Capsule::class, LetterLock::class, Trip::class, NotifyLog::class], version = 3)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun capsuleDao(): CapsuleDao
 }

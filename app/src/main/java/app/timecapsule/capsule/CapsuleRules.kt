@@ -50,7 +50,7 @@ object RouteForecaster {
         locks: Map<Long, LetterLock>,
         today: LocalDate,
     ): RouteForecast {
-        val near = capsules.filter { Geo.distanceToPathM(GeoPoint(it.lat, it.lng), path) <= it.radiusM }
+        val near = capsules.filter { !it.draft && !it.locationUncertain && Geo.distanceToPathM(GeoPoint(it.lat, it.lng), path) <= it.radiusM }
         val (locked, open) = near.partition { locks[it.id].isLocked(today) }
         return RouteForecast(open.sortedBy { it.createdAt }, locked.size)
     }
@@ -75,7 +75,7 @@ object ApproachDetector {
         notifiedToday: Set<Long>,
         today: LocalDate,
     ): Approach? = capsules.asSequence()
-        .filter { it.id !in notifiedToday && !locks[it.id].isLocked(today) && (!it.isMine || it.createdAt < startOfDayMs(today)) }
+        .filter { !it.draft && !it.locationUncertain && it.id !in notifiedToday && !locks[it.id].isLocked(today) && (!it.isMine || it.createdAt < startOfDayMs(today)) }
         .map { Approach(it, Geo.distanceM(here, GeoPoint(it.lat, it.lng))) }
         .filter { it.distanceM <= Rules.APPROACH_ALERT_M }
         .minByOrNull { it.distanceM }

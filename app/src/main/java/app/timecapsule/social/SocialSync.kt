@@ -25,9 +25,9 @@ interface CapsuleSharing {
 /**
  * Keeps this car and the server in step:
  *  - my capsules for friends are uploaded (retried until they are);
- *  - "all friends" capsules follow the friend list (a new friend also gets the old ones);
+ *  - "all friends" capsules retain their original recipient snapshot;
  *  - capsules friends left for me are downloaded with their audio, so the approach alert
- *    and playback work without network on the road;
+ *    and playback files are cached; each new opening checks server access;
  *  - my capsules come back on a new car (기획서: 차를 바꿔도 이어짐).
  */
 class SocialSync(
@@ -59,7 +59,7 @@ class SocialSync(
     }
 
     override fun onBuried(capsule: Capsule) {
-        if (capsule.audience == Audience.SELF.name) return
+        if (capsule.draft || capsule.locationUncertain || capsule.audience == Audience.SELF.name) return
         if (backend.me.value == null) {
             _messages.tryEmit("친구 탭에서 이름을 정하면 친구에게도 전해져요")
             return
@@ -77,21 +77,22 @@ class SocialSync(
     override fun setShared(capsule: Capsule, shared: Boolean) {
         scope.launch {
             lock.withLock {
+                if (!capsule.isMine || capsule.draft || capsule.locationUncertain) return@withLock
                 if (shared) {
-                    repo.setAudience(capsule.id, Audience.FRIENDS.name)
+                    repo.setSharing(capsule.id, Audience.FRIENDS.name, backend.friends.value.map { it.uid })
                     if (backend.me.value == null) _messages.tryEmit("친구 탭에서 이름을 정하면 친구에게도 전해져요")
                     else upload(capsule, announce = true)
                 } else {
                     capsule.remoteId?.let { backend.delete(it) }
                     repo.setAudience(capsule.id, Audience.SELF.name)
-                    _messages.tryEmit("이제 나만 들어요. 친구 차에서도 지워져요")
+                    _messages.tryEmit("공유 철회를 요청했어요. 친구 차의 사본은 연결 후 정리돼요")
                 }
             }
         }
     }
 
     private fun audienceUids(c: Capsule): List<String> = when (c.audience) {
-        Audience.FRIENDS.name -> backend.friends.value.map { it.uid }
+        Audience.FRIENDS.name -> c.recipients.split(',').filter { id -> backend.friends.value.any { it.uid == id } }
         Audience.SOME.name -> c.recipients.split(',').filter { it.isNotBlank() }
         else -> emptyList()
     }
@@ -99,7 +100,7 @@ class SocialSync(
     private suspend fun upload(c: Capsule, announce: Boolean) {
         val me = backend.me.value ?: return
         val fresh = repo.get(c.id) ?: return
-        if (fresh.remoteId != null || !fresh.isMine || fresh.audience == Audience.SELF.name) return
+        if (fresh.draft || fresh.locationUncertain || fresh.remoteId != null || !fresh.isMine || fresh.audience == Audience.SELF.name) return
         val audio = runCatching { File(fresh.audioPath).readBytes() }.getOrNull() ?: return
         val visible = audienceUids(fresh)
         val r = RemoteCapsule(
@@ -123,7 +124,7 @@ class SocialSync(
     private fun sentTo(c: Capsule, visible: List<String>): String {
         val names = backend.friends.value.filter { it.uid in visible }.map { it.name }
         return when {
-            c.audience == Audience.FRIENDS.name && names.isEmpty() -> "친구를 추가하면 이 캡슐도 함께 전해져요"
+            c.audience == Audience.FRIENDS.name && names.isEmpty() -> "공유할 친구가 없어요. 나중에 앨범에서 공개 대상을 다시 정해 주세요"
             names.size == 1 -> "${names[0]}님에게 남겼어요"
             c.audience == Audience.FRIENDS.name -> "친구 ${names.size}명에게 남겼어요"
             else -> "${names.first()}님 외 ${names.size - 1}명에게 남겼어요"
@@ -136,12 +137,15 @@ class SocialSync(
             .forEach { upload(it, announce = false) }
     }
 
-    /** "All friends" capsules: who may receive them follows the current friend list. */
+    /** Existing recipients can be removed, but newly added friends never receive older capsules. */
     private suspend fun followFriends(friends: List<Friend>) {
         val uids = friends.map { it.uid }.sorted()
         val myIds = repo.all().filter { it.isMine && it.audience == Audience.FRIENDS.name }.mapNotNull { it.remoteId }.toSet()
-        backend.remote.value.filter { it.id in myIds && it.visibleTo.sorted() != uids }
-            .forEach { backend.setVisibleTo(it.id, uids) }
+        backend.remote.value.filter { it.id in myIds }
+            .forEach { remote ->
+                val remaining = remote.visibleTo.filter { it in uids }
+                if (remaining != remote.visibleTo) backend.setVisibleTo(remote.id, remaining)
+            }
     }
 
     private suspend fun pull(all: List<RemoteCapsule>, friends: List<Friend>, synced: Boolean) {

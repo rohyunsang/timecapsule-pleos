@@ -82,7 +82,7 @@ class VoiceAnswer(context: Context, private val scope: CoroutineScope, private v
 
     private fun open(id: Long) {
         val s = stt ?: return
-        if (!ready) return
+        if (!ready || !drive.prepared.value) return
         target = id
         Log.i(TAG, "listening for an answer to capsule $id")
         _listening.value = true

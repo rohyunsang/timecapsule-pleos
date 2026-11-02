@@ -50,7 +50,7 @@ class Player(context: Context) {
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> _navigationSpeaking.value = true
             AudioManager.AUDIOFOCUS_GAIN -> _navigationSpeaking.value = false
-            AudioManager.AUDIOFOCUS_LOSS -> { _navigationSpeaking.value = false; stop() }
+            AudioManager.AUDIOFOCUS_LOSS -> { _navigationSpeaking.value = false; stop(); onFinished() }
         }
     }
 
@@ -68,7 +68,7 @@ class Player(context: Context) {
         narration = narrationText
         audioPath = path
         onFinished = done
-        requestFocus()
+        if (!requestFocus()) { finished(); return }
         startNarration()
     }
 
@@ -147,14 +147,14 @@ class Player(context: Context) {
         phase = Phase.IDLE
     }
 
-    private fun requestFocus() {
+    private fun requestFocus(): Boolean {
         val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
             .setAudioAttributes(attrs)
             .setWillPauseWhenDucked(true)
             .setOnAudioFocusChangeListener(focusListener, main)
             .build()
         focus = req
-        audio.requestAudioFocus(req)
+        return audio.requestAudioFocus(req) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
     }
 
     private fun abandonFocus() {
