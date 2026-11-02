@@ -26,11 +26,13 @@ object TheDay {
         Instant.ofEpochMilli(createdAt).atZone(zone).hour.let { it >= 20 || it < 5 }
 
     /** Short facts for the screen, in order: when, weather, temperature, people, road. */
-    fun facts(createdAt: Long, raw: String, zone: ZoneId = ZoneId.systemDefault()): List<String> {
+    fun facts(createdAt: Long, raw: String, zone: ZoneId = ZoneId.systemDefault(), thisYear: Int = java.time.LocalDate.now(zone).year): List<String> {
         val t = Instant.ofEpochMilli(createdAt).atZone(zone)
         val v = parse(raw)
         return listOfNotNull(
-            "${dayName(t.dayOfWeek)} ${partOfDay(t.hour)}",
+            // The date itself ("11월 2일 월요일 아침"); the year only when it is not this year.
+            (if (t.year != thisYear) "${t.year}년 " else "") +
+                "${t.monthValue}월 ${t.dayOfMonth}일 ${dayName(t.dayOfWeek)} ${partOfDay(t.hour)}",
             sky(raw)?.let(::label),
             v["outsideTempC"]?.toFloatOrNull()?.let { "바깥 ${Math.round(it)}도" },
             v["occupiedSeats"]?.toIntOrNull()?.let(::people),

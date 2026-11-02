@@ -247,7 +247,7 @@ fun PlayingScreen(
                     color = Tc.Text, maxLines = 5, overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "그날  " + app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).joinToString(Sep),
+                    app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).joinToString(Sep),
                     style = Type.BodyM, color = Tc.TextSub,
                 )
                 VoiceProgress(pos, c.ownerName)
