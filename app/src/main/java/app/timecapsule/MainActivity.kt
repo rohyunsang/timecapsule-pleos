@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import app.timecapsule.drive.DriveState
 import app.timecapsule.tag.MoodTagEngine
+import app.timecapsule.ui.CollectedMapScreen
 import app.timecapsule.ui.AlbumScreen
 import app.timecapsule.ui.AlertCard
 import app.timecapsule.ui.DevPanel
@@ -168,7 +169,8 @@ private fun Root(app: TimeCapsuleApp) {
                     friendCount = friends.size,
                 )
                 Screen.LETTER -> LetterScreen(app) { screen = Screen.HOME }
-                Screen.ALBUM -> AlbumScreen(drive) { screen = Screen.HOME }
+                Screen.ALBUM -> AlbumScreen(drive, onMap = { screen = Screen.MAP }) { screen = Screen.HOME }
+                Screen.MAP -> CollectedMapScreen(drive) { screen = Screen.ALBUM }
                 Screen.SETTINGS -> SettingsScreen(app) { screen = Screen.HOME }
                 Screen.FRIENDS -> FriendsScreen(app) { screen = Screen.HOME }
             }

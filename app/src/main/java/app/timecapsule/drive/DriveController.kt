@@ -119,16 +119,19 @@ class DriveController(
     }
     private fun maintainSession() {
         _editable.value = canEdit()
-        if (!_prepared.value) return
+        if (!_prepared.value) {
+            if (!canEdit() && _playing.value != null) stopPlayback()
+            return
+        }
         if (!microphoneAllowed() || session.expired(now(), canEdit())) { endDrive(); return }
-        if (!vehicleKnown() || (!positionFresh() && _state.value != DriveState.Recording)) {
+        if (!vehicleKnown() || (!positionFresh() && _state.value != DriveState.Recording && _playing.value?.capsule?.collectedAt == null)) {
             if (_state.value == DriveState.Recording || _state.value is DriveState.Playing || _state.value is DriveState.ApproachAlert)
                 dispatch(DriveEvent.SafetySignalOn)
         }
-        _playing.value?.let { if (!session.granted(it.capsule.id, now())) stopPlayback() }
+
     }
     fun openingReason(c: Capsule): String? = OpenPolicy.reason(c, locks.value[c.id], today(), position.value?.point,
-        if (demo()) now() else position.value?.receivedAt ?: 0L, now(), session.granted(c.id, now()))
+        if (demo()) now() else position.value?.receivedAt ?: 0L, now())
     fun confirmDraft(c: Capsule) {
         if (!canEdit() || !c.isMine) return
         if (c.locationUncertain) return say("녹음 장소를 확인하지 못해 캡슐로 저장할 수 없어요. 음성은 임시보관해요")
@@ -278,7 +281,14 @@ class DriveController(
     fun stopPlayback() {
         operationEpoch++
         dispatch(DriveEvent.PlaybackFinished)
-        session.clearGrant()
+    }
+
+    fun playCollected(id: Long) {
+        if (!canEdit()) return
+        scope.launch {
+            val c = repo.get(id) ?: return@launch
+            if (canEdit() && c.collectedAt != null) playCapsule(id)
+        }
     }
 
     fun playCapsule(id: Long) {
@@ -384,7 +394,6 @@ class DriveController(
             Effect.PausePlayback -> player.pause()
             Effect.StopPlayback -> {
                 lastPlaybackEndAt = SystemClock.elapsedRealtime()
-                session.clearGrant()
                 player.stop()
                 _playing.value = null
                 _userPaused.value = false
@@ -483,31 +492,30 @@ class DriveController(
             val c = repo.get(id)
             if (epoch != operationEpoch) return@launch
             if (c == null) return@launch stopPlayback()
-            if (!_prepared.value || !session.active(now())) {
+            if ((!_prepared.value || !session.active(now())) && !(c.collectedAt != null && canEdit())) {
                 stopPlayback(); say("출발 전에 이번 주행을 준비해 주세요"); return@launch
             }
             val reason = OpenPolicy.reason(c, repo.lockFor(id), today(), position.value?.point,
-                if (demo()) now() else position.value?.receivedAt ?: 0L, now(), session.granted(id, now()))
+                if (demo()) now() else position.value?.receivedAt ?: 0L, now())
             if (reason != null || !vehicleKnown() || signals.value.isNotEmpty()) {
                 stopPlayback(); say(reason ?: "차량 상태를 확인한 후 다시 요청해 주세요"); return@launch
             }
-            // A visit grant allows this one capsule to finish after leaving; a new shared
-            // opening needs a server response, not an old downloaded copy.
-            if (!session.granted(id, now()) && !authorizeShared(c)) {
+            // Collection removes only the location requirement. A new shared replay must
+            // still verify its recipient; only the current paused playback can resume offline.
+            val resuming = _playing.value?.capsule?.id == id && player.isActive
+            if (!resuming && !authorizeShared(c)) {
                 if (epoch == operationEpoch) { stopPlayback(); say("공유 권한을 확인하지 못했어요. 연결 후 다시 시도해 주세요") }
                 return@launch
             }
-            if (epoch != operationEpoch || !_prepared.value) return@launch
+            if (epoch != operationEpoch || (!_prepared.value && !canEdit())) return@launch
             val fresh = repo.get(id)
             if (epoch != operationEpoch) return@launch
             if (fresh == null) return@launch stopPlayback()
             val blocked = OpenPolicy.reason(fresh, repo.lockFor(id), today(), position.value?.point,
-                if (demo()) now() else position.value?.receivedAt ?: 0L, now(), session.granted(id, now()))
+                if (demo()) now() else position.value?.receivedAt ?: 0L, now())
             if (blocked != null || !vehicleKnown() || signals.value.isNotEmpty()) {
                 stopPlayback(); say(blocked ?: "차량 상태 확인 중이에요"); return@launch
             }
-            val alreadyOpen = session.granted(id, now())
-            if (!alreadyOpen) session.grant(id, now())
             _state.value = DriveState.Playing(id)
             _userPaused.value = false
             if (_playing.value?.capsule?.id == id && player.isActive) { player.resume(); return@launch }
@@ -515,7 +523,11 @@ class DriveController(
             _playing.value = PlayingUi(fresh, narration)
             if (_reprompt.value?.id == id) _reprompt.value = null
             val spoken = listOfNotNull(narration, app.timecapsule.tag.TheDay.spoken(fresh.rawVehicleState)).joinToString(" ")
-            player.play(spoken, fresh.audioPath) {
+            player.play(spoken, fresh.audioPath, onStarted = {
+                val collected = fresh.copy(collectedAt = fresh.collectedAt ?: System.currentTimeMillis())
+                _playing.value = PlayingUi(collected, narration)
+                scope.launch { repo.collect(id, collected.collectedAt!!) }
+            }) {
                 scope.launch {
                     repo.logNotify(id, today(), "played")
                     dispatch(DriveEvent.PlaybackFinished)

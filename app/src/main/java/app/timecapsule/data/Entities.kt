@@ -46,6 +46,7 @@ data class Capsule(
     /** Server document id once uploaded (or for friends' capsules, the source id). */
     val remoteId: String? = null,
     @ColumnInfo(defaultValue = "0") val draft: Boolean = false,
+    val collectedAt: Long? = null,
 ) {
     val isMine get() = ownerUid == null
 }
@@ -85,6 +86,9 @@ interface CapsuleDao {
 
     @Query("SELECT * FROM capsule ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<Capsule>>
+
+    @Query("UPDATE capsule SET collectedAt = COALESCE(collectedAt, :at) WHERE id = :id AND draft = 0 AND locationUncertain = 0")
+    suspend fun collect(id: Long, at: Long)
 
     @Query("SELECT * FROM capsule WHERE id = :id")
     suspend fun get(id: Long): Capsule?
@@ -160,7 +164,7 @@ interface CapsuleDao {
     suspend fun deleteAllTrips()
 }
 
-@Database(entities = [Capsule::class, LetterLock::class, Trip::class, NotifyLog::class], version = 3)
+@Database(entities = [Capsule::class, LetterLock::class, Trip::class, NotifyLog::class], version = 4)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun capsuleDao(): CapsuleDao
 }

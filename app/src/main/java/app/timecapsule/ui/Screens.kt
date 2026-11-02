@@ -86,7 +86,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-enum class Screen { HOME, LETTER, ALBUM, FRIENDS, SETTINGS }
+enum class Screen { HOME, LETTER, ALBUM, FRIENDS, SETTINGS, MAP }
 
 internal fun Capsule.date(): LocalDate = Instant.ofEpochMilli(createdAt).atZone(ZoneId.systemDefault()).toLocalDate()
 internal val dayFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy년 M월 d일")
@@ -429,7 +429,7 @@ fun LetterScreen(app: TimeCapsuleApp, back: () -> Unit) {
 // ---- Album (screen 03, parked only) -----------------------------------------------------
 
 @Composable
-fun AlbumScreen(drive: DriveController, back: () -> Unit) {
+fun AlbumScreen(drive: DriveController, onMap: () -> Unit, back: () -> Unit) {
     val capsules by drive.capsules.collectAsState()
     val locks by drive.locks.collectAsState()
     val trips by drive.trips.collectAsState()
@@ -442,7 +442,7 @@ fun AlbumScreen(drive: DriveController, back: () -> Unit) {
         .entries.sortedByDescending { e -> e.value.maxOf { it.createdAt } }
 
     Column(Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
-        Header("여행 앨범", back) { if (capsules.isNotEmpty()) Text("캡슐 ${capsules.size}개", style = Type.LabelM, color = Tc.TextMute) }
+        Header("여행 앨범", back) { Btn("수집 지도", onClick = onMap) }
         if (capsules.isEmpty()) {
             EmptyState(back)
             return@Column
