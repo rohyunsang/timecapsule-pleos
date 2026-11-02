@@ -1,0 +1,398 @@
+{
+  "checks": [
+    {
+      "id": "screen_count",
+      "group": "완결성",
+      "value": 61,
+      "threshold": ">=10",
+      "detail": "account-done, account-edit, album-created, album-edit, album-saved, album-share, album, albums, archive-plan, arrival, buried, capsule-edit, capsule-forest, capsule-sunset, capture, car-capture, car-nearby, car-paused, connect-done, connect, date-locked, deleted, devices, family-create, family-done, family-edit, family-invite, family, follow-done, following, home, inherit-done, inherit, invite-accept, like-that-day, locked, login, map, my, nearby, opened, permissions, person, plan-done, plan-manage, player, privacy, recording, review, route-create, route-detail, route-edit, route-sent, routes, seal, sync-done, sync, together, transfer-done, transfer, welcome",
+      "pass": true
+    },
+    {
+      "id": "prd_coverage",
+      "group": "완결성",
+      "value": "28/28",
+      "threshold": "100%",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "reachability",
+      "group": "완결성",
+      "value": "61/61",
+      "threshold": "100%",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "dead_links",
+      "group": "완결성",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "placeholders",
+      "group": "완결성",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "state_missing",
+      "group": "상태",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "state_excess",
+      "group": "상태",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "state_cap",
+      "group": "상태",
+      "value": 0,
+      "threshold": "0 (화면당 ≤3)",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "chromatic_colors",
+      "group": "일관성",
+      "value": 4,
+      "threshold": "<=6",
+      "detail": "hue 구간: 0-19,20-39,120-139,340-359",
+      "pass": true
+    },
+    {
+      "id": "off_token_colors",
+      "group": "일관성",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "gray_steps",
+      "group": "일관성",
+      "value": 7,
+      "threshold": "<=6",
+      "detail": "rgb(32, 32, 32)a0.45 rgb(32, 32, 32) rgb(80, 80, 80) rgb(108, 108, 108) rgb(192, 192, 192) rgb(240, 240, 240) rgb(256, 256, 256)",
+      "pass": false
+    },
+    {
+      "id": "font_sizes",
+      "group": "일관성",
+      "value": 5,
+      "threshold": "<=7",
+      "detail": "12,14,16,20,28",
+      "pass": true
+    },
+    {
+      "id": "font_weights",
+      "group": "일관성",
+      "value": 3,
+      "threshold": "<=3",
+      "detail": "400,600,700",
+      "pass": true
+    },
+    {
+      "id": "font_families",
+      "group": "일관성",
+      "value": 1,
+      "threshold": "<=2",
+      "detail": "pretendard",
+      "pass": true
+    },
+    {
+      "id": "spacing_4x",
+      "group": "일관성",
+      "value": "100.0%",
+      "threshold": ">=95%",
+      "detail": "비4배수: ",
+      "pass": true
+    },
+    {
+      "id": "radius_kinds",
+      "group": "일관성",
+      "value": 4,
+      "threshold": "<=4",
+      "detail": "12px | 20px | 6px | 999px",
+      "pass": true
+    },
+    {
+      "id": "shadow_kinds",
+      "group": "일관성",
+      "value": 2,
+      "threshold": "<=3",
+      "detail": "rgb(191, 191, 191) 0px 0px 0px 1px inset | rgba(0, 0, 0, 0.28) 0px 8px 28px 0px",
+      "pass": true
+    },
+    {
+      "id": "contrast_aa",
+      "group": "가독성",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "min_font",
+      "group": "가독성",
+      "value": "12px",
+      "threshold": ">=12px",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "large_text_body_font",
+      "group": "가독성",
+      "value": "56.5%",
+      "threshold": ">=90%",
+      "detail": "",
+      "pass": false
+    },
+    {
+      "id": "touch_target",
+      "group": "가독성",
+      "value": "100.0%",
+      "threshold": "100%",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "h_overflow",
+      "group": "가독성",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "word_split",
+      "group": "가독성",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "box_overflow",
+      "group": "가독성",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "last_line_orphan",
+      "group": "가독성",
+      "value": 0,
+      "threshold": "(보고만)",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "row_squeeze",
+      "group": "가독성",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "x_inset_kinds",
+      "group": "가독성",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "badge_semantic",
+      "group": "위계",
+      "value": 0,
+      "threshold": "<=2 뜻/색",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "primary_cta",
+      "group": "위계",
+      "value": 0,
+      "threshold": "0화면 (화면당 ≤1)",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "h1_count",
+      "group": "위계",
+      "value": 0,
+      "threshold": "0화면 (화면당 =1)",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "cta_on_tab_root",
+      "group": "위계",
+      "value": 0,
+      "threshold": "0화면",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "cta_label_verb",
+      "group": "위계",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "archetype_anchor",
+      "group": "위계",
+      "value": 1,
+      "threshold": "0화면",
+      "detail": "map[지도+목록]: block(56933) > 주인공(48952)",
+      "pass": false
+    },
+    {
+      "id": "help_icons",
+      "group": "위계",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "passive_role_words",
+      "group": "위계",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "accent_outside",
+      "group": "위계",
+      "value": 0,
+      "threshold": "0 (강조색은 .accent-text·.accent-dot만)",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "dark_text_on_filled_button",
+      "group": "위계",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "emoji",
+      "group": "슬롭",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "gradients",
+      "group": "슬롭",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "text_gradient",
+      "group": "슬롭",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "card_nesting",
+      "group": "슬롭",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "radius_ratio",
+      "group": "슬롭",
+      "value": "81.8%",
+      "threshold": "(보고만)",
+      "detail": "408/499",
+      "pass": true
+    },
+    {
+      "id": "canvas_scale",
+      "group": "캔버스",
+      "value": 0.72,
+      "threshold": ">=0.7",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "canvas_control_groups",
+      "group": "캔버스",
+      "value": 3,
+      "threshold": "<=3 (탭·팔레트·보기)",
+      "detail": "palette, tabs, view",
+      "pass": true
+    },
+    {
+      "id": "canvas_modes",
+      "group": "캔버스",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "canvas_external_libs",
+      "group": "캔버스",
+      "value": 0,
+      "threshold": "0",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "canvas_arrows",
+      "group": "캔버스",
+      "value": 8,
+      "threshold": "<= 갈래 8 + 흐름 8",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "canvas_policy_lines",
+      "group": "캔버스",
+      "value": 0,
+      "threshold": "0 (3줄 초과는 접기)",
+      "detail": "",
+      "pass": true
+    },
+    {
+      "id": "canvas_interaction",
+      "group": "캔버스",
+      "value": "15/15",
+      "threshold": "전부 통과",
+      "detail": "",
+      "pass": true
+    }
+  ],
+  "passed": 46,
+  "total": 49
+}

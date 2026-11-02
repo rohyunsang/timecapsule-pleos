@@ -1,0 +1,5 @@
+plugins { id 'com.android.application' }
+android {
+ namespace 'io.timecapsule.focusprobe'; compileSdk 35
+ defaultConfig { applicationId 'io.timecapsule.focusprobe'; minSdk 28; targetSdk 34; versionCode 1; versionName 'test-only' }
+}

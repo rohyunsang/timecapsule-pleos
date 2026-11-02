@@ -1,0 +1,46 @@
+[
+  {
+    "slot": "coast",
+    "screens": [],
+    "what": "강릉 동해안의 푸른 바다 해변",
+    "ratio": "4:3",
+    "kind": "photo",
+    "queries": [
+      "강릉 바다 해변 풍경",
+      "Gangneung beach coast landscape"
+    ]
+  },
+  {
+    "slot": "road",
+    "screens": [],
+    "what": "동해안의 해안을 따라가는 도로",
+    "ratio": "4:3",
+    "kind": "photo",
+    "queries": [
+      "동해안 해안도로 바다 풍경",
+      "Korea east coast coastal road"
+    ]
+  },
+  {
+    "slot": "forest",
+    "screens": [],
+    "what": "대관령의 울창한 숲길",
+    "ratio": "4:3",
+    "kind": "photo",
+    "queries": [
+      "대관령 숲길 풍경",
+      "Daegwallyeong forest trail landscape"
+    ]
+  },
+  {
+    "slot": "sunset",
+    "screens": [],
+    "what": "해변 위 따뜻한 노을",
+    "ratio": "4:3",
+    "kind": "photo",
+    "queries": [
+      "해변 노을 풍경",
+      "Korea beach sunset landscape"
+    ]
+  }
+]

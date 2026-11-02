@@ -1,0 +1,46 @@
+[
+  {
+    "slot": "coast",
+    "file": "assets/photos/coast.jpg",
+    "title": "강릉 영진해변 도깨비 촬영지 푸르른 강릉 동해 바다 | 쿠니의 아웃도어 라이프",
+    "author": "",
+    "license": "unknown(내부 검토용)",
+    "source": "bing",
+    "url": "https://view.mk.co.kr/trip-food/article/48441/",
+    "usage": "내부 UI 시안 검토용. 상용 배포 전 사용권 확인 또는 자체 사진 교체 필요.",
+    "geography_note": "강릉 영진해변 출처 사진"
+  },
+  {
+    "slot": "road",
+    "file": "assets/photos/road.jpg",
+    "title": "동해 바다를 정원처럼 품은 새천년 해안도로 삼척 팰리스호텔 : 상상콘텐츠",
+    "author": "",
+    "license": "unknown(내부 검토용)",
+    "source": "bing",
+    "url": "http://www.sangsangtour.co.kr/all/?bmode=view&idx=13220407",
+    "usage": "내부 UI 시안 검토용. 상용 배포 전 사용권 확인 또는 자체 사진 교체 필요.",
+    "geography_note": "삼척 새천년 해안도로 출처 사진. 강릉의 특정 좌표 사진으로 단정하지 않음."
+  },
+  {
+    "slot": "forest",
+    "file": "assets/photos/forest.jpg",
+    "title": "[ 대관령 숲길] 아름드리 금강송과 함께 걷는 102.96km 힐링 숲길",
+    "author": "",
+    "license": "unknown(내부 검토용)",
+    "source": "bing",
+    "url": "https://san.chosun.com/news/articleView.html?idxno=21496",
+    "usage": "내부 UI 시안 검토용. 상용 배포 전 사용권 확인 또는 자체 사진 교체 필요.",
+    "geography_note": "대관령 숲길 출처 사진"
+  },
+  {
+    "slot": "sunset",
+    "file": "assets/photos/sunset.jpg",
+    "title": "Serene Sunset at Seocheon Beach, South Korea · Free Stock Photo",
+    "author": "",
+    "license": "unknown(내부 검토용)",
+    "source": "bing",
+    "url": "https://www.pexels.com/photo/serene-sunset-at-seocheon-beach-south-korea-34987538/",
+    "usage": "내부 UI 시안 검토용. 상용 배포 전 사용권 확인 또는 자체 사진 교체 필요.",
+    "geography_note": "서천 해변 출처 사진. 강릉 노을의 실사 기록이 아닌 분위기 참고 사진."
+  }
+]

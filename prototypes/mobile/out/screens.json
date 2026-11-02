@@ -1,0 +1,1840 @@
+{
+  "groups": [
+    "01 처음 만나는 타임캡슐",
+    "02 목소리를 묻는 순간",
+    "03 같은 길에서 다시 열기",
+    "04 추억을 따라가는 여행",
+    "05 하루를 담은 앨범",
+    "06 가족과 서로의 길",
+    "07 오래 지키는 기억",
+    "08 차량 경험 · 개념 시안"
+  ],
+  "story": {
+    "headline": "그 길에 묻어둔 목소리가,<br><em>다시 그 길에서</em> 당신을 기다린다.",
+    "summary": "타임캡슐 · 모바일 전체 UX 시안. 장소와 날짜가 맞아야 열리는 목소리, 차가 바뀌어도 이어지는 가족의 기억. 마지막 행은 차량 경험의 개념 시안입니다.",
+    "ideas": [
+      {
+        "title": "그 길에서만",
+        "desc": "앨범과 공유 링크도 음성의 장소 잠금을 우회하지 않습니다."
+      },
+      {
+        "title": "나에서 가족으로",
+        "desc": "기기 보관이 기본이며 동기화와 공유는 직접 선택합니다."
+      },
+      {
+        "title": "기억은 오래, 조작은 짧게",
+        "desc": "모바일에서 준비하고 차량에서는 간결하게 만납니다."
+      }
+    ]
+  },
+  "screens": [
+    {
+      "id": "welcome",
+      "file": "screens/welcome.html",
+      "title": "처음 만나는 타임캡슐",
+      "group": "01 처음 만나는 타임캡슐",
+      "purpose": "처음 만나는 타임캡슐",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "login",
+      "file": "screens/login.html",
+      "title": "계정 시작",
+      "group": "01 처음 만나는 타임캡슐",
+      "purpose": "계정 시작",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": true,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": [
+        "error"
+      ]
+    },
+    {
+      "id": "login--error",
+      "file": "screens/login--error.html",
+      "group": "01 처음 만나는 타임캡슐",
+      "title": "계정 시작 · 오류",
+      "purpose": "오류 모습",
+      "role": "everyone",
+      "kind": "form",
+      "state_of": "login",
+      "state": "error"
+    },
+    {
+      "id": "permissions",
+      "file": "screens/permissions.html",
+      "title": "필요할 때 권한 허용",
+      "group": "01 처음 만나는 타임캡슐",
+      "purpose": "필요할 때 권한 허용",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "connect",
+      "file": "screens/connect.html",
+      "title": "내 차 연결",
+      "group": "01 처음 만나는 타임캡슐",
+      "purpose": "내 차 연결",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": true,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [
+        {
+          "to": "connect--error",
+          "label": "연결할 수 없을 때"
+        }
+      ],
+      "states": [
+        "error"
+      ]
+    },
+    {
+      "id": "connect--error",
+      "file": "screens/connect--error.html",
+      "group": "01 처음 만나는 타임캡슐",
+      "title": "내 차 연결 · 오류",
+      "purpose": "오류 모습",
+      "role": "everyone",
+      "kind": "form",
+      "state_of": "connect",
+      "state": "error"
+    },
+    {
+      "id": "connect-done",
+      "file": "screens/connect-done.html",
+      "title": "차 연결 완료",
+      "group": "01 처음 만나는 타임캡슐",
+      "purpose": "차 연결 완료",
+      "role": "everyone",
+      "kind": "result",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "home",
+      "file": "screens/home.html",
+      "title": "오늘의 타임캡슐",
+      "group": "01 처음 만나는 타임캡슐",
+      "purpose": "오늘의 타임캡슐",
+      "role": "everyone",
+      "kind": "home",
+      "traits": {
+        "list_first_use": true,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "대표 콘텐츠형",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": [
+        "empty"
+      ]
+    },
+    {
+      "id": "home--empty",
+      "file": "screens/home--empty.html",
+      "group": "01 처음 만나는 타임캡슐",
+      "title": "오늘의 타임캡슐 · 처음(비어 있음)",
+      "purpose": "처음(비어 있음) 모습",
+      "role": "everyone",
+      "kind": "home",
+      "state_of": "home",
+      "state": "empty"
+    },
+    {
+      "id": "capture",
+      "file": "screens/capture.html",
+      "title": "캡슐 묻기",
+      "group": "02 목소리를 묻는 순간",
+      "purpose": "캡슐 묻기",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "recording",
+      "file": "screens/recording.html",
+      "title": "목소리 녹음",
+      "group": "02 목소리를 묻는 순간",
+      "purpose": "목소리 녹음",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "review",
+      "file": "screens/review.html",
+      "title": "녹음과 분위기 확인",
+      "group": "02 목소리를 묻는 순간",
+      "purpose": "녹음과 분위기 확인",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "seal",
+      "file": "screens/seal.html",
+      "title": "받는 사람과 여는 날",
+      "group": "02 목소리를 묻는 순간",
+      "purpose": "받는 사람과 여는 날",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": true,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [
+        {
+          "to": "seal--error",
+          "label": "날짜가 올바르지 않을 때"
+        }
+      ],
+      "states": [
+        "error"
+      ]
+    },
+    {
+      "id": "seal--error",
+      "file": "screens/seal--error.html",
+      "group": "02 목소리를 묻는 순간",
+      "title": "받는 사람과 여는 날 · 오류",
+      "purpose": "오류 모습",
+      "role": "everyone",
+      "kind": "form",
+      "state_of": "seal",
+      "state": "error"
+    },
+    {
+      "id": "buried",
+      "file": "screens/buried.html",
+      "title": "캡슐을 묻었어요",
+      "group": "02 목소리를 묻는 순간",
+      "purpose": "캡슐을 묻었어요",
+      "role": "everyone",
+      "kind": "result",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "capsule-edit",
+      "file": "screens/capsule-edit.html",
+      "title": "캡슐 편집",
+      "group": "02 목소리를 묻는 순간",
+      "purpose": "캡슐 편집",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [
+        {
+          "to": "capsule-edit--confirm",
+          "label": "삭제를 선택하면"
+        }
+      ],
+      "states": [
+        "confirm"
+      ]
+    },
+    {
+      "id": "capsule-edit--confirm",
+      "file": "screens/capsule-edit--confirm.html",
+      "group": "02 목소리를 묻는 순간",
+      "title": "캡슐 편집 · 확인",
+      "purpose": "지우면 음성을 다시 복구할 수 없어요",
+      "role": "everyone",
+      "kind": "form",
+      "state_of": "capsule-edit",
+      "state": "confirm",
+      "rules": [
+        "RX1"
+      ],
+      "policies": [
+        "[RX1] 지우면 음성을 다시 복구할 수 없어요"
+      ]
+    },
+    {
+      "id": "deleted",
+      "file": "screens/deleted.html",
+      "title": "캡슐 삭제 완료",
+      "group": "02 목소리를 묻는 순간",
+      "purpose": "캡슐 삭제 완료",
+      "role": "everyone",
+      "kind": "result",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "map",
+      "file": "screens/map.html",
+      "title": "길 위의 캡슐",
+      "group": "03 같은 길에서 다시 열기",
+      "purpose": "길 위의 캡슐",
+      "role": "everyone",
+      "kind": "list",
+      "traits": {
+        "list_first_use": true,
+        "form": false,
+        "shares": false,
+        "large_list": true,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "지도+목록",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": [
+        "empty"
+      ]
+    },
+    {
+      "id": "map--empty",
+      "file": "screens/map--empty.html",
+      "group": "03 같은 길에서 다시 열기",
+      "title": "길 위의 캡슐 · 처음(비어 있음)",
+      "purpose": "처음(비어 있음) 모습",
+      "role": "everyone",
+      "kind": "list",
+      "state_of": "map",
+      "state": "empty"
+    },
+    {
+      "id": "locked",
+      "file": "screens/locked.html",
+      "title": "그 길에서 기다리는 목소리",
+      "group": "03 같은 길에서 다시 열기",
+      "purpose": "그 길에서 기다리는 목소리",
+      "role": "everyone",
+      "kind": "detail",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "대상형",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": []
+    },
+    {
+      "id": "date-locked",
+      "file": "screens/date-locked.html",
+      "title": "아직 오지 않은 날짜",
+      "group": "03 같은 길에서 다시 열기",
+      "purpose": "아직 오지 않은 날짜",
+      "role": "everyone",
+      "kind": "detail",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "대상형",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": []
+    },
+    {
+      "id": "nearby",
+      "file": "screens/nearby.html",
+      "title": "다시 만난 장소",
+      "group": "03 같은 길에서 다시 열기",
+      "purpose": "다시 만난 장소",
+      "role": "everyone",
+      "kind": "detail",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [
+        {
+          "to": "nearby--error",
+          "label": "위치 확인 실패"
+        }
+      ],
+      "archetype": "대상형",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": [
+        "error"
+      ]
+    },
+    {
+      "id": "nearby--error",
+      "file": "screens/nearby--error.html",
+      "group": "03 같은 길에서 다시 열기",
+      "title": "다시 만난 장소 · 오류",
+      "purpose": "위치를 확인하지 못해 재생할 수 없어요",
+      "role": "everyone",
+      "kind": "detail",
+      "state_of": "nearby",
+      "state": "error",
+      "rules": [
+        "RX3"
+      ],
+      "policies": [
+        "[RX3] 위치를 확인하지 못해 재생할 수 없어요"
+      ]
+    },
+    {
+      "id": "player",
+      "file": "screens/player.html",
+      "title": "그날의 목소리",
+      "group": "03 같은 길에서 다시 열기",
+      "purpose": "그날의 목소리",
+      "role": "everyone",
+      "kind": "detail",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [
+        {
+          "to": "player--error",
+          "label": "구간을 벗어났을 때"
+        }
+      ],
+      "archetype": "읽기·재생형",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": [
+        "error"
+      ]
+    },
+    {
+      "id": "player--error",
+      "file": "screens/player--error.html",
+      "group": "03 같은 길에서 다시 열기",
+      "title": "그날의 목소리 · 오류",
+      "purpose": "그 장소에서 벗어나 재생을 멈췄어요",
+      "role": "everyone",
+      "kind": "detail",
+      "state_of": "player",
+      "state": "error",
+      "rules": [
+        "RX4"
+      ],
+      "policies": [
+        "[RX4] 그 장소에서 벗어나 재생을 멈췄어요"
+      ]
+    },
+    {
+      "id": "opened",
+      "file": "screens/opened.html",
+      "title": "다시 만난 기억",
+      "group": "03 같은 길에서 다시 열기",
+      "purpose": "다시 만난 기억",
+      "role": "everyone",
+      "kind": "result",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "routes",
+      "file": "screens/routes.html",
+      "title": "추억 경로",
+      "group": "04 추억을 따라가는 여행",
+      "purpose": "추억 경로",
+      "role": "everyone",
+      "kind": "list",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": true,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "행 목록",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": []
+    },
+    {
+      "id": "route-create",
+      "file": "screens/route-create.html",
+      "title": "다시 갈 장소 고르기",
+      "group": "04 추억을 따라가는 여행",
+      "purpose": "다시 갈 장소 고르기",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "route-detail",
+      "file": "screens/route-detail.html",
+      "title": "그때 그 길",
+      "group": "04 추억을 따라가는 여행",
+      "purpose": "그때 그 길",
+      "role": "everyone",
+      "kind": "detail",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "진행 추적형",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": []
+    },
+    {
+      "id": "route-sent",
+      "file": "screens/route-sent.html",
+      "title": "차로 경로 전송 완료",
+      "group": "04 추억을 따라가는 여행",
+      "purpose": "차로 경로 전송 완료",
+      "role": "everyone",
+      "kind": "result",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "albums",
+      "file": "screens/albums.html",
+      "title": "여행 앨범",
+      "group": "05 하루를 담은 앨범",
+      "purpose": "여행 앨범",
+      "role": "everyone",
+      "kind": "list",
+      "traits": {
+        "list_first_use": true,
+        "form": false,
+        "shares": false,
+        "large_list": true,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "행 목록",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": [
+        "empty"
+      ]
+    },
+    {
+      "id": "albums--empty",
+      "file": "screens/albums--empty.html",
+      "group": "05 하루를 담은 앨범",
+      "title": "여행 앨범 · 처음(비어 있음)",
+      "purpose": "처음(비어 있음) 모습",
+      "role": "everyone",
+      "kind": "list",
+      "state_of": "albums",
+      "state": "empty"
+    },
+    {
+      "id": "album",
+      "file": "screens/album.html",
+      "title": "우리의 여름 바다",
+      "group": "05 하루를 담은 앨범",
+      "purpose": "우리의 여름 바다",
+      "role": "everyone",
+      "kind": "detail",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "대상형",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": []
+    },
+    {
+      "id": "album-edit",
+      "file": "screens/album-edit.html",
+      "title": "앨범 정리",
+      "group": "05 하루를 담은 앨범",
+      "purpose": "앨범 정리",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "album-share",
+      "file": "screens/album-share.html",
+      "title": "앨범 초대 링크",
+      "group": "05 하루를 담은 앨범",
+      "purpose": "앨범 초대 링크",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": true,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": [
+        "done"
+      ]
+    },
+    {
+      "id": "album-share--done",
+      "file": "screens/album-share--done.html",
+      "group": "05 하루를 담은 앨범",
+      "title": "앨범 초대 링크 · 보낸 뒤",
+      "purpose": "보낸 뒤 모습",
+      "role": "everyone",
+      "kind": "form",
+      "state_of": "album-share",
+      "state": "done"
+    },
+    {
+      "id": "together",
+      "file": "screens/together.html",
+      "title": "함께 남기는 기억",
+      "group": "06 가족과 서로의 길",
+      "purpose": "함께 남기는 기억",
+      "role": "everyone",
+      "kind": "home",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "목록형",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": []
+    },
+    {
+      "id": "family-create",
+      "file": "screens/family-create.html",
+      "title": "가족 아카이브 만들기",
+      "group": "06 가족과 서로의 길",
+      "purpose": "가족 아카이브 만들기",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": true,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": [
+        "error"
+      ]
+    },
+    {
+      "id": "family-create--error",
+      "file": "screens/family-create--error.html",
+      "group": "06 가족과 서로의 길",
+      "title": "가족 아카이브 만들기 · 오류",
+      "purpose": "오류 모습",
+      "role": "everyone",
+      "kind": "form",
+      "state_of": "family-create",
+      "state": "error"
+    },
+    {
+      "id": "family",
+      "file": "screens/family.html",
+      "title": "우리 가족",
+      "group": "06 가족과 서로의 길",
+      "purpose": "우리 가족",
+      "role": "everyone",
+      "kind": "detail",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "사람형",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": []
+    },
+    {
+      "id": "family-invite",
+      "file": "screens/family-invite.html",
+      "title": "가족 초대",
+      "group": "06 가족과 서로의 길",
+      "purpose": "가족 초대",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": true,
+        "shares": true,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [
+        {
+          "to": "family-invite--error",
+          "label": "받는 주소를 확인해야 할 때"
+        }
+      ],
+      "states": [
+        "error",
+        "done"
+      ]
+    },
+    {
+      "id": "family-invite--error",
+      "file": "screens/family-invite--error.html",
+      "group": "06 가족과 서로의 길",
+      "title": "가족 초대 · 오류",
+      "purpose": "오류 모습",
+      "role": "everyone",
+      "kind": "form",
+      "state_of": "family-invite",
+      "state": "error"
+    },
+    {
+      "id": "family-invite--done",
+      "file": "screens/family-invite--done.html",
+      "group": "06 가족과 서로의 길",
+      "title": "가족 초대 · 보낸 뒤",
+      "purpose": "보낸 뒤 모습",
+      "role": "everyone",
+      "kind": "form",
+      "state_of": "family-invite",
+      "state": "done"
+    },
+    {
+      "id": "invite-accept",
+      "file": "screens/invite-accept.html",
+      "title": "가족 초대 수락",
+      "group": "06 가족과 서로의 길",
+      "purpose": "가족 초대 수락",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "family-edit",
+      "file": "screens/family-edit.html",
+      "title": "가족 관리",
+      "group": "06 가족과 서로의 길",
+      "purpose": "가족 관리",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "family-done",
+      "file": "screens/family-done.html",
+      "title": "가족 설정 완료",
+      "group": "06 가족과 서로의 길",
+      "purpose": "가족 설정 완료",
+      "role": "everyone",
+      "kind": "result",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "following",
+      "file": "screens/following.html",
+      "title": "서로 팔로우",
+      "group": "06 가족과 서로의 길",
+      "purpose": "서로 팔로우",
+      "role": "everyone",
+      "kind": "list",
+      "traits": {
+        "list_first_use": true,
+        "form": false,
+        "shares": false,
+        "large_list": true,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "행 목록",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": [
+        "empty"
+      ]
+    },
+    {
+      "id": "following--empty",
+      "file": "screens/following--empty.html",
+      "group": "06 가족과 서로의 길",
+      "title": "서로 팔로우 · 처음(비어 있음)",
+      "purpose": "처음(비어 있음) 모습",
+      "role": "everyone",
+      "kind": "list",
+      "state_of": "following",
+      "state": "empty"
+    },
+    {
+      "id": "person",
+      "file": "screens/person.html",
+      "title": "친구 프로필",
+      "group": "06 가족과 서로의 길",
+      "purpose": "친구 프로필",
+      "role": "everyone",
+      "kind": "detail",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "사람형",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": []
+    },
+    {
+      "id": "follow-done",
+      "file": "screens/follow-done.html",
+      "title": "팔로우 요청 완료",
+      "group": "06 가족과 서로의 길",
+      "purpose": "팔로우 요청 완료",
+      "role": "everyone",
+      "kind": "result",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "my",
+      "file": "screens/my.html",
+      "title": "내 정보",
+      "group": "07 오래 지키는 기억",
+      "purpose": "내 정보",
+      "role": "everyone",
+      "kind": "home",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "목록형",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": []
+    },
+    {
+      "id": "privacy",
+      "file": "screens/privacy.html",
+      "title": "기억의 공개 범위",
+      "group": "07 오래 지키는 기억",
+      "purpose": "기억의 공개 범위",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "sync",
+      "file": "screens/sync.html",
+      "title": "가족 계정 동기화",
+      "group": "07 오래 지키는 기억",
+      "purpose": "가족 계정 동기화",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": true
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": [
+        "progress"
+      ]
+    },
+    {
+      "id": "sync--progress",
+      "file": "screens/sync--progress.html",
+      "group": "07 오래 지키는 기억",
+      "title": "가족 계정 동기화 · 진행 중",
+      "purpose": "진행 중 모습",
+      "role": "everyone",
+      "kind": "form",
+      "state_of": "sync",
+      "state": "progress"
+    },
+    {
+      "id": "sync-done",
+      "file": "screens/sync-done.html",
+      "title": "동기화 완료",
+      "group": "07 오래 지키는 기억",
+      "purpose": "동기화 완료",
+      "role": "everyone",
+      "kind": "result",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "devices",
+      "file": "screens/devices.html",
+      "title": "연결한 차량",
+      "group": "07 오래 지키는 기억",
+      "purpose": "연결한 차량",
+      "role": "everyone",
+      "kind": "list",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "행 목록",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": []
+    },
+    {
+      "id": "transfer",
+      "file": "screens/transfer.html",
+      "title": "새 차로 이어가기",
+      "group": "07 오래 지키는 기억",
+      "purpose": "새 차로 이어가기",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": true,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [
+        {
+          "to": "transfer--error",
+          "label": "계정 보관 전"
+        },
+        {
+          "to": "transfer--confirm",
+          "label": "차량에서 지우기"
+        }
+      ],
+      "states": [
+        "error",
+        "confirm"
+      ]
+    },
+    {
+      "id": "transfer--error",
+      "file": "screens/transfer--error.html",
+      "group": "07 오래 지키는 기억",
+      "title": "새 차로 이어가기 · 오류",
+      "purpose": "오류 모습",
+      "role": "everyone",
+      "kind": "form",
+      "state_of": "transfer",
+      "state": "error"
+    },
+    {
+      "id": "transfer--confirm",
+      "file": "screens/transfer--confirm.html",
+      "group": "07 오래 지키는 기억",
+      "title": "새 차로 이어가기 · 확인",
+      "purpose": "차량에서 지우기 전 계정 보관을 확인하세요",
+      "role": "everyone",
+      "kind": "form",
+      "state_of": "transfer",
+      "state": "confirm",
+      "rules": [
+        "RX2"
+      ],
+      "policies": [
+        "[RX2] 차량에서 지우기 전 계정 보관을 확인하세요"
+      ]
+    },
+    {
+      "id": "transfer-done",
+      "file": "screens/transfer-done.html",
+      "title": "차량 이전 완료",
+      "group": "07 오래 지키는 기억",
+      "purpose": "차량 이전 완료",
+      "role": "everyone",
+      "kind": "result",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "inherit",
+      "file": "screens/inherit.html",
+      "title": "가족에게 기록 넘기기",
+      "group": "07 오래 지키는 기억",
+      "purpose": "가족에게 기록 넘기기",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": true,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": [
+        "error"
+      ]
+    },
+    {
+      "id": "inherit--error",
+      "file": "screens/inherit--error.html",
+      "group": "07 오래 지키는 기억",
+      "title": "가족에게 기록 넘기기 · 오류",
+      "purpose": "오류 모습",
+      "role": "everyone",
+      "kind": "form",
+      "state_of": "inherit",
+      "state": "error"
+    },
+    {
+      "id": "inherit-done",
+      "file": "screens/inherit-done.html",
+      "title": "이전 요청 완료",
+      "group": "07 오래 지키는 기억",
+      "purpose": "이전 요청 완료",
+      "role": "everyone",
+      "kind": "result",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "archive-plan",
+      "file": "screens/archive-plan.html",
+      "title": "가족 아카이브",
+      "group": "07 오래 지키는 기억",
+      "purpose": "가족 아카이브",
+      "role": "everyone",
+      "kind": "detail",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "읽기·재생형",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": []
+    },
+    {
+      "id": "plan-done",
+      "file": "screens/plan-done.html",
+      "title": "출시 알림 신청 완료",
+      "group": "07 오래 지키는 기억",
+      "purpose": "출시 알림 신청 완료",
+      "role": "everyone",
+      "kind": "result",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "car-capture",
+      "file": "screens/car-capture.html",
+      "title": "차량 · 목소리 남기기",
+      "group": "08 차량 경험 · 개념 시안",
+      "purpose": "차량 · 목소리 남기기",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "car-nearby",
+      "file": "screens/car-nearby.html",
+      "title": "차량 · 캡슐 접근",
+      "group": "08 차량 경험 · 개념 시안",
+      "purpose": "차량 · 캡슐 접근",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "car-paused",
+      "file": "screens/car-paused.html",
+      "title": "차량 · 안전 안내 우선",
+      "group": "08 차량 경험 · 개념 시안",
+      "purpose": "차량 · 안전 안내 우선",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "like-that-day",
+      "file": "screens/like-that-day.html",
+      "title": "그날처럼 · 미래 경험",
+      "group": "08 차량 경험 · 개념 시안",
+      "purpose": "그날처럼 · 미래 경험",
+      "role": "everyone",
+      "kind": "detail",
+      "traits": {
+        "list_first_use": false,
+        "form": false,
+        "shares": false,
+        "large_list": false,
+        "long_task": false
+      },
+      "policies": [
+        "음성은 장소·날짜·공개 대상 조건을 모두 충족해야 재생합니다.",
+        "시안 데이터이며 실제 차량 연동·녹음·결제는 실행하지 않습니다."
+      ],
+      "branches": [],
+      "archetype": "대상형",
+      "archetype_why": "현장 잠금과 가족의 기억을 우선하는 타임캡슐의 핵심 흐름",
+      "states": []
+    },
+    {
+      "id": "album-created",
+      "file": "screens/album-created.html",
+      "title": "오늘의 앨범 완성",
+      "group": "05 하루를 담은 앨범",
+      "purpose": "오늘의 앨범 완성",
+      "role": "everyone",
+      "kind": "result",
+      "traits": {},
+      "policies": [
+        "실제 연동이 아닌 UX 시안입니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "album-saved",
+      "file": "screens/album-saved.html",
+      "title": "앨범 수정 완료",
+      "group": "05 하루를 담은 앨범",
+      "purpose": "앨범 수정 완료",
+      "role": "everyone",
+      "kind": "result",
+      "traits": {},
+      "policies": [
+        "실제 연동이 아닌 UX 시안입니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "route-edit",
+      "file": "screens/route-edit.html",
+      "title": "추억 경로 편집",
+      "group": "04 추억을 따라가는 여행",
+      "purpose": "추억 경로 편집",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {},
+      "policies": [
+        "실제 연동이 아닌 UX 시안입니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "plan-manage",
+      "file": "screens/plan-manage.html",
+      "title": "아카이브 구독 관리",
+      "group": "07 오래 지키는 기억",
+      "purpose": "아카이브 구독 관리",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {},
+      "policies": [
+        "실제 연동이 아닌 UX 시안입니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "account-edit",
+      "file": "screens/account-edit.html",
+      "title": "내 프로필 수정",
+      "group": "07 오래 지키는 기억",
+      "purpose": "내 프로필 수정",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {},
+      "policies": [
+        "실제 연동이 아닌 UX 시안입니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "account-done",
+      "file": "screens/account-done.html",
+      "title": "프로필 수정 완료",
+      "group": "07 오래 지키는 기억",
+      "purpose": "프로필 수정 완료",
+      "role": "everyone",
+      "kind": "result",
+      "traits": {},
+      "policies": [
+        "실제 연동이 아닌 UX 시안입니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "arrival",
+      "file": "screens/arrival.html",
+      "title": "도착한 순간",
+      "group": "08 차량 경험 · 개념 시안",
+      "purpose": "도착한 순간",
+      "role": "everyone",
+      "kind": "form",
+      "traits": {},
+      "policies": [
+        "실제 연동이 아닌 UX 시안입니다."
+      ],
+      "branches": [],
+      "states": []
+    },
+    {
+      "id": "capsule-forest",
+      "file": "screens/capsule-forest.html",
+      "title": "숲을 지나며",
+      "group": "03 같은 길에서 다시 열기",
+      "purpose": "캡슐별 장소와 공개 조건 확인",
+      "role": "everyone",
+      "kind": "detail",
+      "archetype": "대상형",
+      "archetype_why": "개별 장소와 목소리를 중심으로 결정",
+      "traits": {},
+      "policies": [
+        "사진은 장소 분위기 예시입니다.",
+        "장소를 벗어나면 음성은 잠겨 있습니다."
+      ],
+      "branches": []
+    },
+    {
+      "id": "capsule-sunset",
+      "file": "screens/capsule-sunset.html",
+      "title": "노을 앞의 약속",
+      "group": "03 같은 길에서 다시 열기",
+      "purpose": "캡슐별 장소와 공개 조건 확인",
+      "role": "everyone",
+      "kind": "detail",
+      "archetype": "대상형",
+      "archetype_why": "개별 장소와 목소리를 중심으로 결정",
+      "traits": {},
+      "policies": [
+        "사진은 장소 분위기 예시입니다.",
+        "장소를 벗어나면 음성은 잠겨 있습니다."
+      ],
+      "branches": []
+    }
+  ],
+  "people": [
+    {
+      "name": "어린 자녀를 둔 가족",
+      "who": "한국의 부모와 어린 자녀, 여행 중 목소리를 남기는 가족",
+      "why": "아이의 지금 목소리를 미래에 전하고 싶다",
+      "feels": "애틋함과 기대",
+      "wants": [
+        {
+          "q": "오늘 남긴 목소리는 어디에 보관되나",
+          "at": [
+            "home",
+            "buried",
+            "sync"
+          ]
+        },
+        {
+          "q": "공개 범위를 나중에 바꿀 수 있나",
+          "at": [
+            "privacy",
+            "capsule-edit"
+          ]
+        }
+      ],
+      "win": "녹음을 확인하고 가족에게 안전하게 남긴 순간",
+      "screens": [
+        "home",
+        "capture",
+        "family"
+      ],
+      "core": true
+    },
+    {
+      "name": "부모와 독립한 자녀",
+      "who": "한국의 성인 자녀, 부모와 다른 차를 이용",
+      "why": "부모가 남긴 목소리를 같은 길에서 만나고 싶다",
+      "feels": "그리움과 호기심",
+      "wants": [
+        {
+          "q": "언제 어디에서 이 목소리를 들을 수 있나",
+          "at": [
+            "locked",
+            "date-locked",
+            "nearby"
+          ]
+        },
+        {
+          "q": "공개 범위를 나중에 바꿀 수 있나",
+          "at": [
+            "privacy",
+            "capsule-edit"
+          ]
+        }
+      ],
+      "win": "장소에서 가족의 캡슐을 여는 순간",
+      "screens": [
+        "map",
+        "locked",
+        "player"
+      ]
+    },
+    {
+      "name": "커플·부부와 혼자 여행하는 운전자",
+      "who": "기념일 드라이브 또는 혼자 떠나는 한국 성인",
+      "why": "오늘의 마음을 미래에 전하고 싶다",
+      "feels": "설렘",
+      "wants": [
+        {
+          "q": "누구에게 언제 공개할 수 있나",
+          "at": [
+            "seal",
+            "privacy"
+          ]
+        },
+        {
+          "q": "공개 범위를 나중에 바꿀 수 있나",
+          "at": [
+            "privacy",
+            "capsule-edit"
+          ]
+        }
+      ],
+      "win": "받는 사람과 날짜를 정해 캡슐을 묻은 순간",
+      "screens": [
+        "seal",
+        "routes",
+        "following"
+      ]
+    }
+  ],
+  "avatar_style": "people",
+  "photo_centric": false,
+  "promos": [],
+  "badges": {
+    "잠김": "",
+    "열 수 있어요": "is-brand",
+    "확인 필요": "is-warning",
+    "초대 중": "is-info",
+    "완료": "is-success",
+    "연결 실패": "is-danger"
+  },
+  "prd_coverage": {
+    "P1": [
+      "capture",
+      "car-capture"
+    ],
+    "P2": [
+      "recording"
+    ],
+    "P3": [
+      "buried"
+    ],
+    "P4": [
+      "arrival"
+    ],
+    "P5": [
+      "route-detail",
+      "car-nearby"
+    ],
+    "P6": [
+      "nearby",
+      "player"
+    ],
+    "P7": [
+      "car-paused"
+    ],
+    "P8": [
+      "seal"
+    ],
+    "P9": [
+      "route-create",
+      "route-detail",
+      "route-sent"
+    ],
+    "P10": [
+      "album-created"
+    ],
+    "P11": [
+      "album-share"
+    ],
+    "P12": [
+      "transfer",
+      "transfer-done"
+    ],
+    "R1": [
+      "recording"
+    ],
+    "R2": [
+      "nearby"
+    ],
+    "R3": [
+      "date-locked"
+    ],
+    "R4": [
+      "car-capture"
+    ],
+    "R5": [
+      "car-paused"
+    ],
+    "R6": [
+      "car-paused"
+    ],
+    "R7": [
+      "arrival"
+    ],
+    "R8": [
+      "capture"
+    ],
+    "R9": [
+      "sync"
+    ],
+    "R10": [
+      "transfer"
+    ],
+    "R11": [
+      "locked"
+    ],
+    "R12": [
+      "album"
+    ],
+    "RX1": [
+      "capsule-edit--confirm"
+    ],
+    "RX2": [
+      "transfer--confirm"
+    ],
+    "RX3": [
+      "nearby--error"
+    ],
+    "RX4": [
+      "player--error"
+    ]
+  },
+  "stage": "max",
+  "pending_states": 0
+}

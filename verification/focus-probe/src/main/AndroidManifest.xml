@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ <queries><package android:name="io.timecapsule.vehicle"/></queries>
+ <uses-feature android:name="android.hardware.type.automotive" android:required="true"/>
+ <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+ <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+ <application android:label="오디오 포커스 검증 도구" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false">
+  <activity android:name=".ProbeActivity" android:exported="true"/>
+  <service android:name=".MediaProbeService" android:exported="true" android:foregroundServiceType="mediaPlayback"/>
+ </application>
+</manifest>

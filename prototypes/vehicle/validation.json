@@ -1,0 +1,39 @@
+{
+  "screens": 42,
+  "viewports": [
+    1280,
+    600
+  ],
+  "horizontal_overflow": [],
+  "runtime_errors": [],
+  "interaction_checks": [
+    [
+      "near",
+      true
+    ],
+    [
+      "date",
+      true
+    ],
+    [
+      "access",
+      true
+    ],
+    [
+      "audio-focus",
+      true
+    ],
+    [
+      "driving",
+      true
+    ],
+    [
+      "record-review",
+      true
+    ],
+    [
+      "save-flow",
+      true
+    ]
+  ]
+}

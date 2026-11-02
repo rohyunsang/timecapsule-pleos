@@ -1,0 +1,47 @@
+{
+  "packageName": "io.timecapsule.vehicle",
+  "appDescription": "A vehicle app for leaving voice memories at places and listening on later visits.",
+  "invokeWord": "타임캡슐",
+  "version": "0.3.0",
+  "actionCalls": [
+    {
+      "type": "function",
+      "function": {
+        "component": "service",
+        "name": "START_CAPSULE_RECORDING",
+        "description": "Record up to fifteen seconds of a voice memory at the current location after explicit user request and prior trip preparation.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "component": "service",
+        "name": "SAVE_CAPSULE_RECORDING",
+        "description": "Finish the current voice recording and save it at its starting location.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "component": "service",
+        "name": "CANCEL_CAPSULE_RECORDING",
+        "description": "Cancel the current voice recording and discard its audio.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
+    }
+  ]
+}

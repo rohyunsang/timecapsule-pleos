@@ -1,0 +1,29 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ <queries><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.APP_MAPS"/></intent><package android:name="ai.umos.maps.android.navigation.app"/></queries>
+ <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+ <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+ <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+ <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+ <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+ <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+ <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+ <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+ <uses-permission android:name="pleos.car.permission.CAR_DRIVE"/>
+ <uses-permission android:name="pleos.car.permission.CAR_LIGHTS"/>
+ <uses-permission android:name="pleos.car.permission.FUSED_LOCATION"/>
+ <uses-feature android:name="android.hardware.type.automotive" android:required="true"/>
+ <uses-feature android:name="android.hardware.microphone" android:required="false"/>
+ <application android:appCategory="audio" android:icon="@drawable/ic_capsule" android:dataExtractionRules="@xml/data_extraction_rules" android:label="타임캡슐" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false" android:fullBackupContent="false" android:supportsRtl="true">
+ <uses-library android:name="android.car" android:required="false"/>
+ <meta-data android:name="androidx.car.app.launchable" android:value="true"/>
+ <service android:name=".PlaybackService" android:exported="true" android:foregroundServiceType="location|mediaPlayback|microphone">
+   <intent-filter><action android:name="android.media.browse.MediaBrowserService"/></intent-filter>
+ </service>
+ <receiver android:name=".GleoRecordingReceiver" android:exported="true" android:permission="android.permission.MEDIA_CONTENT_CONTROL">
+  <intent-filter><action android:name="START_CAPSULE_RECORDING"/><action android:name="SAVE_CAPSULE_RECORDING"/><action android:name="CANCEL_CAPSULE_RECORDING"/></intent-filter>
+ </receiver>
+ <receiver android:name=".PlaybackActionReceiver" android:exported="false"/>
+ <activity android:name=".MainActivity" android:exported="true" android:resizeableActivity="true">
+ <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+ </activity></application>
+</manifest>

@@ -25,3 +25,24 @@ google-services.json
 *.apk
 *.aab
 !apk/*_release.apk
+
+# Imported workspace exclusions
+.gradle/
+**/build/
+local.properties
+*.jks
+__pycache__/
+*.pyc
+.DS_Store
+.idea/
+
+# Local Python / task artifacts
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+.kotlin/
+node_modules/
+*.idsig

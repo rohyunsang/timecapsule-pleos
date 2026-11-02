@@ -1,0 +1,63 @@
+import asyncio,json
+from pathlib import Path
+from playwright.async_api import async_playwright
+root=Path(__file__).parent
+URL='http://127.0.0.1:8791/road-voice-planning/timecapsule-vehicle/'
+async def main():
+ async with async_playwright() as p:
+  b=await p.chromium.launch(args=['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream'])
+  page=await b.new_page(viewport={'width':1440,'height':1100},permissions=['microphone'])
+  errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+  await page.goto(URL)
+  await page.evaluate("localStorage.removeItem('tc-driving-listening')")
+  await page.reload()
+  checks=[]
+  async def ck(label,expr):
+   ok=await page.evaluate(expr);checks.append([label,ok]);assert ok,label
+  await ck('기본 청취 꺼짐','!Listening.model.enabled')
+  await page.get_by_role('button',name='주행 청취 설정',exact=True).click()
+  await page.get_by_role('button',name='주행 청취 켜기',exact=True).click()
+  await page.reload()
+  await ck('설정 유지',"Listening.model.enabled")
+  await page.locator('#date').check();await page.locator('#driving').check();await page.locator('#near').check()
+  await page.wait_for_function("Listening.model.status==='playing' || Listening.model.status==='blocked'")
+  if await page.evaluate("Listening.model.status==='blocked'"):await page.get_by_role('button',name='듣기',exact=True).click()
+  await page.wait_for_function('Listening.audio.currentTime>0.15')
+  await ck('실제 오디오 재생',"!Listening.audio.paused && Listening.model.status==='playing'")
+  await ck('주행 중 메뉴 없음',"document.querySelector('.rail')===null")
+  await page.screenshot(path=str(root/'exports/driving-playing.png'))
+  await page.locator('#interrupt').check()
+  await ck('내비 통화 즉시 중단','Listening.audio.paused')
+  await page.locator('#interrupt').uncheck()
+  await ck('안내 종료 후 자동 재개 금지',"Listening.audio.paused && Listening.model.status==='paused'")
+  await page.get_by_role('button',name='듣기',exact=True).click()
+  await page.locator('#near').uncheck()
+  await ck('장소 이탈 중단','Listening.audio.paused')
+  await page.locator('#near').check()
+  await ck('재진입 자동 반복 금지','Listening.audio.paused')
+  await page.get_by_role('button',name='듣기',exact=True).click()
+  await page.locator('#access').uncheck()
+  await ck('권한 회수 중단','Listening.audio.paused')
+  await page.locator('#access').check();await page.get_by_role('button',name='듣기',exact=True).click()
+  await page.locator('#warning').check()
+  await ck('안전 경고 중단','Listening.audio.paused')
+  await page.locator('#warning').uncheck();await page.get_by_role('button',name='듣기',exact=True).click()
+  await page.locator('#fresh').uncheck()
+  await ck('위치 불확실 중단','Listening.audio.paused')
+  await page.locator('#fresh').check();await page.locator('#driving').uncheck()
+  await page.evaluate("go('consent')")
+  await page.get_by_role('button',name='동의 확인 후 실제 녹음',exact=True).click()
+  await page.wait_for_function("current==='record'")
+  await page.wait_for_timeout(600)
+  await page.get_by_role('button',name='녹음 마치기',exact=True).click()
+  await page.wait_for_function("Listening.audio.src.startsWith('blob:')")
+  await ck('MediaRecorder 실제 Blob 생성',"Listening.audio.src.startsWith('blob:')")
+  await page.get_by_role('button',name='내 녹음 확인',exact=True).click()
+  await ck('내 녹음 미리 듣기',"!Listening.audio.paused")
+  await page.get_by_role('button',name='녹음 삭제',exact=True).click()
+  await ck('녹음 삭제 후 URL 해제',"!Listening.audio.src.startsWith('blob:') && Listening.audio.paused")
+  await ck('실행 오류 없음',str(not errors).lower())
+  report={'checks':checks,'errors':errors,'audio':'HTMLAudioElement time advanced','recording':'Chromium fake microphone stream, not human microphone verification','vehicle':'Simulated inputs, not Pleos emulator'}
+  (root/'listening-validation.json').write_text(json.dumps(report,ensure_ascii=False,indent=2));print(json.dumps(report,ensure_ascii=False))
+  await b.close()
+asyncio.run(main())

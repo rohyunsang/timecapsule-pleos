@@ -1,0 +1,68 @@
+{
+  "checks": [
+    [
+      "기본 청취 꺼짐",
+      true
+    ],
+    [
+      "설정 유지",
+      true
+    ],
+    [
+      "실제 오디오 재생",
+      true
+    ],
+    [
+      "주행 중 메뉴 없음",
+      true
+    ],
+    [
+      "내비 통화 즉시 중단",
+      true
+    ],
+    [
+      "안내 종료 후 자동 재개 금지",
+      true
+    ],
+    [
+      "장소 이탈 중단",
+      true
+    ],
+    [
+      "재진입 자동 반복 금지",
+      true
+    ],
+    [
+      "권한 회수 중단",
+      true
+    ],
+    [
+      "안전 경고 중단",
+      true
+    ],
+    [
+      "위치 불확실 중단",
+      true
+    ],
+    [
+      "MediaRecorder 실제 Blob 생성",
+      true
+    ],
+    [
+      "내 녹음 미리 듣기",
+      true
+    ],
+    [
+      "녹음 삭제 후 URL 해제",
+      true
+    ],
+    [
+      "실행 오류 없음",
+      true
+    ]
+  ],
+  "errors": [],
+  "audio": "HTMLAudioElement time advanced",
+  "recording": "Chromium fake microphone stream, not human microphone verification",
+  "vehicle": "Simulated inputs, not Pleos emulator"
+}

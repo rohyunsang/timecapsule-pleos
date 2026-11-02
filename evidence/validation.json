@@ -1,0 +1,47 @@
+{
+  "date": "2026-11-01",
+  "package": "io.timecapsule.vehicle",
+  "version": "0.1.0",
+  "apk_sha256": "c93625ebd6fe3df1c1fea579fc3f248df2e965bad21987726bb7ca7db981743d",
+  "apk_bytes": 7899240,
+  "installed_apk_hash_matches": true,
+  "debuggable": false,
+  "signature_scheme": "v3",
+  "unit_tests": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0
+  },
+  "android_lint": {
+    "errors": 0,
+    "warnings": 2
+  },
+  "runtime": "Pleos Connect 2.1.0 ARM64 / API 34",
+  "sdk": {
+    "Vehicle": "2.3.2",
+    "FusedLocation": "1.1.3"
+  },
+  "hardware_vehicle_tested": false,
+  "app_market_approved": false,
+  "microphone_input": "emulator audio disabled; recording/codec flow only",
+  "integration_checks": [
+    "Vehicle P/D callbacks",
+    "FusedLocation actual provider callbacks",
+    "runtime permission consent including Pleos FUSED_LOCATION",
+    "AAC recording and app restart persistence",
+    "30-second stop",
+    "future date lock",
+    "location exit lock",
+    "foreground location wait",
+    "background arrival playback",
+    "turn signal interrupts playback",
+    "navigation-usage audio focus interrupts playback",
+    "no automatic resume after interruption",
+    "drive transition cancels recording",
+    "delete file and metadata",
+    "signed release normal install",
+    "signed release background playback at simulated moving speed",
+    "signed release geofence exit stops playback",
+    "release demo data cleanup"
+  ]
+}

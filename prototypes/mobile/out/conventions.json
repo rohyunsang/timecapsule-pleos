@@ -1,0 +1,156 @@
+{
+  "keywords": [
+    "가족 앨범",
+    "음성 일기",
+    "여행 기록"
+  ],
+  "apps": [
+    {
+      "no": 1,
+      "name": "트리플 - 항공·호텔 최저가 예약, 여행계획",
+      "ratings": 27310,
+      "url": "https://apps.apple.com/kr/app/%ED%8A%B8%EB%A6%AC%ED%94%8C-%ED%95%AD%EA%B3%B5-%ED%98%B8%ED%85%94-%EC%B5%9C%EC%A0%80%EA%B0%80-%EC%98%88%EC%95%BD-%EC%97%AC%ED%96%89%EA%B3%84%ED%9A%8D/id1225499481?uo=4"
+    },
+    {
+      "no": 2,
+      "name": "FamilyAlbum - 패밀리 앨범",
+      "ratings": 17907,
+      "url": "https://apps.apple.com/kr/app/familyalbum-%ED%8C%A8%EB%B0%80%EB%A6%AC-%EC%95%A8%EB%B2%94/id935672069?uo=4"
+    },
+    {
+      "no": 3,
+      "name": "쑥쑥찰칵 - 아기 사진 공유, 사진 정리 육아앱",
+      "ratings": 17606,
+      "url": "https://apps.apple.com/kr/app/%EC%91%A5%EC%91%A5%EC%B0%B0%EC%B9%B5-%EC%95%84%EA%B8%B0-%EC%82%AC%EC%A7%84-%EA%B3%B5%EC%9C%A0-%EC%82%AC%EC%A7%84-%EC%A0%95%EB%A6%AC-%EC%9C%A1%EC%95%84%EC%95%B1/id1509183009?uo=4"
+    },
+    {
+      "no": 4,
+      "name": "Bebememo - 아기의 스마트 사진 앨범",
+      "ratings": 16282,
+      "url": "https://apps.apple.com/kr/app/bebememo-%EC%95%84%EA%B8%B0%EC%9D%98-%EC%8A%A4%EB%A7%88%ED%8A%B8-%EC%82%AC%EC%A7%84-%EC%95%A8%EB%B2%94/id1494276528?uo=4"
+    },
+    {
+      "no": 5,
+      "name": "다욜 : 다이어리, 캘린더, 일기",
+      "ratings": 6171,
+      "url": "https://apps.apple.com/kr/app/%EB%8B%A4%EC%9A%9C-%EB%8B%A4%EC%9D%B4%EC%96%B4%EB%A6%AC-%EC%BA%98%EB%A6%B0%EB%8D%94-%EC%9D%BC%EA%B8%B0/id1571925624?uo=4"
+    }
+  ],
+  "follow": [
+    {
+      "id": "M1",
+      "area": "탭",
+      "what": "기록 탐색과 계정·관리 기능을 하단 탭으로 분리한다.",
+      "seen_in": [
+        "FamilyAlbum - 패밀리 앨범",
+        "Bebememo - 아기의 스마트 사진 앨범",
+        "다욜 : 다이어리, 캘린더, 일기"
+      ],
+      "evidence": "FamilyAlbum 시트 1, Bebememo 시트 3·7, 다욜 시트 1 하단 탭"
+    },
+    {
+      "id": "M2",
+      "area": "홈",
+      "what": "기록을 날짜·월 단위로 자동 묶고 기간을 바꿔 탐색한다.",
+      "seen_in": [
+        "FamilyAlbum - 패밀리 앨범",
+        "쑥쑥찰칵 - 아기 사진 공유, 사진 정리 육아앱",
+        "Bebememo - 아기의 스마트 사진 앨범"
+      ],
+      "evidence": "FamilyAlbum 시트 1 월 선택, 쑥쑥찰칵 시트 2 날짜와 8 달력, Bebememo 시트 2 성장 시기별 묶음"
+    },
+    {
+      "id": "M3",
+      "area": "입력",
+      "what": "공유할 사람과 공개 범위를 콘텐츠 단위로 선택할 수 있게 한다.",
+      "seen_in": [
+        "FamilyAlbum - 패밀리 앨범",
+        "쑥쑥찰칵 - 아기 사진 공유, 사진 정리 육아앱",
+        "Bebememo - 아기의 스마트 사진 앨범"
+      ],
+      "evidence": "FamilyAlbum 시트 3 가족 전체 공개·한정 공개, 쑥쑥찰칵 시트 3 공유 범위, Bebememo 앱 설명 공개 범위 설정"
+    },
+    {
+      "id": "M4",
+      "area": "기타",
+      "what": "모든 사람에게 공개하는 대신 초대한 가족만 들어오는 비공개 공간을 제공한다.",
+      "seen_in": [
+        "FamilyAlbum - 패밀리 앨범",
+        "Bebememo - 아기의 스마트 사진 앨범"
+      ],
+      "evidence": "FamilyAlbum 시트 2 가족 한정 공유와 앱 설명, Bebememo 앱 설명 초대받은 가족만 접근"
+    }
+  ],
+  "consider": [
+    {
+      "id": "K1",
+      "what": "기록을 기간별 앨범이나 성장 영상으로 자동 묶어 다시 발견하게 한다.",
+      "seen_in": [
+        "FamilyAlbum - 패밀리 앨범",
+        "쑥쑥찰칵 - 아기 사진 공유, 사진 정리 육아앱",
+        "Bebememo - 아기의 스마트 사진 앨범"
+      ],
+      "evidence": "FamilyAlbum 시트 4 성장 파노라마, 쑥쑥찰칵 시트 4 성장영상, Bebememo 시트 6 한 해 한 권",
+      "why_works": "기록이 쌓이는 부담 없이 회고 가능한 결과물로 전환된다. 효과는 추론이며 인과 검증은 없다."
+    }
+  ],
+  "avoid": [
+    {
+      "id": "A1",
+      "what": "기록 저장과 동기화 성공 여부가 불명확해 기록이 사라졌다고 느끼게 하지 않는다.",
+      "count": 7,
+      "apps": [
+        "다욜 : 다이어리, 캘린더, 일기"
+      ],
+      "quote": "적어둔 내용이 그냥 사라셔요. 동기화 오류 있는거 같아요",
+      "evidence": "낮은 별점 리뷰 중 데이터 손실·동기화 오류 7건"
+    },
+    {
+      "id": "A2",
+      "what": "유료 전환 시점과 자동 결제 조건을 뒤늦게 알리지 않는다.",
+      "count": 4,
+      "apps": [
+        "Bebememo - 아기의 스마트 사진 앨범",
+        "다욜 : 다이어리, 캘린더, 일기"
+      ],
+      "quote": "이렇게 유료 전환 된다는거 알려주셨어야",
+      "evidence": "Bebememo 갑작스런 유료전환·환불·너무 비쌈, 다욜 월구독 변경 리뷰"
+    }
+  ],
+  "cases": [
+    {
+      "what": "지도 위 동선과 날짜별 일정을 함께 배치한다.",
+      "app": "트리플 - 항공·호텔 최저가 예약, 여행계획"
+    },
+    {
+      "what": "가입 없이 로컬 기록을 시작할 수 있다고 안내한다.",
+      "app": "다욜 : 다이어리, 캘린더, 일기"
+    }
+  ],
+  "archetypes": {
+    "home": {
+      "apps": {
+        "FamilyAlbum - 패밀리 앨범": "진열형",
+        "Bebememo - 아기의 스마트 사진 앨범": "진열형",
+        "다욜 : 다이어리, 캘린더, 일기": "진열형"
+      },
+      "majority": "진열형"
+    },
+    "detail": {
+      "apps": {},
+      "majority": null
+    },
+    "list": {
+      "apps": {
+        "FamilyAlbum - 패밀리 앨범": "상품 격자",
+        "Bebememo - 아기의 스마트 사진 앨범": "상품 격자"
+      },
+      "majority": "상품 격자"
+    }
+  },
+  "limits": [
+    "스토어 홍보 이미지와 공개 설명을 검토했으며 실제 로그인 앱 사용 검증은 아니다.",
+    "5개 중 3개 앱의 리뷰 수집 결과는 0건이다.",
+    "사진 앱의 격자를 음성 앱에 기계적으로 적용할 필요는 없다. 장소·제목 중심의 행 목록을 선택하면 핵심 가치에 따른 예외 이유를 기록한다."
+  ]
+}

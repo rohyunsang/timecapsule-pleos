@@ -1,0 +1,18 @@
+--------- beginning of main
+11-02 00:29:40.556 14192 14192 I TimeCapsule: Media browser trusted=true uid=1010174
+11-02 00:29:51.948 14192 14192 I TimeCapsule: Gear received: GEAR_DRIVE
+11-02 00:29:51.970 14192 14192 I TimeCapsule: CarUxRestrictions known=true restricted=true flags=80
+11-02 00:29:52.990 14192 14192 I TimeCapsule: Media browser trusted=true uid=1010174
+11-02 00:29:53.073 14192 14192 I TimeCapsule: RECORD_STARTED gear=GEAR_DRIVE background=true
+11-02 00:29:55.302 14192 14192 I TimeCapsule: Media browser trusted=true uid=1010174
+11-02 00:30:08.426 14192 14192 I TimeCapsule: RECORD_SAVED id=1793547008425 draft=false
+11-02 00:30:09.455 14192 14192 I TimeCapsule: Media browser trusted=true uid=1010174
+11-02 00:30:09.508 14192 14192 I TimeCapsule: RECORD_STARTED gear=GEAR_DRIVE background=true
+11-02 00:30:11.551 14192 14192 I TimeCapsule: RECORD_SAVED id=1793547011550 draft=true
+11-02 00:30:18.630 14192 14192 I TimeCapsule: Media browser trusted=true uid=1010174
+11-02 00:30:18.701 14192 14192 I TimeCapsule: RECORD_STARTED gear=GEAR_DRIVE background=true
+11-02 00:30:20.666 14192 14192 I TimeCapsule: Media browser trusted=true uid=1010174
+11-02 00:30:23.871 14192 14192 I TimeCapsule: RECORD_STARTED gear=GEAR_DRIVE background=true
+11-02 00:30:25.943 14192 14192 I TimeCapsule: RECORD_SAVED id=1793547025942 draft=true
+11-02 00:30:30.056 14192 14192 I TimeCapsule: CarUxRestrictions known=true restricted=false flags=0
+11-02 00:30:30.159 14192 14192 I TimeCapsule: Gear received: GEAR_PARK

@@ -1,0 +1,452 @@
+{
+  "mode": "spec",
+  "items": [
+    {
+      "id": "P1",
+      "kind": "step",
+      "name": "캡슐 녹음 시작",
+      "quote": "“타임캡슐, 묻어줘” 또는 핸들 버튼",
+      "covered_by": [
+        "capture",
+        "car-capture"
+      ]
+    },
+    {
+      "id": "P2",
+      "kind": "step",
+      "name": "캡슐 녹음 중",
+      "quote": "알림음 후 최대 30초 녹음. 차 안 전원이 들을 수 있음",
+      "covered_by": [
+        "recording"
+      ]
+    },
+    {
+      "id": "P3",
+      "kind": "step",
+      "name": "캡슐 저장 결과",
+      "quote": "“비 오는 밤의 캡슐을 묻었어요” 음성 확인",
+      "covered_by": [
+        "buried"
+      ]
+    },
+    {
+      "id": "P4",
+      "kind": "step",
+      "name": "도착 녹음 제안",
+      "quote": "P단 + 문 열림, 처음 온 장소일 때만 “도착 한마디 남길까요?”",
+      "covered_by": [
+        "arrival"
+      ]
+    },
+    {
+      "id": "P5",
+      "kind": "step",
+      "name": "출발 전 캡슐 예고",
+      "quote": "출발 때 “오늘 길에 캡슐이 묻혀 있어요” 예고",
+      "covered_by": [
+        "route-detail",
+        "car-nearby"
+      ]
+    },
+    {
+      "id": "P6",
+      "kind": "step",
+      "name": "현장 캡슐 재생",
+      "quote": "300m 안에서 내레이션, “들려줘”에 원본 재생",
+      "covered_by": [
+        "nearby",
+        "player"
+      ]
+    },
+    {
+      "id": "P7",
+      "kind": "step",
+      "name": "재생 안전 중단",
+      "quote": "안전 경고·방향지시등에 일시정지",
+      "covered_by": [
+        "car-paused"
+      ]
+    },
+    {
+      "id": "P8",
+      "kind": "step",
+      "name": "편지 수신자와 날짜",
+      "quote": "받는 사람과 열리는 날짜를 지정",
+      "covered_by": [
+        "seal"
+      ]
+    },
+    {
+      "id": "P9",
+      "kind": "step",
+      "name": "추억 경로 설정",
+      "quote": "예전 캡슐 장소를 경유지로 넣은 경로를 내비에 설정",
+      "covered_by": [
+        "route-create",
+        "route-detail",
+        "route-sent"
+      ]
+    },
+    {
+      "id": "P10",
+      "kind": "step",
+      "name": "여행 앨범 생성 결과",
+      "quote": "시동 종료 + 미러 접힘에 “캡슐 3개를 앨범으로 묶었어요”",
+      "covered_by": [
+        "album-created"
+      ]
+    },
+    {
+      "id": "P11",
+      "kind": "step",
+      "name": "여행 앨범 공유",
+      "quote": "가족 계정 저장, 폰으로 링크 공유",
+      "covered_by": [
+        "album-share"
+      ]
+    },
+    {
+      "id": "P12",
+      "kind": "step",
+      "name": "캡슐 기기 이전",
+      "quote": "캡슐은 언제든 삭제할 수 있고, 차를 팔 때는 기기에서 모두 지우고 계정으로만 옮깁니다.",
+      "covered_by": [
+        "transfer",
+        "transfer-done"
+      ]
+    },
+    {
+      "id": "R1",
+      "kind": "rule",
+      "name": "녹음 길이 제한",
+      "quote": "지금 이 순간의 목소리를 최대 30초 녹음",
+      "screen_hint": "recording",
+      "state_hint": "policy",
+      "policy": [
+        "recording"
+      ],
+      "covered_by": [
+        "recording"
+      ]
+    },
+    {
+      "id": "R2",
+      "kind": "rule",
+      "name": "현장 접근과 재생 연기",
+      "quote": "접근 안내 후 내레이션과 원본 목소리 재생. “다음에”로 미룰 수 있음",
+      "screen_hint": "capsule-nearby",
+      "state_hint": "policy",
+      "policy": [
+        "nearby"
+      ],
+      "covered_by": [
+        "nearby"
+      ]
+    },
+    {
+      "id": "R3",
+      "kind": "rule",
+      "name": "편지 개봉 날짜",
+      "quote": "특정 사람에게, 특정 날 이후에만 열리는 캡슐",
+      "screen_hint": "letter",
+      "state_hint": "error",
+      "policy": [
+        "date-locked"
+      ],
+      "covered_by": [
+        "date-locked"
+      ]
+    },
+    {
+      "id": "R4",
+      "kind": "rule",
+      "name": "주행 화면 제한",
+      "quote": "주행 중에는 음성과 핸들 버튼만 씁니다. 화면 UI는 정차를 확인한 뒤에만 열립니다.",
+      "screen_hint": "driving",
+      "state_hint": "policy",
+      "policy": [
+        "car-capture"
+      ],
+      "covered_by": [
+        "car-capture"
+      ]
+    },
+    {
+      "id": "R5",
+      "kind": "rule",
+      "name": "위험 상태 중단",
+      "quote": "안전 경고, 급제동, 방향지시등 신호가 오면 재생과 녹음을 즉시 멈춥니다.",
+      "screen_hint": "playback",
+      "state_hint": "policy",
+      "policy": [
+        "car-paused"
+      ],
+      "covered_by": [
+        "car-paused"
+      ]
+    },
+    {
+      "id": "R6",
+      "kind": "rule",
+      "name": "내비 오디오 우선",
+      "quote": "내비 음성 안내가 나오는 동안에는 캡슐을 열지 않습니다.",
+      "screen_hint": "playback",
+      "state_hint": "policy",
+      "policy": [
+        "car-paused"
+      ],
+      "covered_by": [
+        "car-paused"
+      ]
+    },
+    {
+      "id": "R7",
+      "kind": "rule",
+      "name": "도착 제안 빈도",
+      "quote": "대답이 없으면 넘어감. 하루 최대 2번",
+      "screen_hint": "arrival",
+      "state_hint": "policy",
+      "policy": [
+        "arrival"
+      ],
+      "covered_by": [
+        "arrival"
+      ]
+    },
+    {
+      "id": "R8",
+      "kind": "rule",
+      "name": "명시적 녹음",
+      "quote": "녹음은 명시적인 명령이나 버튼으로만 시작합니다. 항상 듣고 있는 방식은 쓰지 않습니다.",
+      "screen_hint": "recording",
+      "state_hint": "confirm",
+      "policy": [
+        "capture"
+      ],
+      "covered_by": [
+        "capture"
+      ]
+    },
+    {
+      "id": "R9",
+      "kind": "rule",
+      "name": "선택적 계정 동기화",
+      "quote": "기본은 차량 기기 저장. 가족 계정 동기화와 공유는 사용자가 켜야 동작합니다.",
+      "screen_hint": "sync",
+      "state_hint": "confirm",
+      "policy": [
+        "sync"
+      ],
+      "covered_by": [
+        "sync"
+      ]
+    },
+    {
+      "id": "R10",
+      "kind": "rule",
+      "name": "삭제와 차량 이전",
+      "quote": "캡슐은 언제든 삭제할 수 있고, 차를 팔 때는 기기에서 모두 지우고 계정으로만 옮깁니다.",
+      "screen_hint": "transfer",
+      "state_hint": "confirm",
+      "policy": [
+        "transfer"
+      ],
+      "covered_by": [
+        "transfer"
+      ]
+    },
+    {
+      "id": "R11",
+      "kind": "rule",
+      "name": "현장 재생 유지",
+      "quote": "통합 시 기존 상호 팔로우 및 해당 장소 안에서만 음성을 재생하는 조건을 유지한다.",
+      "screen_hint": "capsule-locked",
+      "state_hint": "policy",
+      "policy": [
+        "locked"
+      ],
+      "covered_by": [
+        "locked"
+      ]
+    },
+    {
+      "id": "R12",
+      "kind": "rule",
+      "name": "원격 재생 우회 금지",
+      "quote": "모바일 가족 아카이브·여행 앨범·공유 화면에서 원격 음성 재생으로 우회하지 않는다.",
+      "screen_hint": "album",
+      "state_hint": "policy",
+      "policy": [
+        "album"
+      ],
+      "covered_by": [
+        "album"
+      ]
+    },
+    {
+      "id": "RX1",
+      "kind": "rule",
+      "name": "지우면 음성을 다시 복구할 수 없어요",
+      "quote": "캡슐은 언제든 삭제할 수 있고",
+      "target": "capsule-edit",
+      "state": "confirm",
+      "covered_by": [
+        "capsule-edit--confirm"
+      ]
+    },
+    {
+      "id": "RX2",
+      "kind": "rule",
+      "name": "차량에서 지우기 전 계정 보관을 확인하세요",
+      "quote": "차를 팔 때는 기기에서 모두 지우고 계정으로만 옮깁니다.",
+      "target": "transfer",
+      "state": "confirm",
+      "covered_by": [
+        "transfer--confirm"
+      ]
+    },
+    {
+      "id": "RX3",
+      "kind": "rule",
+      "name": "위치를 확인하지 못해 재생할 수 없어요",
+      "quote": "핵심 데이터",
+      "target": "nearby",
+      "state": "error",
+      "covered_by": [
+        "nearby--error"
+      ]
+    },
+    {
+      "id": "RX4",
+      "kind": "rule",
+      "name": "그 장소에서 벗어나 재생을 멈췄어요",
+      "quote": "그 길에 묻어둔 목소리가",
+      "target": "player",
+      "state": "error",
+      "covered_by": [
+        "player--error"
+      ]
+    }
+  ],
+  "objects": [
+    {
+      "id": "O1",
+      "name": "음성 캡슐",
+      "quote": "지금 이 순간의 목소리를 최대 30초 녹음",
+      "create": [
+        "capture"
+      ],
+      "view": [
+        "locked"
+      ],
+      "edit": [
+        "capsule-edit"
+      ],
+      "after": [
+        "buried"
+      ]
+    },
+    {
+      "id": "O2",
+      "name": "편지 캡슐",
+      "quote": "받는 사람과 열리는 날짜를 지정",
+      "create": [
+        "seal"
+      ],
+      "view": [
+        "date-locked"
+      ],
+      "edit": [
+        "capsule-edit"
+      ],
+      "after": [
+        "buried"
+      ]
+    },
+    {
+      "id": "O3",
+      "name": "추억 경로",
+      "quote": "예전 캡슐 장소를 경유지로 넣은 경로를 내비에 설정",
+      "create": [
+        "route-create"
+      ],
+      "view": [
+        "route-detail"
+      ],
+      "edit": [
+        "route-edit"
+      ],
+      "after": [
+        "route-sent"
+      ]
+    },
+    {
+      "id": "O4",
+      "name": "여행 앨범",
+      "quote": "하루 캡슐을 묶어 오디오 여행일지로",
+      "create": [
+        "album-created"
+      ],
+      "view": [
+        "album"
+      ],
+      "edit": [
+        "album-edit"
+      ],
+      "after": [
+        "album-saved"
+      ]
+    },
+    {
+      "id": "O5",
+      "name": "가족 계정 동기화",
+      "quote": "기본은 차량 기기 저장. 가족 계정 동기화와 공유는 사용자가 켜야 동작합니다.",
+      "create": [
+        "sync"
+      ],
+      "view": [
+        "family"
+      ],
+      "edit": [
+        "privacy"
+      ],
+      "after": [
+        "sync-done"
+      ]
+    },
+    {
+      "id": "O6",
+      "name": "캡슐 이전",
+      "quote": "차를 바꾸거나 자녀에게 넘길 때 캡슐 전체 이전",
+      "create": [
+        "transfer"
+      ],
+      "view": [
+        "devices"
+      ],
+      "edit": [
+        "transfer"
+      ],
+      "after": [
+        "transfer-done"
+      ]
+    },
+    {
+      "id": "O7",
+      "name": "가족 아카이브 구독",
+      "quote": "클라우드 보관 확대, 가족 공유, 앨범 영상 내보내기",
+      "create": [
+        "archive-plan"
+      ],
+      "view": [
+        "archive-plan"
+      ],
+      "edit": [
+        "plan-manage"
+      ],
+      "after": [
+        "plan-done"
+      ]
+    }
+  ]
+}

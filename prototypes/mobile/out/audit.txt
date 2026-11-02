@@ -1,0 +1,65 @@
+
+[완결성]
+  ✅ screen_count: 61 (기준 >=10)
+  ✅ prd_coverage: 28/28 (기준 100%)
+  ✅ reachability: 61/61 (기준 100%)
+  ✅ dead_links: 0 (기준 0)
+  ✅ placeholders: 0 (기준 0)
+
+[상태]
+  ✅ state_missing: 0 (기준 0)
+  ✅ state_excess: 0 (기준 0)
+  ✅ state_cap: 0 (기준 0 (화면당 ≤3))
+
+[일관성]
+  ✅ chromatic_colors: 4 (기준 <=6)
+  ✅ off_token_colors: 0 (기준 0)
+  ❌ gray_steps: 7 (기준 <=6)  — rgb(32, 32, 32)a0.45 rgb(32, 32, 32) rgb(80, 80, 80) rgb(108, 108, 108) rgb(192, 192, 192) rgb(240, 240, 240) rgb(256, 256, 256)
+  ✅ font_sizes: 5 (기준 <=7)
+  ✅ font_weights: 3 (기준 <=3)
+  ✅ font_families: 1 (기준 <=2)
+  ✅ spacing_4x: 100.0% (기준 >=95%)
+  ✅ radius_kinds: 4 (기준 <=4)
+  ✅ shadow_kinds: 2 (기준 <=3)
+
+[가독성]
+  ✅ contrast_aa: 0 (기준 0)
+  ✅ min_font: 12px (기준 >=12px)
+  ❌ large_text_body_font: 56.5% (기준 >=90%)
+  ✅ touch_target: 100.0% (기준 100%)
+  ✅ h_overflow: 0 (기준 0)
+  ✅ word_split: 0 (기준 0)
+  ✅ box_overflow: 0 (기준 0)
+  ✅ last_line_orphan: 0 (기준 (보고만))
+  ✅ row_squeeze: 0 (기준 0)
+  ✅ x_inset_kinds: 0 (기준 0)
+
+[위계]
+  ✅ badge_semantic: 0 (기준 <=2 뜻/색)
+  ✅ primary_cta: 0 (기준 0화면 (화면당 ≤1))
+  ✅ h1_count: 0 (기준 0화면 (화면당 =1))
+  ✅ cta_on_tab_root: 0 (기준 0화면)
+  ✅ cta_label_verb: 0 (기준 0)
+  ❌ archetype_anchor: 1 (기준 0화면)  — map[지도+목록]: block(56933) > 주인공(48952)
+  ✅ help_icons: 0 (기준 0)
+  ✅ passive_role_words: 0 (기준 0)
+  ✅ accent_outside: 0 (기준 0 (강조색은 .accent-text·.accent-dot만))
+  ✅ dark_text_on_filled_button: 0 (기준 0)
+
+[슬롭]
+  ✅ emoji: 0 (기준 0)
+  ✅ gradients: 0 (기준 0)
+  ✅ text_gradient: 0 (기준 0)
+  ✅ card_nesting: 0 (기준 0)
+  ✅ radius_ratio: 81.8% (기준 (보고만))
+
+[캔버스]
+  ✅ canvas_scale: 0.72 (기준 >=0.7)
+  ✅ canvas_control_groups: 3 (기준 <=3 (탭·팔레트·보기))
+  ✅ canvas_modes: 0 (기준 0)
+  ✅ canvas_external_libs: 0 (기준 0)
+  ✅ canvas_arrows: 8 (기준 <= 갈래 8 + 흐름 8)
+  ✅ canvas_policy_lines: 0 (기준 0 (3줄 초과는 접기))
+  ✅ canvas_interaction: 15/15 (기준 전부 통과)
+
+PASS 46/49

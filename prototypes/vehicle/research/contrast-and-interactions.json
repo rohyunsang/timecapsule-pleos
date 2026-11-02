@@ -1,0 +1,22 @@
+{
+  "night": {
+    "text/bg": 16.52,
+    "muted/bg": 10.81,
+    "muted/panel": 9.21,
+    "text/raised": 11.49,
+    "ink/accent": 10.48,
+    "accent/bg": 11.09,
+    "line/raised": 3.26
+  },
+  "day": {
+    "text/bg": 13.96,
+    "muted/bg": 6.25,
+    "muted/panel": 6.87,
+    "text/raised": 12.35,
+    "ink/accent": 6.22,
+    "accent/bg": 5.79,
+    "line/raised": 3.01
+  },
+  "no_auto_resume": true,
+  "active_section": "캡슐"
+}

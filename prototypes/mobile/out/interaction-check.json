@@ -1,0 +1,35 @@
+[
+  {
+    "check": "최종 지도 가로 넘침 없음",
+    "pass": true
+  },
+  {
+    "check": "최종 지도 렌더 측정",
+    "archetype": null,
+    "data": {}
+  },
+  {
+    "check": "숲 캡슐 개별 상세",
+    "pass": true
+  },
+  {
+    "check": "미리듣기 시안 버튼 상태 변경",
+    "pass": true
+  },
+  {
+    "check": "캡슐 이름 검색",
+    "pass": true
+  },
+  {
+    "check": "locked 재생 토글 없음",
+    "pass": true
+  },
+  {
+    "check": "date-locked 재생 토글 없음",
+    "pass": true
+  },
+  {
+    "check": "player--error 재생 토글 없음",
+    "pass": true
+  }
+]
