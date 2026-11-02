@@ -68,7 +68,7 @@ class TimeCapsuleApp : Application() {
     override fun onCreate() {
         super.onCreate()
         db = Room.databaseBuilder(this, AppDatabase::class.java, "timecapsule.db")
-            .addMigrations(app.timecapsule.data.Migrations.FROM_1, app.timecapsule.data.Migrations.FROM_2)
+            .addMigrations(app.timecapsule.data.Migrations.FROM_1, app.timecapsule.data.Migrations.FROM_2, app.timecapsule.data.Migrations.FROM_3)
             .build()
         settings = Settings(this)
         repo = CapsuleRepository(db)
@@ -125,7 +125,7 @@ class TimeCapsuleApp : Application() {
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(a: android.app.Activity) { started++; visible.value = true }
-            override fun onActivityStopped(a: android.app.Activity) { started--; visible.value = started > 0 }
+            override fun onActivityStopped(a: android.app.Activity) { started--; visible.value = started > 0; if (!visible.value && !drive.prepared.value) drive.stopPlayback() }
             override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {}
             override fun onActivityResumed(a: android.app.Activity) {}
             override fun onActivityPaused(a: android.app.Activity) {}

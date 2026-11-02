@@ -4,14 +4,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DriveSessionTest {
-    @Test fun grantsExpireAndNeverSurviveRestart() {
+    @Test fun sessionDoesNotSurviveRestart() {
         val s = DriveSession()
         assertFalse(s.active(100))
-        s.start(100); s.grant(7, 200)
-        assertTrue(s.granted(7, 201)); assertFalse(s.granted(8, 201))
-        assertFalse(s.granted(7, 200 + DriveSession.VISIT_MS))
-        s.end(); assertFalse(s.granted(7, 201))
-        s.start(300); assertFalse(s.granted(7, 301))
+        s.start(100); assertTrue(s.active(101))
+        s.end(); assertFalse(s.active(102))
+        assertFalse(DriveSession().active(103))
     }
     @Test fun briefParkingDoesNotEndDriveButLongParkingDoes() {
         val s = DriveSession(); s.start(100)

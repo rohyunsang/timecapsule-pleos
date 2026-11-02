@@ -43,6 +43,7 @@ class Player(context: Context) {
     private var narration: String = ""
     private var audioPath: String = ""
     private var onFinished: () -> Unit = {}
+    private var onStarted: () -> Unit = {}
     private var focus: AudioFocusRequest? = null
 
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
@@ -63,11 +64,12 @@ class Player(context: Context) {
     }
 
     /** Starts from the beginning: narration, then the recording at [path]. */
-    fun play(narrationText: String, path: String, done: () -> Unit) {
+    fun play(narrationText: String, path: String, onStarted: () -> Unit = {}, done: () -> Unit) {
         stopInternal()
         narration = narrationText
         audioPath = path
         onFinished = done
+        this.onStarted = onStarted
         if (!requestFocus()) { finished(); return }
         startNarration()
     }
@@ -89,7 +91,7 @@ class Player(context: Context) {
         }
     }
 
-    fun restart() = play(narration, audioPath, onFinished)
+    fun restart() = play(narration, audioPath, done = onFinished)
 
     fun stop() {
         stopInternal()
@@ -132,6 +134,7 @@ class Player(context: Context) {
             return
         }
         phase = Phase.VOICE
+        val started = onStarted; onStarted = {}; started()
     }
 
     private fun finished() {
