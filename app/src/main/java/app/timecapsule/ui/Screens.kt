@@ -63,6 +63,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.timecapsule.TimeCapsuleApp
 import app.timecapsule.capsule.RouteForecast
+import app.timecapsule.capsule.Rules
 import app.timecapsule.capsule.isLocked
 import app.timecapsule.data.Capsule
 import app.timecapsule.data.Trip
@@ -601,6 +602,17 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                 radio("FRIENDS", "친구 모두에게", "녹음할 때 연결된 친구에게만 공유해요. 새 개봉에는 인터넷이 필요해요")
             }
             Spacer(Modifier.height(8.dp))
+            Section("녹음")
+            Panel {
+                val maxSec by app.settings.maxRecordSec.collectAsState()
+                val silence by app.settings.silenceSec.collectAsState()
+                ListRow("최대 길이", "이 길이가 되면 저절로 묻혀요")
+                ChoiceRow(Rules.RECORD_LENGTHS, maxSec, { lengthLabel(it).removePrefix("최대 ") }, app.settings::setMaxRecordSec)
+                RowDivider()
+                ListRow("말이 없으면 저절로 묻기", "정한 시간 동안 조용하면 그때까지의 녹음을 묻어요. 아무 말도 없었으면 저장하지 않아요")
+                ChoiceRow(Rules.SILENCE_CHOICES, silence, { if (it == 0) "끄기" else "${it}초" }, app.settings::setSilenceSec)
+            }
+            Spacer(Modifier.height(8.dp))
             Section("개인정보")
             Panel {
                 ListRow("녹음은 직접 누를 때만", "마이크는 버튼을 눌렀을 때와, 캡슐 알림에 말로 답할 때(몇 초)만 켜져요") { ValueText("항상") }
@@ -649,6 +661,19 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
             onConfirm = { confirm = false; app.wipeCar() },
             onDismiss = { confirm = false },
         )
+    }
+}
+
+/** One row of choices; the picked one is filled. */
+@Composable
+private fun <T> ChoiceRow(choices: List<T>, picked: T, label: (T) -> String, onPick: (T) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = Tc.Inset, end = Tc.Inset, bottom = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        choices.forEach { c ->
+            Btn(label(c), Modifier.weight(1f), style = if (c == picked) BtnStyle.Filled else BtnStyle.Basic, height = 64.dp) { onPick(c) }
+        }
     }
 }
 

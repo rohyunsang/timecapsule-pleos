@@ -28,6 +28,7 @@ import app.timecapsule.tag.MoodTagEngine
 import app.timecapsule.ui.CollectedMapScreen
 import app.timecapsule.ui.AlbumScreen
 import app.timecapsule.ui.AlertCard
+import app.timecapsule.drive.Gleo
 import app.timecapsule.ui.DevPanel
 import app.timecapsule.ui.HomeScreen
 import app.timecapsule.ui.LetterScreen
@@ -59,6 +60,7 @@ class MainActivity : ComponentActivity() {
         }.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (wanted.isNotEmpty()) askPerms.launch(wanted.toTypedArray())
         handleFriendLink(intent)
+        handleGleo(intent)
         setContent {
             // Day/night follows the car (AAOS night mode); the dev panel can pin one for demos.
             val pinned by app.nightOverride.collectAsState()
@@ -71,6 +73,21 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         handleFriendLink(intent)
+        handleGleo(intent)
+    }
+
+    /** Gleo AI: "타임캡슐 녹음해 줘" opens this screen with START_CAPSULE_RECORDING. */
+    private fun handleGleo(intent: android.content.Intent?) {
+        if (intent?.action != Gleo.START) return
+        intent.action = null
+        app.openScreen.value = Screen.HOME
+        app.scope.launch {
+            val ok = app.drive.recordByVoice()
+            Gleo.reply(
+                this@MainActivity, Gleo.START, ok,
+                if (ok) "Recording a voice capsule." else "Recording could not start now.",
+            )
+        }
     }
 
     /** A friend QR code opened on this car (timecapsule://friend?code=...). */
@@ -141,6 +158,8 @@ private fun Root(app: TimeCapsuleApp) {
             s == DriveState.Recording ->
                 RecordingScreen(
                     recordingSince,
+                    maxSec = app.settings.maxRecordSec.collectAsState().value,
+                    silenceSec = app.settings.silenceSec.collectAsState().value,
                     car.placeName,
                     MoodTagEngine.tagsFor(car).filter { it.label != car.placeName },
                     level = drive::micLevel,

@@ -25,11 +25,13 @@ class Beeper {
 
 data class Recording(val file: File, val durationSec: Int)
 
-/** F-01: AAC recording into app-private storage, capped at 30 s. */
+/** F-01: AAC recording into app-private storage, capped at the length chosen in settings. */
 class Recorder(private val context: Context, private val beeper: Beeper) {
     private var recorder: MediaRecorder? = null
     private var file: File? = null
     private var startedAt = 0L
+    private var maxSec = Rules.MAX_RECORD_SEC
+    private var lastLevel = 0f
     private val audio = context.getSystemService(AudioManager::class.java)
     private var focus: android.media.AudioFocusRequest? = null
     var onInterrupted: () -> Unit = {}
@@ -43,11 +45,14 @@ class Recorder(private val context: Context, private val beeper: Beeper) {
     fun level(): Float {
         val amp = runCatching { recorder?.maxAmplitude ?: 0 }.getOrDefault(0)
         // Speech peaks sit around 2k-20k; a square root makes quiet talk still visible.
-        return kotlin.math.sqrt((amp / 20_000f).coerceIn(0f, 1f))
+        return kotlin.math.sqrt((amp / 20_000f).coerceIn(0f, 1f)).also { lastLevel = it }
     }
 
-    /** Starts recording; [onLimit] fires on the main thread when 30 s is reached. */
-    fun start(onLimit: () -> Unit): Boolean {
+    /** The last value [level] read, for a second reader (the screen) that must not reset the peak. */
+    fun lastLevel(): Float = if (recorder == null) 0f else lastLevel
+
+    /** Starts recording; [onLimit] fires on the main thread when [limitSec] is reached. */
+    fun start(limitSec: Int, onLimit: () -> Unit): Boolean {
         if (recorder != null) return true
         val request = android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
             .setAudioAttributes(android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA)
@@ -66,8 +71,11 @@ class Recorder(private val context: Context, private val beeper: Beeper) {
             r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
             r.setAudioSamplingRate(44_100)
-            r.setAudioEncodingBitRate(64_000) // voice; keeps a 30 s clip ~240 KB for upload
-            r.setMaxDuration(Rules.MAX_RECORD_SEC * 1000)
+            maxSec = limitSec.coerceIn(Rules.MIN_RECORD_SEC, Rules.MAX_RECORD_SEC)
+            // Voice. 64 kbps up to a minute (~480 KB); 32 kbps beyond, so 3 min is ~720 KB,
+            // under the 1 MB a shared capsule may take on the server.
+            r.setAudioEncodingBitRate(if (maxSec <= 60) 64_000 else 32_000)
+            r.setMaxDuration(maxSec * 1000)
             r.setOutputFile(out.absolutePath)
             r.setOnInfoListener { _, what, _ ->
                 if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) onLimit()
@@ -92,7 +100,7 @@ class Recorder(private val context: Context, private val beeper: Beeper) {
     fun stop(): Recording? {
         val r = recorder ?: return null
         val out = file
-        val sec = ((SystemClock.elapsedRealtime() - startedAt) / 1000).toInt().coerceAtMost(Rules.MAX_RECORD_SEC)
+        val sec = ((SystemClock.elapsedRealtime() - startedAt) / 1000).toInt().coerceAtMost(maxSec)
         recorder = null
         file = null
         val ok = runCatching { r.stop() }.isSuccess

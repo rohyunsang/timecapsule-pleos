@@ -11,7 +11,14 @@ object Rules {
     const val CAPSULE_RADIUS_M = 300.0
     const val APPROACH_ALERT_M = 1_200.0
     const val MIN_RECORD_SEC = 3
-    const val MAX_RECORD_SEC = 30
+    /** Longest choice. Bit rate drops for long clips so 3 minutes stays well under 1 MB for upload. */
+    const val MAX_RECORD_SEC = 180
+    /** Length choices in settings, and the default. */
+    val RECORD_LENGTHS = listOf(30, 60, 120, 180)
+    const val DEFAULT_RECORD_SEC = 60
+    /** "Saves itself after N seconds of quiet" choices; 0 = off. */
+    val SILENCE_CHOICES = listOf(0, 5, 7, 10)
+    const val DEFAULT_SILENCE_SEC = 7
     const val ARRIVAL_PROMPTS_PER_DAY = 2
     const val ALERT_TIMEOUT_MS = 10_000L
 }
