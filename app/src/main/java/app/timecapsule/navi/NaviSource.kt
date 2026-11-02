@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-data class NaviPosition(val point: GeoPoint, val address: String?)
+data class NaviPosition(val point: GeoPoint, val address: String?, val receivedAt: Long = 0L)
 
 data class NamedPoint(val name: String, val point: GeoPoint)
 

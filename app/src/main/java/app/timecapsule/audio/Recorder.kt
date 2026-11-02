@@ -30,6 +30,12 @@ class Recorder(private val context: Context, private val beeper: Beeper) {
     private var recorder: MediaRecorder? = null
     private var file: File? = null
     private var startedAt = 0L
+    private val audio = context.getSystemService(AudioManager::class.java)
+    private var focus: android.media.AudioFocusRequest? = null
+    var onInterrupted: () -> Unit = {}
+    private fun abandonFocus() {
+        focus?.let { audio.abandonAudioFocusRequest(it) }; focus = null
+    }
 
     val isRecording get() = recorder != null
 
@@ -43,6 +49,15 @@ class Recorder(private val context: Context, private val beeper: Beeper) {
     /** Starts recording; [onLimit] fires on the main thread when 30 s is reached. */
     fun start(onLimit: () -> Unit): Boolean {
         if (recorder != null) return true
+        val request = android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            .setAudioAttributes(android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
+            .setWillPauseWhenDucked(true)
+            .setOnAudioFocusChangeListener({ change ->
+                if (change != AudioManager.AUDIOFOCUS_GAIN && isRecording) onInterrupted()
+            }, android.os.Handler(android.os.Looper.getMainLooper())).build()
+        if (audio.requestAudioFocus(request) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) return false
+        focus = request
         val dir = File(context.filesDir, "capsules").apply { mkdirs() }
         val out = File(dir, "capsule_${System.currentTimeMillis()}.m4a")
         val r = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else @Suppress("DEPRECATION") MediaRecorder()
@@ -68,6 +83,7 @@ class Recorder(private val context: Context, private val beeper: Beeper) {
             Log.w(TAG, "cannot record", e)
             r.release()
             out.delete()
+            abandonFocus()
             false
         }
     }
@@ -81,6 +97,7 @@ class Recorder(private val context: Context, private val beeper: Beeper) {
         file = null
         val ok = runCatching { r.stop() }.isSuccess
         r.release()
+        abandonFocus()
         beeper.recordEnd()
         if (!ok || out == null || sec < Rules.MIN_RECORD_SEC) {
             out?.delete()
@@ -90,6 +107,7 @@ class Recorder(private val context: Context, private val beeper: Beeper) {
     }
 
     fun cancel() {
+        abandonFocus()
         recorder?.let { runCatching { it.stop() }; it.release() }
         file?.delete()
         recorder = null

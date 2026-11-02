@@ -27,6 +27,7 @@ sealed interface DriveEvent {
 
 sealed interface Effect {
     data object StartRecording : Effect
+    data object SaveDraft : Effect
     data object SaveRecording : Effect
     data class ShowApproachAlert(val capsuleId: Long) : Effect
     data object HideApproachAlert : Effect
@@ -58,8 +59,8 @@ object DriveStateMachine {
 
         DriveState.Recording -> when (event) {
             // Safety signal ends the recording and keeps what was captured (spec F-01).
-            DriveEvent.RecordingEnded, DriveEvent.SafetySignalOn ->
-                Transition(DriveState.Idle, listOf(Effect.SaveRecording))
+            DriveEvent.RecordingEnded -> Transition(DriveState.Idle, listOf(Effect.SaveRecording))
+            DriveEvent.SafetySignalOn -> Transition(DriveState.Idle, listOf(Effect.SaveDraft))
             else -> Transition(state)
         }
 
@@ -81,8 +82,8 @@ object DriveStateMachine {
 
         is DriveState.Paused -> when (event) {
             DriveEvent.SafetySignalOff -> {
-                val delay = if (state.resumeTo is DriveState.Playing) RESUME_PLAYBACK_MS else RESUME_ALERT_MS
-                Transition(state, listOf(Effect.ResumeAfter(delay, state.resumeTo)))
+                if (state.resumeTo is DriveState.Playing) Transition(state)
+                else Transition(state, listOf(Effect.ResumeAfter(RESUME_ALERT_MS, state.resumeTo)))
             }
             // Stopping while paused ends playback; an alert left paused becomes "later".
             DriveEvent.PlaybackFinished -> when (val r = state.resumeTo) {

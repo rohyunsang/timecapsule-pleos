@@ -19,7 +19,7 @@ class DriveStateMachineTest {
     @Test fun safetySignalWhileRecordingStillSaves() {
         val t = reduce(DriveState.Recording, DriveEvent.SafetySignalOn)
         assertEquals(DriveState.Idle, t.state)
-        assertEquals(listOf(Effect.SaveRecording), t.effects)
+        assertEquals(listOf(Effect.SaveDraft), t.effects)
     }
 
     @Test fun approachPlayAndFinish() {
@@ -37,13 +37,14 @@ class DriveStateMachineTest {
         assertTrue(Effect.RepromptAtNextStop(3) in t.effects)
     }
 
-    @Test fun playbackPausesAndResumesAfterTwoSeconds() {
+    @Test fun playbackWaitsForExplicitResumeAfterSignalClears() {
         val paused = reduce(DriveState.Playing(5), DriveEvent.SafetySignalOn)
         assertEquals(DriveState.Paused(DriveState.Playing(5)), paused.state)
         assertEquals(listOf(Effect.PausePlayback), paused.effects)
 
         val off = reduce(paused.state, DriveEvent.SafetySignalOff)
-        assertEquals(listOf(Effect.ResumeAfter(2_000, DriveState.Playing(5))), off.effects)
+        assertTrue(off.effects.isEmpty())
+        assertEquals(paused.state, off.state)
 
         val resumed = DriveStateMachine.resume(DriveState.Playing(5))
         assertEquals(DriveState.Playing(5), resumed.state)

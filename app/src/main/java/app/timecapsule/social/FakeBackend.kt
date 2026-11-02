@@ -137,6 +137,9 @@ class FakeBackend(context: Context) : SocialBackend {
         refresh()
     }
 
+    override suspend fun canOpen(id: String): Boolean = app.timecapsule.BuildConfig.DEBUG &&
+        remote.value.any { it.id == id }
+
     override suspend fun audio(id: String): ByteArray? = audioById[id]
 
     override suspend fun signOut() = switchAccount(null)

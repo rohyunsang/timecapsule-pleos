@@ -87,7 +87,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** F-01: the steering-wheel voice button buries a capsule, a second press ends it. */
+    /** Explicit RECORD only. Ordinary media keys never start microphone recording. */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (keyCode in VOICE_KEYS && event.repeatCount == 0) {
             if (app.drive.state.value == DriveState.Recording) app.drive.stopRecording() else app.drive.bury()
@@ -97,7 +97,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
-        val VOICE_KEYS = setOf(KeyEvent.KEYCODE_VOICE_ASSIST, KeyEvent.KEYCODE_SEARCH, KeyEvent.KEYCODE_HEADSETHOOK)
+        val VOICE_KEYS = setOf(KeyEvent.KEYCODE_MEDIA_RECORD)
     }
 }
 
@@ -118,8 +118,9 @@ private fun Root(app: TimeCapsuleApp) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
     // Driving = the platform asks for distraction optimization (CarUxRestrictions, Pleos guide)
-    // or the gear is out of P. Unknown gear counts as parked so the app stays usable on a bench.
-    val restricted = (uxRestricted && !app.forceFake) || car.gearInPark == false
+    // Unknown or expired car state keeps management screens locked.
+    val editable by drive.editable.collectAsState()
+    val restricted = !editable
 
     // Spec 07: only screens 04-06 (and home) while driving.
     LaunchedEffect(restricted) { if (restricted) screen = Screen.HOME }

@@ -24,6 +24,8 @@ data class VehicleSnapshot(
     val carModel: String? = null,
     /** Weather at the car (weather.Sky name), from the weather service; not a car signal. */
     val sky: String? = null,
+    val gearAt: Long = 0L,
+    val turnSignalAt: Long = 0L,
 ) {
     /** Raw values for Capsule.rawVehicleState (spec F-02: keep raw data so tags can be recomputed). */
     fun toJson(): String {

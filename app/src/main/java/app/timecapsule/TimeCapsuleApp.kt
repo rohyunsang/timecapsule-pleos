@@ -68,28 +68,37 @@ class TimeCapsuleApp : Application() {
     override fun onCreate() {
         super.onCreate()
         db = Room.databaseBuilder(this, AppDatabase::class.java, "timecapsule.db")
-            // Prototype: no shipped data to migrate yet.
-            .fallbackToDestructiveMigration()
+            .addMigrations(app.timecapsule.data.Migrations.FROM_1, app.timecapsule.data.Migrations.FROM_2)
             .build()
         settings = Settings(this)
         repo = CapsuleRepository(db)
 
         // Dev: a "force_fake" file switches to fake car + navi even on a Pleos unit (for demos).
-        val forceFake = java.io.File(filesDir, FORCE_FAKE).exists()
+        val forceFake = BuildConfig.DEBUG && java.io.File(filesDir, FORCE_FAKE).exists()
         onPleos = !forceFake && isInstalled(PLEOS_CAR_SERVICE)
         vehicle = if (onPleos) {
             runCatching { PleosVehicleSource(this, scope).also { it.start() } }.getOrNull()
-                ?: fakeVehicle().also { onPleos = false }
-        } else fakeVehicle()
+                ?: FakeVehicleSource(VehicleSnapshot()).also { onPleos = false }
+        } else if (forceFake) fakeVehicle() else FakeVehicleSource(VehicleSnapshot())
         navi = if (!forceFake && isInstalled(PLEOS_NAVI_SERVICE)) {
             PleosNaviSource(this, scope).also { it.start() }
-        } else FakeNaviSource(NaviPosition(GeoPoint(37.7519, 128.8761), "강원특별자치도 강릉시 7번 국도"))
+        } else FakeNaviSource(if (forceFake) NaviPosition(GeoPoint(37.7519, 128.8761), "강원특별자치도 강릉시 7번 국도") else null)
 
         ux = UxRestrictions(this).also { it.start() }
 
         val beeper = Beeper()
         val sky = app.timecapsule.weather.SkySource(scope, navi.position).also { it.start() }
-        drive = DriveController(scope, vehicle, navi, repo, Recorder(this, beeper), Player(this), beeper, settings, sky = sky.sky, outsideTempC = sky.tempC)
+        drive = DriveController(scope, vehicle, navi, repo, Recorder(this, beeper), Player(this), beeper, settings,
+            restricted = { !forceFake && ux.restricted.value }, demo = { forceFake },
+            microphoneAllowed = { checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED },
+            requestPreparation = {
+                visible.value && runCatching {
+                    androidx.core.content.ContextCompat.startForegroundService(this,
+                        android.content.Intent(this, app.timecapsule.drive.DriveService::class.java).setAction(app.timecapsule.drive.DriveService.PREPARE))
+                }.isSuccess
+            },
+            releasePreparation = { stopService(android.content.Intent(this, app.timecapsule.drive.DriveService::class.java)) },
+            sky = sky.sky, outsideTempC = sky.tempC)
 
         val useFirebase = BuildConfig.FIREBASE_API_KEY.isNotBlank() && !java.io.File(filesDir, FAKE_SERVER).exists()
         social = if (useFirebase) {
@@ -105,6 +114,14 @@ class TimeCapsuleApp : Application() {
             navi.position.value?.let { it.point to drive.car.value.placeName }
         }.also { it.start() }
         drive.sharing = sync
+        drive.currentRecipients = { social.friends.value.map { it.uid } }
+        drive.authorizeShared = { c -> c.isMine || c.remoteId?.let { social.canOpen(it) } == true }
+        scope.launch {
+            var previous = social.me.value?.uid
+            social.me.collect { profile ->
+                if (profile?.uid != previous) { drive.endDrive(); previous = profile?.uid }
+            }
+        }
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(a: android.app.Activity) { started++; visible.value = true }
@@ -128,7 +145,7 @@ class TimeCapsuleApp : Application() {
         if (on) f.createNewFile() else f.delete()
     }
 
-    val forceFake get() = java.io.File(filesDir, FORCE_FAKE).exists()
+    val forceFake get() = BuildConfig.DEBUG && java.io.File(filesDir, FORCE_FAKE).exists()
 
     /** Dev panel: in-memory server instead of Firebase (no internet at a venue); next start. */
     var fakeServer: Boolean
@@ -141,14 +158,14 @@ class TimeCapsuleApp : Application() {
      * Capsules left for friends stay on the server (they belong to the friends now too).
      */
     fun wipeCar() {
-        drive.deleteEverything(this)
-        scope.launch { social.signOut() }
+        drive.endDrive()
+        scope.launch { drive.deleteEverything(this@TimeCapsuleApp).join(); social.signOut() }
     }
 
     /** Dev panel: play another person on this car. Local capsules go; the server keeps theirs. */
     fun switchAccount(p: app.timecapsule.social.Profile?) {
-        drive.deleteEverything(this)
-        scope.launch { social.switchAccount(p) }
+        drive.endDrive()
+        scope.launch { drive.deleteEverything(this@TimeCapsuleApp).join(); social.switchAccount(p) }
     }
 
     private fun fakeVehicle() = FakeVehicleSource(VehicleSnapshot(occupiedSeats = 1, outsideTempC = 18f, gearInPark = true))

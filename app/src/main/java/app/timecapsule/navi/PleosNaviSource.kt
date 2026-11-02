@@ -45,7 +45,7 @@ class PleosNaviSource(context: Context, private val scope: CoroutineScope) : Nav
 
     private val listener = object : NaviHelperEventListener {
         override fun onCurrentLocationInfo(info: CurrentLocationInfo) {
-            _position.value = NaviPosition(GeoPoint(info.latitude, info.longitude), info.address)
+            _position.value = NaviPosition(GeoPoint(info.latitude, info.longitude), info.address, android.os.SystemClock.elapsedRealtime())
         }
 
         override fun onRouteStarted(info: RouteStartInfo) {
@@ -95,11 +95,12 @@ class PleosNaviSource(context: Context, private val scope: CoroutineScope) : Nav
                     }
                 }
             },
-            { e -> Log.w(TAG, "NaviHelper unavailable: ${e.message}") },
+            { e -> _position.value = null; Log.w(TAG, "NaviHelper unavailable: ${e.message}") },
         )
     }
 
     fun stop() {
+        _position.value = null
         poll?.cancel()
         if (connected) runCatching { helper.removeListener(listener) }
         runCatching { helper.release() }

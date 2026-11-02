@@ -112,7 +112,7 @@ fun HomeScreen(
     val capsules by drive.capsules.collectAsState()
     val locks by drive.locks.collectAsState()
     val today = LocalDate.now()
-    val playable = capsules.filterNot { locks[it.id].isLocked(today) }.sortedByDescending { it.createdAt }
+    val playable = capsules.filterNot { it.draft || locks[it.id].isLocked(today) }.sortedByDescending { it.createdAt }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Tc.Bg)) {
         val portrait = widthClass(maxWidth) == WidthClass.Portrait
@@ -211,9 +211,17 @@ private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalD
     val reprompt by drive.reprompt.collectAsState()
     val arrival by drive.arrivalPrompt.collectAsState()
     val position by drive.position.collectAsState()
+    val prepared by drive.prepared.collectAsState()
+    var preparing by remember { mutableStateOf(false) }
+    if (preparing) ConfirmPopup("이번 주행을 준비할까요?",
+        "함께 탄 사람에게 녹음을 알리고 동의를 확인해 주세요. 준비만으로 녹음하지 않으며, 캡슐 알림에는 잠시 음성으로 답할 수 있어요.",
+        "동의 확인 · 준비", onConfirm = { preparing = false; drive.prepareDrive() }, onDismiss = { preparing = false })
     val again = reprompt
     val f = forecast
     when {
+        !prepared -> InlinePrompt("이번 주행 준비", "주차 중 권한과 동승자 동의를 확인해 주세요",
+            cta = "준비하기" to { if (!restricted) preparing = true }, ctaIcon = Icons.Rounded.Mic,
+            sub = "" to {})
         arrival -> InlinePrompt(
             "도착했어요. 한마디 남길까요?", "이곳엔 아직 캡슐이 없어요",
             cta = "남기기" to { drive.answerArrival(true) }, ctaIcon = Icons.Rounded.Mic,
@@ -430,7 +438,7 @@ fun AlbumScreen(drive: DriveController, back: () -> Unit) {
     var deleting by remember { mutableStateOf<Capsule?>(null) }
     var sharing by remember { mutableStateOf<Capsule?>(null) }
     // F-08: group by trip; capsules outside a trip are grouped by day.
-    val groups = capsules.groupBy { c -> c.tripId?.let { "trip:$it" } ?: "day:${c.date()}" }
+    val groups = capsules.filterNot { it.draft }.groupBy { c -> c.tripId?.let { "trip:$it" } ?: "day:${c.date()}" }
         .entries.sortedByDescending { e -> e.value.maxOf { it.createdAt } }
 
     Column(Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
@@ -443,6 +451,15 @@ fun AlbumScreen(drive: DriveController, back: () -> Unit) {
             Modifier.widthIn(max = 1100.dp).fillMaxWidth().align(Alignment.CenterHorizontally),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            capsules.filter { it.draft }.forEach { c ->
+                item(key = "draft:${c.id}") {
+                    ListRow("임시보관 · ${c.durationSec}초", if (c.locationUncertain) "장소 미확정 · 비공개 음성" else "중단된 녹음 · 주차 후 저장해 주세요",
+                        onClick = { drive.previewDraft(c) }) {
+                        if (!c.locationUncertain) Btn("저장", height = 56.dp) { drive.confirmDraft(c) }
+                        IconBtn(Icons.Rounded.DeleteOutline, "삭제", onClick = { deleting = c })
+                    }
+                }
+            }
             groups.forEach { (key, list) ->
                 val trip = if (key.startsWith("trip:")) tripById[key.removePrefix("trip:").toLong()] else null
                 item(key = key) {
@@ -463,7 +480,8 @@ fun AlbumScreen(drive: DriveController, back: () -> Unit) {
                             if (i > 0) RowDivider()
                             CapsuleRow(
                                 c, locks[c.id]?.openAfter?.takeIf { locks[c.id].isLocked(today) }, { drive.playCapsule(c.id) },
-                                onShare = { sharing = c }.takeIf { c.isMine && c.audience in setOf("SELF", "FRIENDS") },
+                                onShare = { sharing = c }.takeIf { c.isMine && !c.locationUncertain && c.audience in setOf("SELF", "FRIENDS") },
+                                reason = drive.openingReason(c),
                             ) { deleting = c }
                         }
                     }
@@ -475,8 +493,8 @@ fun AlbumScreen(drive: DriveController, back: () -> Unit) {
         val toFriends = c.audience == "SELF"
         ConfirmPopup(
             if (toFriends) "이 캡슐을 친구 모두에게 들려줄까요?" else "이 캡슐을 나만 들을까요?",
-            if (toFriends) "친구가 이 길을 지나면 내 목소리가 나와요. 언제든 다시 나만으로 바꿀 수 있어요."
-            else "서버와 친구 차에서 지워지고 이 차에만 남아요.",
+            if (toFriends) "지금 연결된 친구에게만 공유해요. 나중에 추가한 친구에게는 공개되지 않아요. 새 개봉에는 인터넷 연결이 필요해요."
+            else "공유 철회를 요청해요. 오프라인 차량의 사본은 다음 연결 때 정리되며, 이미 들은 음성은 회수할 수 없어요.",
             if (toFriends) "친구에게 공개" else "나만 듣기",
             onConfirm = { drive.setShared(c, toFriends); sharing = null },
             onDismiss = { sharing = null },
@@ -510,14 +528,14 @@ private fun ColumnScope.EmptyState(back: () -> Unit) {
 
 /** One capsule: the whole row plays it; delete is a separate, confirmed action. */
 @Composable
-private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onShare: (() -> Unit)? = null, onDelete: () -> Unit) {
+private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onShare: (() -> Unit)? = null, reason: String? = null, onDelete: () -> Unit) {
     val locked = lockedUntil != null
     val time = Instant.ofEpochMilli(c.createdAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("a h:mm"))
     val tags = app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).drop(1).joinToString(Sep)
     ListRow(
         title = "${c.placeName ?: "장소 기록 없음"}   ${c.durationSec}초",
         sub = if (locked) "${LocalDate.ofEpochDay(lockedUntil!!).format(dayFmt)}에 열리는 편지"
-        else listOf(whoOf(c), time, tags, if (c.locationUncertain) "위치 불확실" else "").filter { it.isNotEmpty() }.joinToString(Sep),
+        else listOf(whoOf(c), reason ?: "", time, tags, if (c.locationUncertain) "위치 불확실" else "").filter { it.isNotEmpty() }.joinToString(Sep),
         leading = if (locked) Icons.Rounded.Lock else Icons.Rounded.PlayArrow,
         leadingTint = if (locked) Tc.TextMute else Tc.Text,
         enabled = !locked,
@@ -566,6 +584,8 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
             Modifier.widthIn(max = 1100.dp).fillMaxWidth().align(Alignment.CenterHorizontally).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            val prepared by app.drive.prepared.collectAsState()
+            if (prepared) ListRow("이번 주행 종료", "기록 준비와 캡슐 알림을 종료해요", onClick = { app.drive.endDrive() })
             Section("목소리 남기기를 누르면")
             Panel {
                 val radio: @Composable (String, String, String) -> Unit = { value, label, sub ->
@@ -578,7 +598,7 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                 }
                 radio("SELF", "나만 (기본)", "이 차에만 남고 아무에게도 가지 않아요")
                 RowDivider()
-                radio("FRIENDS", "친구 모두에게", "친구가 그 길을 지나면 내 목소리가 나와요")
+                radio("FRIENDS", "친구 모두에게", "녹음할 때 연결된 친구에게만 공유해요. 새 개봉에는 인터넷이 필요해요")
             }
             Spacer(Modifier.height(8.dp))
             Section("개인정보")

@@ -55,6 +55,9 @@ class PleosVehicleSource(context: Context, private val scope: CoroutineScope) : 
     private var lowBeam = false
     private var highBeam = false
     private var brakePulse: Job? = null
+    private var poll: Job? = null
+    private var gearListener: GearSelectionListener? = null
+    private var turnListener: TurnSignalStateListener? = null
 
     override val snapshot: StateFlow<VehicleSnapshot> = _snapshot.asStateFlow()
     override val activeSafetySignals: StateFlow<Set<SafetySignal>> = _signals.asStateFlow()
@@ -71,10 +74,19 @@ class PleosVehicleSource(context: Context, private val scope: CoroutineScope) : 
         subscribeTurnSignal()
         subscribeSteering()
         subscribeBrake()
-        subscribeTelltales()
+        // Safety telltales require system-only PRIVATE_CAR_SAFETY; ordinary apps do not subscribe.
+        poll = scope.launch {
+            while (true) {
+                gearListener?.let { l -> runCatching { vehicle.getGear().getCurrentGearSelectionState({ l.onSelected(it) }, { l.onFailed(it) }) } }
+                turnListener?.let { l -> runCatching { vehicle.getTurnSignal().getCurrentTurnSignalState({ l.onTurnSignalStateUpdated(it) }, { l.onFailed(it) }) } }
+                delay(2_000)
+            }
+        }
     }
 
     fun stop() {
+        poll?.cancel()
+        _snapshot.value = VehicleSnapshot()
         unregister.forEach { runCatching(it) }
         unregister.clear()
         runCatching { vehicle.release() }
@@ -166,9 +178,10 @@ class PleosVehicleSource(context: Context, private val scope: CoroutineScope) : 
 
     private fun subscribeGear() {
         val l = object : GearSelectionListener {
-            override fun onSelected(gear: VehicleGear?) { _snapshot.update { it.copy(gearInPark = gear == VehicleGear.GEAR_PARK) } }
-            override fun onFailed(e: Exception) = failed("Gear")(e)
+            override fun onSelected(gear: VehicleGear?) { _snapshot.update { it.copy(gearInPark = gear?.let { it == VehicleGear.GEAR_PARK }, gearAt = android.os.SystemClock.elapsedRealtime()) } }
+            override fun onFailed(e: Exception) { _snapshot.update { it.copy(gearInPark = null, gearAt = 0) }; failed("Gear")(e) }
         }
+        gearListener = l
         sub("Gear", { vehicle.getGear().registerGearSelection(l) }) { vehicle.getGear().unregisterGearSelection(l) }
     }
 
@@ -199,10 +212,12 @@ class PleosVehicleSource(context: Context, private val scope: CoroutineScope) : 
     private fun subscribeTurnSignal() {
         val l = object : TurnSignalStateListener {
             override fun onTurnSignalStateUpdated(value: TurnSignalValue?) {
+                _snapshot.update { it.copy(turnSignalAt = if (value != null) android.os.SystemClock.elapsedRealtime() else 0) }
                 setSignal(SafetySignal.TURN_SIGNAL, value != null && value != TurnSignalValue.OFF)
             }
-            override fun onFailed(e: Exception) = failed("TurnSignal")(e)
+            override fun onFailed(e: Exception) { _snapshot.update { it.copy(turnSignalAt = 0) }; failed("TurnSignal")(e) }
         }
+        turnListener = l
         val ts = vehicle.getTurnSignal()
         sub("TurnSignal", { ts.registerTurnSignalState(l) }) { ts.unregisterTurnSignalState(l) }
     }
@@ -230,18 +245,6 @@ class PleosVehicleSource(context: Context, private val scope: CoroutineScope) : 
         }
         val brake = vehicle.getBrake()
         sub("Brake", { brake.registerBrakePedalStatus(l) }) { brake.unregisterBrakePedalStatus(l) }
-    }
-
-    private fun subscribeTelltales() {
-        val l = object : TelltaleInfoListener {
-            override fun onTelltaleInfoUpdated(info: Telltales?) {
-                val warning = info?.telltales.orEmpty().any { it.type in WARNING_TELLTALES && it.state != TelltaleState.OFF }
-                setSignal(SafetySignal.SAFETY_WARNING, warning)
-            }
-            override fun onFailed(e: Exception) = failed("Safety")(e)
-        }
-        val safety = vehicle.getSafety()
-        sub("Safety", { safety.registerTelltales(l) }) { safety.unregisterTelltales(l) }
     }
 
     private fun setSignal(signal: SafetySignal, on: Boolean) =

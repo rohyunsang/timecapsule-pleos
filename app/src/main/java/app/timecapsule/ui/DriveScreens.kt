@@ -244,8 +244,8 @@ fun PlayingScreen(
             if (safetyPaused != null) {
                 Panel(Modifier.padding(bottom = 16.dp)) {
                     ListRow(
-                        "${safetyPaused.joinToString(", ") { it.korean() }} 때문에 잠시 멈췄어요",
-                        "끝나면 2초 뒤 이어서 들려 드려요",
+                        if (safetyPaused.isEmpty()) "이어 듣기를 기다리고 있어요" else "${safetyPaused.joinToString(", ") { it.korean() }} 때문에 잠시 멈췄어요",
+                        "안내가 끝나면 재생 버튼으로 이어 들으세요",
                         leading = Icons.Rounded.PauseCircle,
                     )
                 }
@@ -253,8 +253,8 @@ fun PlayingScreen(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Btn("처음부터", Modifier.weight(1f), icon = Icons.Rounded.Replay, height = Tc.TouchLarge, onClick = onRestart)
                 Btn(
-                    if (userPaused) "이어 듣기" else "일시정지", Modifier.weight(1f),
-                    icon = if (userPaused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                    if (userPaused || safetyPaused != null) "이어 듣기" else "일시정지", Modifier.weight(1f),
+                    icon = if (userPaused || safetyPaused != null) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
                     style = BtnStyle.Filled, height = Tc.TouchLarge, onClick = onPause,
                 )
                 Btn("그만", Modifier.weight(1f), icon = Icons.Rounded.Stop, height = Tc.TouchLarge, onClick = onStop)

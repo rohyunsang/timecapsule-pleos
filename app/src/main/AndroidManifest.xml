@@ -35,6 +35,9 @@
         </intent>
     </queries>
 
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <application
         android:name=".TimeCapsuleApp"
         android:allowBackup="false"
@@ -66,6 +69,16 @@
                 <data android:scheme="timecapsule" android:host="friend" />
             </intent-filter>
         </activity>
+        <receiver android:name=".drive.RecordingCommandReceiver" android:exported="true"
+            android:permission="android.permission.MEDIA_CONTENT_CONTROL">
+            <intent-filter>
+                <action android:name="app.timecapsule.RECORD_START" />
+                <action android:name="app.timecapsule.RECORD_SAVE" />
+                <action android:name="app.timecapsule.RECORD_CANCEL" />
+            </intent-filter>
+        </receiver>
+        <service android:name=".drive.DriveService" android:exported="false"
+            android:foregroundServiceType="microphone|mediaPlayback" />
         <receiver android:name=".drive.AlertActionReceiver" android:exported="false" />
     </application>
 </manifest>

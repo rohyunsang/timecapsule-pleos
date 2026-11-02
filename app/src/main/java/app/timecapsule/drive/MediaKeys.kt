@@ -30,6 +30,11 @@ class MediaKeys(context: Context, private val scope: CoroutineScope, private val
     private fun open(): MediaSession = session ?: MediaSession(app, "TimeCapsule").also { s ->
         session = s
         s.setCallback(object : MediaSession.Callback() {
+            override fun onPlay() { handle(KeyEvent.KEYCODE_MEDIA_PLAY) }
+            override fun onPause() { handle(KeyEvent.KEYCODE_MEDIA_PAUSE) }
+            override fun onStop() { drive.stopPlayback() }
+            override fun onSkipToNext() { handle(KeyEvent.KEYCODE_MEDIA_NEXT) }
+            override fun onSkipToPrevious() { handle(KeyEvent.KEYCODE_MEDIA_PREVIOUS) }
             override fun onMediaButtonEvent(intent: Intent): Boolean {
                 @Suppress("DEPRECATION")
                 val key = intent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT) ?: return false
@@ -58,8 +63,8 @@ class MediaKeys(context: Context, private val scope: CoroutineScope, private val
             }
             s is DriveState.Playing || s is DriveState.Paused -> when (code) {
                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> drive.togglePause()
-                KeyEvent.KEYCODE_MEDIA_PAUSE -> if (!drive.userPaused.value) drive.togglePause()
-                KeyEvent.KEYCODE_MEDIA_PLAY -> if (drive.userPaused.value) drive.togglePause()
+                KeyEvent.KEYCODE_MEDIA_PAUSE -> if (s is DriveState.Playing && !drive.userPaused.value) drive.togglePause()
+                KeyEvent.KEYCODE_MEDIA_PLAY -> if (drive.userPaused.value || s is DriveState.Paused) drive.togglePause()
                 KeyEvent.KEYCODE_MEDIA_PREVIOUS -> drive.restart()
                 KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_STOP -> drive.stopPlayback()
                 else -> return false
@@ -89,7 +94,7 @@ class MediaKeys(context: Context, private val scope: CoroutineScope, private val
         val actions = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE or
             PlaybackState.ACTION_STOP or PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS
         // "Playing" while an alert is open too, so the media keys are routed to us right away.
-        val state = if (playing && paused) PlaybackState.STATE_PAUSED else PlaybackState.STATE_PLAYING
+        val state = if (playing && (paused || s is DriveState.Paused)) PlaybackState.STATE_PAUSED else PlaybackState.STATE_PLAYING
         session.setPlaybackState(PlaybackState.Builder().setActions(actions).setState(state, 0L, 1f).build())
         if (!session.isActive) session.isActive = true
     }

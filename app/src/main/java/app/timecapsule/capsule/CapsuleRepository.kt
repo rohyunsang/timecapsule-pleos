@@ -38,8 +38,9 @@ class CapsuleRepository(private val db: AppDatabase) {
         openOn: LocalDate?,
         audience: String = "SELF",
         recipients: List<String> = emptyList(),
+        draft: Boolean = false,
     ): Capsule {
-        val where = at ?: lastKnown
+        val where = at // Never attach the end position to an unlocated recording.
         val trip = dao.openTrip()
         val capsule = Capsule(
             createdAt = System.currentTimeMillis(),
@@ -56,7 +57,8 @@ class CapsuleRepository(private val db: AppDatabase) {
             odometerKm = snapshot.odometerKm,
             // Spec F-01: no fix at all -> keep the last one and flag it.
             locationUncertain = at == null,
-            audience = audience,
+            audience = if (draft || at == null) "SELF" else audience,
+            draft = draft || at == null,
             recipients = recipients.joinToString(","),
         )
         val id = dao.insert(capsule)
@@ -64,6 +66,9 @@ class CapsuleRepository(private val db: AppDatabase) {
         trip?.let { t -> snapshot.occupiedSeats?.let { dao.raiseOccupants(t.id, it) } }
         return capsule.copy(id = id)
     }
+
+    suspend fun confirmDraft(id: Long) = dao.confirmDraft(id)
+    suspend fun setSharing(id: Long, audience: String, recipients: List<String>) = dao.setSharing(id, audience, recipients.joinToString(","))
 
     suspend fun byRemoteId(remoteId: String) = dao.byRemoteId(remoteId)
     suspend fun all() = dao.all()

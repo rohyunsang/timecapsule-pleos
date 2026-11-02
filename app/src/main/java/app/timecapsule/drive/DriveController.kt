@@ -3,6 +3,7 @@ package app.timecapsule.drive
 import android.content.Context
 import android.os.SystemClock
 import app.timecapsule.Settings
+import app.timecapsule.capsule.OpenPolicy
 import app.timecapsule.audio.Beeper
 import app.timecapsule.audio.Player
 import app.timecapsule.audio.Recorder
@@ -64,12 +65,80 @@ class DriveController(
     private val player: Player,
     private val beeper: Beeper,
     private val settings: Settings,
+    private val restricted: () -> Boolean = { true },
+    private val demo: () -> Boolean = { false },
+    private val microphoneAllowed: () -> Boolean = { false },
+    private val requestPreparation: () -> Boolean = { false },
+    private val releasePreparation: () -> Unit = {},
     /** Uploads capsules left for friends; set once the sharing layer exists. */
     var sharing: app.timecapsule.social.CapsuleSharing? = null,
     sky: StateFlow<app.timecapsule.weather.Sky?> = MutableStateFlow(null),
     outsideTempC: StateFlow<Float?> = MutableStateFlow(null),
 ) {
     private fun today() = LocalDate.now()
+    private fun now() = SystemClock.elapsedRealtime()
+    private val session = DriveSession()
+    private val _prepared = MutableStateFlow(false)
+    val prepared: StateFlow<Boolean> = _prepared.asStateFlow()
+    private val _editable = MutableStateFlow(false)
+    val editable: StateFlow<Boolean> = _editable.asStateFlow()
+    private var operationEpoch = 0L
+    private var saving = false
+    var authorizeShared: suspend (Capsule) -> Boolean = { it.isMine }
+    var currentRecipients: () -> List<String> = { emptyList() }
+
+    private fun vehicleKnown(): Boolean {
+        val s = car.value
+        return demo() || (s.gearInPark != null &&
+            OpenPolicy.fresh(s.gearAt, now(), OpenPolicy.VEHICLE_MAX_AGE_MS) &&
+            OpenPolicy.fresh(s.turnSignalAt, now(), OpenPolicy.VEHICLE_MAX_AGE_MS))
+    }
+    fun canEdit() = car.value.gearInPark == true && vehicleKnown() && !restricted()
+    private fun positionFresh(): Boolean = position.value?.let {
+        OpenPolicy.valid(it.point) && (demo() || OpenPolicy.fresh(it.receivedAt, now(), OpenPolicy.POSITION_MAX_AGE_MS))
+    } == true
+    fun prepareDrive() {
+        if (!canEdit()) return say("주차 후 차량 상태를 확인해 주세요")
+        if (!microphoneAllowed()) return say("설정에서 마이크 권한을 허용해 주세요")
+        if (!requestPreparation()) say("기록 준비를 시작하지 못했어요. 앱 화면에서 다시 시도해 주세요")
+    }
+    internal fun completePreparation(): Boolean {
+        if (!canEdit() || !microphoneAllowed() || _prepared.value) return false
+        session.start(now()); _prepared.value = true
+        say("이번 주행을 준비했어요. 요청할 때만 녹음해요")
+        return true
+    }
+    fun endDrive() {
+        operationEpoch++
+        if (_state.value == DriveState.Recording) dispatch(DriveEvent.SafetySignalOn)
+        resumeJob?.cancel(); alertTimeout?.cancel(); arrivalTimeout?.cancel()
+        player.stop(); _state.value = DriveState.Idle; _playing.value = null; _alert.value = null
+        _answerWindow.value = null; _reprompt.value = null; _arrivalPrompt.value = false
+        _userPaused.value = false; session.end(); _prepared.value = false
+        releasePreparation()
+    }
+    private fun maintainSession() {
+        _editable.value = canEdit()
+        if (!_prepared.value) return
+        if (!microphoneAllowed() || session.expired(now(), canEdit())) { endDrive(); return }
+        if (!vehicleKnown() || (!positionFresh() && _state.value != DriveState.Recording)) {
+            if (_state.value == DriveState.Recording || _state.value is DriveState.Playing || _state.value is DriveState.ApproachAlert)
+                dispatch(DriveEvent.SafetySignalOn)
+        }
+        _playing.value?.let { if (!session.granted(it.capsule.id, now())) stopPlayback() }
+    }
+    fun openingReason(c: Capsule): String? = OpenPolicy.reason(c, locks.value[c.id], today(), position.value?.point,
+        if (demo()) now() else position.value?.receivedAt ?: 0L, now(), session.granted(c.id, now()))
+    fun confirmDraft(c: Capsule) {
+        if (!canEdit() || !c.isMine) return
+        if (c.locationUncertain) return say("녹음 장소를 확인하지 못해 캡슐로 저장할 수 없어요. 음성은 임시보관해요")
+        scope.launch { repo.confirmDraft(c.id); say("나만 듣는 캡슐로 저장했어요") }
+    }
+    fun previewDraft(c: Capsule) {
+        if (!canEdit() || !c.isMine || !c.draft || _state.value != DriveState.Idle) return
+        // Private recovery preview is parked-only; it never grants a location opening.
+        player.play("임시보관한 녹음이에요", c.audioPath) {}
+    }
 
     /** Car state plus the place fields that come from the navigation app (spec F-02). */
     val car: StateFlow<VehicleSnapshot> = combine(vehicle.snapshot, navi.position, navi.route, sky, outsideTempC) { s, pos, route, sk, temp ->
@@ -138,6 +207,7 @@ class DriveController(
     private var arrivedAt: Long? = null
 
     init {
+        recorder.onInterrupted = { dispatch(DriveEvent.SafetySignalOn) }
         // A capsule removed from this car (deleted, unfriended) must not keep its "아까 지나친" prompt.
         scope.launch {
             repo.capsules.collect { list ->
@@ -159,6 +229,8 @@ class DriveController(
         scope.launch {
             while (true) {
                 delay(APPROACH_CHECK_MS)
+                maintainSession()
+                if (!canEdit() && _state.value == DriveState.Idle) player.stop()
                 checkApproach()
             }
         }
@@ -173,10 +245,13 @@ class DriveController(
      * from settings (all friends, or only me); while driving there is no picking.
      */
     fun bury(openOn: LocalDate? = null, audience: String? = null, recipients: List<String> = emptyList()) {
-        if (_state.value != DriveState.Idle) return
+        if (_state.value != DriveState.Idle || saving) return
+        if (!_prepared.value || !session.active(now())) return say("출발 전에 이번 주행을 준비해 주세요")
+        if (!vehicleKnown() || signals.value.isNotEmpty() || !microphoneAllowed()) return say("지금은 녹음을 시작할 수 없어요")
+        player.stop()
         pendingOpenOn = openOn
         pendingAudience = audience ?: settings.defaultAudience.value
-        pendingRecipients = recipients
+        pendingRecipients = if (pendingAudience == "FRIENDS") currentRecipients() else recipients
         dispatch(DriveEvent.BuryRequested)
     }
 
@@ -200,22 +275,33 @@ class DriveController(
 
     fun listen() = dispatch(DriveEvent.PlayRequested)
     fun later() = dispatch(DriveEvent.Later)
-    fun stopPlayback() = dispatch(DriveEvent.PlaybackFinished)
+    fun stopPlayback() {
+        operationEpoch++
+        dispatch(DriveEvent.PlaybackFinished)
+        session.clearGrant()
+    }
 
     fun playCapsule(id: Long) {
+        if (saving) return
         if (_state.value == DriveState.Idle) dispatch(DriveEvent.PlayCapsule(id))
         else say("지금은 재생할 수 없어요")
     }
 
     fun togglePause() {
-        if (_state.value !is DriveState.Playing) return
-        if (_userPaused.value) player.resume() else player.pause()
-        _userPaused.value = !_userPaused.value
+        val s = _state.value
+        if (s is DriveState.Paused && s.resumeTo is DriveState.Playing) {
+            if (signals.value.isEmpty() && vehicleKnown()) startPlayback(s.resumeTo.capsuleId)
+        } else if (s is DriveState.Playing) {
+            if (_userPaused.value) startPlayback(s.capsuleId)
+            else { player.pause(); _userPaused.value = true }
+        }
     }
 
     fun restart() {
-        _userPaused.value = false
-        player.restart()
+        val c = _playing.value?.capsule ?: return
+        if (signals.value.isNotEmpty()) return
+        player.stop()
+        startPlayback(c.id)
     }
 
     fun dismissReprompt() { _reprompt.value = null }
@@ -231,7 +317,8 @@ class DriveController(
      * waypoints, so the first two become waypoints and the last one the destination.
      */
     fun driveMemoryRoute(album: List<Capsule>) {
-        val spots = album.filterNot { it.locationUncertain }.sortedBy { it.createdAt }
+        if (!canEdit()) return
+        val spots = album.filterNot { it.locationUncertain || it.draft }.sortedBy { it.createdAt }
         if (spots.isEmpty()) return say("위치가 기록된 캡슐이 없어요")
         val named = spots.map { NamedPoint(it.placeName ?: "캡슐 지점", GeoPoint(it.lat, it.lng)) }
         val dest = named.last()
@@ -242,17 +329,20 @@ class DriveController(
     }
 
     fun delete(capsule: Capsule) = scope.launch {
+        if (!canEdit()) return@launch
+        if (_playing.value?.capsule?.id == capsule.id) stopPlayback()
+        player.stop()
         repo.delete(capsule)
         sharing?.onDeleted(capsule)
     }
 
-    fun setShared(capsule: Capsule, shared: Boolean) { sharing?.setShared(capsule, shared) }
+    fun setShared(capsule: Capsule, shared: Boolean) { if (canEdit() && !capsule.draft && !capsule.locationUncertain) sharing?.setShared(capsule, shared) }
 
     /** Voice position and length in ms while the voice plays; null during the narration. */
     fun progress(): Pair<Int, Int>? = player.progress()
 
     fun deleteEverything(context: Context) = scope.launch {
-        player.stop()
+        endDrive()
         repo.deleteEverything(context)
         _reprompt.value = null
         _forecast.value = null
@@ -264,12 +354,15 @@ class DriveController(
 
     /** Dev panel: pretend the car is 1.2 km from [id]. */
     fun simulateApproach(id: Long) {
-        if (_state.value == DriveState.Idle) dispatch(DriveEvent.CapsuleWithinRange(id))
+        if (demo() && _prepared.value && _state.value == DriveState.Idle) dispatch(DriveEvent.CapsuleWithinRange(id))
     }
 
     // ---- state machine plumbing --------------------------------------------------------
 
-    fun dispatch(event: DriveEvent) = apply(DriveStateMachine.reduce(_state.value, event))
+    fun dispatch(event: DriveEvent) {
+        if (event == DriveEvent.SafetySignalOn) operationEpoch++
+        apply(DriveStateMachine.reduce(_state.value, event))
+    }
 
     private fun apply(t: Transition) {
         _state.value = t.state
@@ -281,6 +374,7 @@ class DriveController(
         when (effect) {
             Effect.StartRecording -> startRecording()
             Effect.SaveRecording -> saveRecording()
+            Effect.SaveDraft -> saveRecording(interrupted = true)
             is Effect.ShowApproachAlert -> showAlert(effect.capsuleId)
             Effect.HideApproachAlert -> {
                 alertTimeout?.cancel()
@@ -290,6 +384,7 @@ class DriveController(
             Effect.PausePlayback -> player.pause()
             Effect.StopPlayback -> {
                 lastPlaybackEndAt = SystemClock.elapsedRealtime()
+                session.clearGrant()
                 player.stop()
                 _playing.value = null
                 _userPaused.value = false
@@ -302,7 +397,7 @@ class DriveController(
                 resumeJob?.cancel()
                 resumeJob = scope.launch {
                     delay(effect.millis)
-                    if (signals.value.isEmpty() && _state.value is DriveState.Paused) {
+                    if (_prepared.value && vehicleKnown() && positionFresh() && signals.value.isEmpty() && _state.value is DriveState.Paused) {
                         apply(DriveStateMachine.resume(effect.target))
                     }
                 }
@@ -313,7 +408,7 @@ class DriveController(
     private fun startRecording() {
         // Spec F-02: tags describe the moment recording starts.
         recordSnapshot = car.value
-        recordPosition = navi.position.value?.point
+        recordPosition = navi.position.value?.point?.takeIf { positionFresh() }
         val ok = recorder.start { scope.launch { if (_state.value == DriveState.Recording) dispatch(DriveEvent.RecordingEnded) } }
         if (ok) {
             _recordingSince.value = SystemClock.elapsedRealtime()
@@ -324,7 +419,7 @@ class DriveController(
         }
     }
 
-    private fun saveRecording() {
+    private fun saveRecording(interrupted: Boolean = false) {
         _recordingSince.value = null
         if (discardRecording) {
             discardRecording = false
@@ -342,18 +437,27 @@ class DriveController(
             micFailed = false
             return
         }
+        val audience = pendingAudience
+        val recipients = pendingRecipients.toList()
+        val at = recordPosition
+        saving = true
         scope.launch {
+          try {
             val tags = MoodTagEngine.tagsFor(snap)
-            val c = repo.bury(rec, snap, tags, recordPosition, navi.position.value?.point, openOn, pendingAudience, pendingRecipients)
+            val c = repo.bury(rec, snap, tags, at, null, openOn, audience, recipients, draft = interrupted || at == null)
             val name = c.placeName ?: tags.firstOrNull()?.label ?: "오늘의"
-            say(if (openOn != null) "편지 캡슐을 묻었어요. ${openOn.year}년 ${openOn.monthValue}월 ${openOn.dayOfMonth}일에 열려요" else "$name 캡슐을 묻었어요")
-            sharing?.onBuried(c)
+            say(if (c.draft) "녹음을 비공개로 임시보관했어요. 주차 후 확인해 주세요" else if (openOn != null) "편지 캡슐을 묻었어요. ${openOn.year}년 ${openOn.monthValue}월 ${openOn.dayOfMonth}일에 열려요" else "$name 캡슐을 묻었어요")
+            if (!c.draft) sharing?.onBuried(c)
+          } catch (_: Exception) {
+              say("녹음을 목록에 저장하지 못했어요. 저장 공간을 확인해 주세요")
+          } finally { saving = false }
         }
     }
 
     private fun showAlert(id: Long) {
         scope.launch {
             val c = repo.get(id) ?: return@launch dispatch(DriveEvent.Later)
+            if (!_prepared.value || _state.value != DriveState.ApproachAlert(id) || c.draft || c.locationUncertain) return@launch
             val here = navi.position.value?.point
             val dist = here?.let { app.timecapsule.geo.Geo.distanceM(it, GeoPoint(c.lat, c.lng)) } ?: Rules.APPROACH_ALERT_M
             val elapsed = Narration.elapsed(dateOf(c), today())
@@ -374,20 +478,49 @@ class DriveController(
     }
 
     private fun startPlayback(id: Long) {
-        if (_playing.value?.capsule?.id == id && player.isActive) {
-            if (!_userPaused.value) player.resume()
-            return
-        }
+        val epoch = ++operationEpoch
         scope.launch {
-            val c = repo.get(id) ?: return@launch dispatch(DriveEvent.PlaybackFinished)
-            val narration = Narration.build(dateOf(c), today(), MoodTagEngine.fromStored(c.tags), from = c.ownerName)
-            _playing.value = PlayingUi(c, narration)
+            val c = repo.get(id)
+            if (epoch != operationEpoch) return@launch
+            if (c == null) return@launch stopPlayback()
+            if (!_prepared.value || !session.active(now())) {
+                stopPlayback(); say("출발 전에 이번 주행을 준비해 주세요"); return@launch
+            }
+            val reason = OpenPolicy.reason(c, repo.lockFor(id), today(), position.value?.point,
+                if (demo()) now() else position.value?.receivedAt ?: 0L, now(), session.granted(id, now()))
+            if (reason != null || !vehicleKnown() || signals.value.isNotEmpty()) {
+                stopPlayback(); say(reason ?: "차량 상태를 확인한 후 다시 요청해 주세요"); return@launch
+            }
+            // A visit grant allows this one capsule to finish after leaving; a new shared
+            // opening needs a server response, not an old downloaded copy.
+            if (!session.granted(id, now()) && !authorizeShared(c)) {
+                if (epoch == operationEpoch) { stopPlayback(); say("공유 권한을 확인하지 못했어요. 연결 후 다시 시도해 주세요") }
+                return@launch
+            }
+            if (epoch != operationEpoch || !_prepared.value) return@launch
+            val fresh = repo.get(id)
+            if (epoch != operationEpoch) return@launch
+            if (fresh == null) return@launch stopPlayback()
+            val blocked = OpenPolicy.reason(fresh, repo.lockFor(id), today(), position.value?.point,
+                if (demo()) now() else position.value?.receivedAt ?: 0L, now(), session.granted(id, now()))
+            if (blocked != null || !vehicleKnown() || signals.value.isNotEmpty()) {
+                stopPlayback(); say(blocked ?: "차량 상태 확인 중이에요"); return@launch
+            }
+            val alreadyOpen = session.granted(id, now())
+            if (!alreadyOpen) session.grant(id, now())
+            _state.value = DriveState.Playing(id)
             _userPaused.value = false
+            if (_playing.value?.capsule?.id == id && player.isActive) { player.resume(); return@launch }
+            val narration = Narration.build(dateOf(fresh), today(), MoodTagEngine.fromStored(fresh.tags), from = fresh.ownerName)
+            _playing.value = PlayingUi(fresh, narration)
             if (_reprompt.value?.id == id) _reprompt.value = null
-            repo.logNotify(id, today(), "played")
-            // The screen keeps the short line; the voice adds one plain fact about the day.
-            val spoken = listOfNotNull(narration, app.timecapsule.tag.TheDay.spoken(c.rawVehicleState)).joinToString(" ")
-            player.play(spoken, c.audioPath) { scope.launch { dispatch(DriveEvent.PlaybackFinished) } }
+            val spoken = listOfNotNull(narration, app.timecapsule.tag.TheDay.spoken(fresh.rawVehicleState)).joinToString(" ")
+            player.play(spoken, fresh.audioPath) {
+                scope.launch {
+                    repo.logNotify(id, today(), "played")
+                    dispatch(DriveEvent.PlaybackFinished)
+                }
+            }
         }
     }
 
@@ -395,11 +528,12 @@ class DriveController(
 
     /** F-04, checked every few seconds; suppressed during safety signals and 10 s after. */
     private suspend fun checkApproach() {
+        if (!_prepared.value || !session.active(now()) || !vehicleKnown() || !positionFresh() || saving) return
         if (_state.value != DriveState.Idle || signals.value.isNotEmpty()) return
         if (SystemClock.elapsedRealtime() - lastSignalClearAt < DriveStateMachine.RESUME_ALERT_MS) return
         if (SystemClock.elapsedRealtime() - lastPlaybackEndAt < DriveStateMachine.QUIET_AFTER_PLAYBACK_MS) return
         val here = navi.position.value?.point ?: return
-        val hit = ApproachDetector.next(here, capsules.value, locks.value, repo.notifiedToday(today()), today()) ?: return
+        val hit = ApproachDetector.next(here, capsules.value.filter { c -> app.timecapsule.geo.Geo.distanceM(here, GeoPoint(c.lat, c.lng)) <= c.radiusM }, locks.value, repo.notifiedToday(today()), today()) ?: return
         if (_state.value == DriveState.Idle) dispatch(DriveEvent.CapsuleWithinRange(hit.capsule.id))
     }
 
@@ -411,7 +545,7 @@ class DriveController(
                     (r?.waypoints.orEmpty() + listOfNotNull(r?.destination)).map { it.point }
                 val f = RouteForecaster.forecast(path, capsules.value, locks.value, today())
                 _forecast.value = f
-                f.message()?.let(::say)
+                if (_prepared.value) f.message()?.let(::say)
                 repo.startTrip(car.value.odometerKm, car.value.occupiedSeats)
             }
             is NaviEvent.Arrived -> {
@@ -426,6 +560,7 @@ class DriveController(
 
     /** F-09: after arriving, P + door open at a spot with no capsule -> offer one line. */
     private fun checkArrival(s: VehicleSnapshot) {
+        if (!_prepared.value || !canEdit() || !positionFresh()) return
         val since = arrivedAt ?: return
         if (SystemClock.elapsedRealtime() - since > ARRIVAL_WINDOW_MS) { arrivedAt = null; return }
         if (s.gearInPark != true || s.anyDoorOpen != true || _state.value != DriveState.Idle) return
@@ -445,7 +580,7 @@ class DriveController(
 
     private fun say(text: String) {
         _messages.tryEmit(text)
-        player.say(text)
+        if (_state.value != DriveState.Recording && signals.value.isEmpty()) player.say(text)
     }
 
     private companion object {

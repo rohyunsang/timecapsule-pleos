@@ -78,6 +78,7 @@ interface SocialBackend {
     suspend fun setVisibleTo(id: String, uids: List<String>)
     suspend fun delete(id: String)
     suspend fun audio(id: String): ByteArray?
+    suspend fun canOpen(id: String): Boolean = false
 
     /** Dev panel: switch this car to another account used here before, or a new person (null). */
     suspend fun switchAccount(profile: Profile?)

@@ -1,3 +1,5 @@
+> 이 문서는 원본 proto의 개발 경과입니다. integration에서 변경된 개봉·재개·공유·준비 정책은 [README](README.md)와 [결정 기록](docs/integration/decisions.md)을 우선합니다. 아래의 과거 구현 설명과 SDK 상태는 현재 동작을 보장하지 않습니다.
+
 # 프로토타입 (proto/sso06052)
 
 팀 명세 v0.1(docs/feature-spec.html) 기준 개인 프로토타입입니다. main에는 합치지 않습니다.
