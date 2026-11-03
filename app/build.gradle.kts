@@ -85,6 +85,9 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.kotlinx.coroutines.android)
 
+    implementation(libs.maplibre.android)
+    implementation(libs.okhttp)
+
     implementation(libs.pleos.vehicle)
     implementation(libs.pleos.navihelper)
     implementation(libs.pleos.tts)

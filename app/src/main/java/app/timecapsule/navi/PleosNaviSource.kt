@@ -28,8 +28,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * NaviHelper wrapper. Location comes from getCurrentLocationInfo() polled every 2 s, because the
- * Pleos FusedLocation SDK is not released yet (spec F-04 falls back to the navigation app).
+ * NaviHelper wrapper. Location comes from getCurrentLocationInfo() polled every 2 s.
+ * The collection map shares this existing vehicle position source.
  */
 class PleosNaviSource(context: Context, private val scope: CoroutineScope) : NaviSource {
     private val helper = NaviHelper(context.applicationContext)

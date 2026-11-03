@@ -13,11 +13,20 @@
 
 ## 지도
 
-Leaflet 1.9.4 JS/CSS를 공식 배포 SHA256과 대조하여 앱에 포함했습니다. 라이선스는 `app/src/main/assets/collected-map/LICENSE`입니다. 배경은 OpenStreetMap 표준 HTTPS 타일이고 출처를 화면에 표시합니다. WebView 기본 HTTP 캐시, 앱 식별 User-Agent, HTTPS Referer를 사용하며 일괄 다운로드나 오프라인 지도 저장은 제공하지 않습니다.
+MapLibre Native Android 12.0.1의 `MapView`를 Compose `AndroidView`로 표시합니다. Leaflet JS/CSS와 WebView 코드는 제거했습니다. MapLibre 라이선스는 `app/src/main/assets/native-map/LICENSE.MapLibre.md`에 포함합니다. 현재 Kotlin 2.0 계열과 호환되는 버전을 사용하며, 최신 13.6.1의 Kotlin 2.2.10 요구사항 때문에 앱 전체 Kotlin 업그레이드를 섞지 않았습니다.
 
-지도 데이터에는 수집 캡슐 ID와 좌표만 로컬 JS로 전달합니다. 외부 JS와 JS 네이티브 브리지는 사용하지 않습니다. 오디오·제목·사용자 계정은 지도 서버로 전달하지 않습니다. 타일 서버는 요청된 지도 영역과 IP를 알 수 있습니다. 임의 페이지 이동·파일 접근을 차단하고 수집 선택 요청을 네이티브에서 다시 검증합니다.
+배경은 OpenStreetMap 표준 HTTPS raster 타일입니다. 화면에 출처 링크를 상시 표시합니다. MapLibre 전용 HTTP 클라이언트에 앱을 식별하는 User-Agent와 64 MiB 디스크 캐시를 적용하고 서버의 HTTP 캐시 헤더를 따릅니다. `prefetchZoomDelta=0`으로 미리 받기를 끄며 일괄 다운로드나 오프라인 지도 저장을 제공하지 않습니다. 공개 OSM 타일은 가용성을 보장하지 않으므로 서비스 규모가 커지면 별도 공급원으로 전환해야 합니다.
 
-같은 좌표의 캡슐은 숫자 마커로 묶고 아래 목록에서 개별 선택합니다. 타일 로드 실패 시 메시지와 목록 재생을 유지합니다. 지도 조작은 주차 상태에서만 허용됩니다.
+캡슐 ID·좌표·선택 상태는 네이티브 GeoJSON 소스에만 전달하며, 제목·음성·계정은 타일 서버에 보내지 않습니다. 타일 서버는 요청된 지도 영역과 IP를 알 수 있습니다. 숫자 마커는 Android Canvas로 생성하므로 외부 글꼴·아이콘 서버를 사용하지 않습니다.
+
+같은 좌표의 캡슐은 숫자로 묶습니다. 마커를 반복 선택하면 해당 위치의 캡슐을 순서대로 선택하며, 아래 목록에서도 각각 선택할 수 있습니다. 전체 보기·현재 위치 버튼을 제공합니다. 지도 배경 오류 시 안내와 목록 재생을 유지합니다. 화면 시작·재개·중단·종료와 메모리 경고를 `MapView`에 전달합니다. 지도 조작은 기존 주차 상태 검사 안에서만 허용됩니다.
+
+### Pleos 연동
+
+- 현재 위치: 기존 NaviHelper `getCurrentLocationInfo()`의 결과를 공유합니다. 유효한 좌표이면서 수신 시각이 10초 이내인 경우만 파란 점과 현재 위치 버튼을 표시합니다. GPS가 없어도 수집한 캡슐 재생은 가능합니다.
+- 길 안내: 수집한 캡슐에서 ‘이 장소로 길 안내’를 누르면 기존 경로가 바뀐다는 확인 팝업을 표시합니다. 확인 후 DB에서 캡슐을 다시 읽고 수집·좌표·주차 상태를 재검사한 다음 기존 `NaviSource.drive()`와 Pleos `requestRoute()`를 사용합니다. 마커 선택이나 재생만으로는 경로를 변경하지 않습니다.
+- SDK 요청이 반환되었다는 사실과 실제 내비게이션의 경로 설정 성공을 구분해 ‘길 안내를 요청했어요’라고 표시합니다.
+- 지도 렌더러는 MapLibre이며 Pleos 자체 지도 SDK로 표기하지 않습니다. Pleos `Map SDK for Android`는 공식 Maps Platform 목록에 있으나 링크된 문서가 Page Not Found여서 사용 가능 여부를 확정할 수 없습니다.
 
 ## 데이터와 검증
 
@@ -28,11 +37,12 @@ Room v4는 nullable `collectedAt`을 추가합니다. v1/v2는 기존 v3 마이�
 ```sh
 JAVA_HOME=/opt/homebrew/opt/openjdk@21 bash gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug :app:assembleRelease
 python3 scripts/verify-migrations.py
-node --check app/src/main/assets/collected-map/map.js
 ```
 
-이번 실행 결과: 단위 테스트 50개 통과, debug/release 빌드 성공, Lint 오류 0개·경고 35개, v1/v2/v3 → v4 마이그레이션 검사와 지도 JS 구문 검사 통과. release는 서명키가 없어 unsigned입니다.
+네이티브 지도 전환 검증 결과와 기기 검증 범위는 `native-map-validation.md`에 기록합니다.
 
-기기에서 현장 수집 → 앱 재시작 → 다른 장소의 지도 재생, 타일 로딩 실패, 공유 철회 후 재생 거절, 주행 전환 시 지도 닫힘을 추가 확인해야 합니다. 현재 환경에는 연결된 Android 기기가 없어 이 실행 검증은 수행하지 않았습니다.
-
-지도 라이브러리와 타일 운영 근거: https://leafletjs.com/download.html , https://operations.osmfoundation.org/policies/tiles/ (2026-11-02 확인).
+공식 근거(2026-11-02 확인):
+- https://maplibre.org/maplibre-native/android/examples/getting-started/
+- https://operations.osmfoundation.org/policies/tiles/
+- https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/NaviHelper/destinations
+- https://document.pleos.ai/product-maps

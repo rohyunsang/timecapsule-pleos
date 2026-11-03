@@ -283,6 +283,18 @@ class DriveController(
         dispatch(DriveEvent.PlaybackFinished)
     }
 
+    /** Explicit parked-only action; re-read the collection before changing navigation. */
+    fun driveToCollected(id: Long) {
+        if (!canEdit()) return
+        scope.launch {
+            val c = repo.get(id) ?: return@launch
+            if (!canEdit() || !app.timecapsule.map.CollectedMapData.eligible(c)) return@launch
+            val destination = NamedPoint(c.placeName ?: "캡슐 지점", GeoPoint(c.lat, c.lng))
+            if (navi.drive(destination, emptyList())) say("Pleos 내비게이션에 길 안내를 요청했어요")
+            else say("내비게이션에 연결하지 못했어요")
+        }
+    }
+
     fun playCollected(id: Long) {
         if (!canEdit()) return
         scope.launch {
