@@ -54,6 +54,10 @@ class NativeCollectedMap(
         view = MapView(context, MapLibreMapOptions.createFromAttributes(context)
             .textureMode(true).rotateGesturesEnabled(false).tiltGesturesEnabled(false)
             .attributionEnabled(false))
+        view.layoutParams = android.view.ViewGroup.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+        )
         view.onCreate(savedState)
         view.addOnDidFailLoadingMapListener { if (!disposed) onUnavailable(true) }
         view.addOnTileActionListener { operation, _, _, _, _, _, source ->

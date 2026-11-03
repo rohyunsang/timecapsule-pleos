@@ -40,7 +40,8 @@ fun CollectedMapScreen(drive: DriveController, back: () -> Unit) {
     val now by produceState(SystemClock.elapsedRealtime()) {
         while (true) { value = SystemClock.elapsedRealtime(); delay(2_000) }
     }
-    val current = CollectedMapData.currentPoint(position, now)
+    // A position can arrive between expiry ticks; compare it with the actual current clock.
+    val current = CollectedMapData.currentPoint(position, maxOf(now, SystemClock.elapsedRealtime()))
     Column(Modifier.fillMaxSize().padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
         Header("수집 지도", back)
         if (collected.isEmpty()) {
