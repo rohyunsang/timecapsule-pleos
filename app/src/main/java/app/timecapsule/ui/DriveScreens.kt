@@ -77,21 +77,28 @@ private fun rememberNow(key: Any?): Long {
  * car is listening; the ring around it runs down over the 30 seconds. Today's weather sits
  * faintly behind, because it is buried with the voice. The two ways out stay fixed at the bottom.
  */
+/** "최대 30초", "최대 1분", "최대 2분 30초". */
+fun lengthLabel(sec: Int): String = "최대 " + when {
+    sec < 60 -> "${sec}초"
+    sec % 60 == 0 -> "${sec / 60}분"
+    else -> "${sec / 60}분 ${sec % 60}초"
+}
+
 @Composable
 fun RecordingScreen(
-    since: Long?, place: String?, tags: List<MoodTag>, level: () -> Float,
+    since: Long?, maxSec: Int, silenceSec: Int, place: String?, tags: List<MoodTag>, level: () -> Float,
     sky: app.timecapsule.weather.Sky?, night: Boolean, animate: Boolean,
     onStop: () -> Unit, onCancel: () -> Unit,
 ) {
     val now = rememberNow(since)
     val elapsed = since?.let { ((now - it) / 1000).toInt() } ?: 0
-    val shown = elapsed.coerceAtMost(Rules.MAX_RECORD_SEC)
+    val shown = elapsed.coerceAtMost(maxSec)
     val tooShort = elapsed < Rules.MIN_RECORD_SEC
     // Mic level polled ~16 times a second and eased, so the circle breathes instead of jumping.
     var target by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) { while (true) { target = level(); delay(60) } }
     val voice by animateFloatAsState(target, tween(120), label = "voice")
-    val left by animateFloatAsState(1f - shown / Rules.MAX_RECORD_SEC.toFloat(), tween(900, easing = LinearEasing), label = "left")
+    val left by animateFloatAsState(1f - shown / maxSec.toFloat(), tween(900, easing = LinearEasing), label = "left")
     val track = Tc.Basic; val ink = Tc.Text; val paper = Tc.Bg
 
     Box(Modifier.fillMaxSize().background(Tc.Bg)) {
@@ -101,7 +108,7 @@ fun RecordingScreen(
                 Dot(Tc.Rec, 12.dp)
                 Text("  녹음 중", style = Type.TitleS, color = Tc.Text)
                 Spacer(Modifier.weight(1f))
-                Text("최대 ${Rules.MAX_RECORD_SEC}초", style = Type.LabelM, color = Tc.TextMute)
+                Text(lengthLabel(maxSec), style = Type.LabelM, color = Tc.TextMute)
             }
             Column(
                 Modifier.weight(1f).fillMaxWidth(),
@@ -129,14 +136,18 @@ fun RecordingScreen(
                     }
                     Icon(Icons.Rounded.Mic, null, tint = paper, modifier = Modifier.size(64.dp))
                 }
-                Text("0:%02d".format(shown), style = Type.TitleS.copy(fontFeatureSettings = "tnum"), color = Tc.Text)
+                Text("%d:%02d".format(shown / 60, shown % 60), style = Type.TitleS.copy(fontFeatureSettings = "tnum"), color = Tc.Text)
                 Text(
                     (listOf(place ?: "위치 확인 중") + tags.map { it.label }).joinToString(Sep),
                     style = Type.BodyS, color = Tc.TextMute, textAlign = TextAlign.Center, maxLines = 2,
                 )
             }
             Text(
-                if (tooShort) "3초 이상 말해 주세요" else "다 말했으면 묻기를 누르세요",
+                when {
+                    tooShort -> "3초 이상 말해 주세요"
+                    silenceSec > 0 -> "다 말했으면 묻기를 누르세요. ${silenceSec}초 동안 말이 없으면 저절로 묻혀요"
+                    else -> "다 말했으면 묻기를 누르세요"
+                },
                 style = Type.BodyM, color = Tc.TextSub, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
             )
@@ -236,7 +247,7 @@ fun PlayingScreen(
                     color = Tc.Text, maxLines = 5, overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "그날  " + app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).joinToString(Sep),
+                    app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).joinToString(Sep),
                     style = Type.BodyM, color = Tc.TextSub,
                 )
                 VoiceProgress(pos, c.ownerName)

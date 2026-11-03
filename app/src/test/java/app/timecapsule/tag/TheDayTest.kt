@@ -10,13 +10,17 @@ class TheDayTest {
     private val zone = ZoneId.of("Asia/Seoul")
     private val fridayNight = ZonedDateTime.of(2026, 10, 30, 21, 5, 0, 0, zone).toInstant().toEpochMilli()
 
+    @Test fun anotherYearShowsTheYear() {
+        assertEquals("2026년 10월 30일 금요일 밤", TheDay.facts(fridayNight, "{}", zone, 2027).first())
+    }
+
     @Test fun factsFromRawState() {
         val raw = """{"wiperOn":true,"headlightOn":true,"occupiedSeats":3,"outsideTempC":11.6,"placeName":"7번 국도, \"강릉\""}"""
-        assertEquals(listOf("금요일 밤", "비", "바깥 12도", "3명 탑승"), TheDay.facts(fridayNight, raw, zone))
+        assertEquals(listOf("10월 30일 금요일 밤", "비", "바깥 12도", "3명 탑승"), TheDay.facts(fridayNight, raw, zone, 2026))
     }
 
     @Test fun emptyStateStillSaysWhen() {
-        assertEquals(listOf("금요일 밤"), TheDay.facts(fridayNight, "{}", zone))
+        assertEquals(listOf("10월 30일 금요일 밤"), TheDay.facts(fridayNight, "{}", zone, 2026))
     }
 
     @Test fun spokenIsOnePlainSentence() {
@@ -27,7 +31,7 @@ class TheDayTest {
     }
 
     @Test fun savedSkyAndWiper() {
-        assertEquals(listOf("금요일 밤", "흐림", "2명 탑승"), TheDay.facts(fridayNight, """{"sky":"CLOUDY","occupiedSeats":2}""", zone))
+        assertEquals(listOf("10월 30일 금요일 밤", "흐림", "2명 탑승"), TheDay.facts(fridayNight, """{"sky":"CLOUDY","occupiedSeats":2}""", zone, 2026))
         assertEquals("그날은 맑았어요.", TheDay.spoken("""{"sky":"CLEAR"}"""))
         assertEquals("그날은 흐렸고, 2명이 타고 있었어요.", TheDay.spoken("""{"sky":"CLOUDY","occupiedSeats":2}"""))
         // The wiper is the car's own proof: a "clear" forecast with the wiper on was rain.

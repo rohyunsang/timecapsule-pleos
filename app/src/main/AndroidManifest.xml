@@ -68,6 +68,11 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="timecapsule" android:host="friend" />
             </intent-filter>
+            <!-- Gleo AI voice action (assets/schema.json): start recording a capsule right away. -->
+            <intent-filter>
+                <action android:name="START_CAPSULE_RECORDING" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
         <receiver android:name=".drive.RecordingCommandReceiver" android:exported="true"
             android:permission="android.permission.MEDIA_CONTENT_CONTROL">
@@ -80,5 +85,12 @@
         <service android:name=".drive.DriveService" android:exported="false"
             android:foregroundServiceType="microphone|mediaPlayback" />
         <receiver android:name=".drive.AlertActionReceiver" android:exported="false" />
+        <!-- Gleo AI voice actions: save or throw away the capsule being recorded. -->
+        <receiver android:name=".drive.GleoReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="SAVE_CAPSULE_RECORDING" />
+                <action android:name="CANCEL_CAPSULE_RECORDING" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

@@ -1,0 +1,35 @@
+{
+  "packageName": "app.timecapsule.proto",
+  "appDescription": "A car app that leaves short voice messages at places on the road for yourself, friends and family to hear when they drive by later.",
+  "invokeWord": "타임캡슐",
+  "version": "0.1.0",
+  "actionCalls": [
+    {
+      "type": "function",
+      "function": {
+        "component": "activity",
+        "name": "START_CAPSULE_RECORDING",
+        "description": "Start recording a voice capsule at the current location right away.",
+        "parameters": { "type": "object", "properties": {}, "required": [] }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "component": "service",
+        "name": "SAVE_CAPSULE_RECORDING",
+        "description": "Finish the voice capsule being recorded and save it.",
+        "parameters": { "type": "object", "properties": {}, "required": [] }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "component": "service",
+        "name": "CANCEL_CAPSULE_RECORDING",
+        "description": "Stop the voice capsule being recorded and discard it.",
+        "parameters": { "type": "object", "properties": {}, "required": [] }
+      }
+    }
+  ]
+}

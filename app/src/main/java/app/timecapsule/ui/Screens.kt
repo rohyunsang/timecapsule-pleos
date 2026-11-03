@@ -63,6 +63,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.timecapsule.TimeCapsuleApp
 import app.timecapsule.capsule.RouteForecast
+import app.timecapsule.capsule.Rules
+import app.timecapsule.tag.TheDay
 import app.timecapsule.capsule.isLocked
 import app.timecapsule.data.Capsule
 import app.timecapsule.data.Trip
@@ -221,7 +223,7 @@ private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalD
     when {
         !prepared -> InlinePrompt("이번 주행 준비", "주차 중 권한과 동승자 동의를 확인해 주세요",
             cta = "준비하기" to { if (!restricted) preparing = true }, ctaIcon = Icons.Rounded.Mic,
-            sub = "" to {})
+            sub = null)
         arrival -> InlinePrompt(
             "도착했어요. 한마디 남길까요?", "이곳엔 아직 캡슐이 없어요",
             cta = "남기기" to { drive.answerArrival(true) }, ctaIcon = Icons.Rounded.Mic,
@@ -601,6 +603,17 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                 radio("FRIENDS", "친구 모두에게", "녹음할 때 연결된 친구에게만 공유해요. 새 개봉에는 인터넷이 필요해요")
             }
             Spacer(Modifier.height(8.dp))
+            Section("녹음")
+            Panel {
+                val maxSec by app.settings.maxRecordSec.collectAsState()
+                val silence by app.settings.silenceSec.collectAsState()
+                ListRow("최대 길이", "이 길이가 되면 저절로 묻혀요")
+                ChoiceRow(Rules.RECORD_LENGTHS, maxSec, { lengthLabel(it).removePrefix("최대 ") }, app.settings::setMaxRecordSec)
+                RowDivider()
+                ListRow("말이 없으면 저절로 묻기", "정한 시간 동안 조용하면 그때까지의 녹음을 묻어요. 아무 말도 없었으면 저장하지 않아요")
+                ChoiceRow(Rules.SILENCE_CHOICES, silence, { if (it == 0) "끄기" else "${it}초" }, app.settings::setSilenceSec)
+            }
+            Spacer(Modifier.height(8.dp))
             Section("개인정보")
             Panel {
                 ListRow("녹음은 직접 누를 때만", "마이크는 버튼을 눌렀을 때와, 캡슐 알림에 말로 답할 때(몇 초)만 켜져요") { ValueText("항상") }
@@ -649,6 +662,19 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
             onConfirm = { confirm = false; app.wipeCar() },
             onDismiss = { confirm = false },
         )
+    }
+}
+
+/** One row of choices; the picked one is filled. */
+@Composable
+private fun <T> ChoiceRow(choices: List<T>, picked: T, label: (T) -> String, onPick: (T) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = Tc.Inset, end = Tc.Inset, bottom = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        choices.forEach { c ->
+            Btn(label(c), Modifier.weight(1f), style = if (c == picked) BtnStyle.Filled else BtnStyle.Basic, height = 64.dp) { onPick(c) }
+        }
     }
 }
 
@@ -721,6 +747,24 @@ fun DevPanel(app: TimeCapsuleApp, close: () -> Unit) {
                     Text("차량 값은 Virtual Console(127.0.0.1:8088)에서 바꾸세요", style = Type.LabelM, color = Tc.TextMute)
                 }
                 FriendDev(app, close)
+                if (fakeNavi != null) {
+                    // One capsule per weather (and night): drive there and play it, to see its backdrop.
+                    val samples = capsules.filter { !it.draft && !it.locationUncertain }
+                        .groupBy { c ->
+                            val sky = TheDay.sky(c.rawVehicleState)?.let(TheDay::label) ?: "날씨 없음"
+                            sky + if (TheDay.isNight(c.createdAt)) " 밤" else ""
+                        }.toSortedMap().mapValues { it.value.first() }
+                    Section("날씨별 재생 (그 캡슐 자리로 옮겨서)")
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        samples.forEach { (label, c) ->
+                            Btn(label, height = 72.dp) {
+                                fakeNavi.moveTo(NaviPosition(GeoPoint(c.lat, c.lng), c.placeName))
+                                close()
+                                app.drive.devPreview(c.id)
+                            }
+                        }
+                    }
+                }
                 Section("시연")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     val newest = capsules.maxByOrNull { it.createdAt }
@@ -729,6 +773,8 @@ fun DevPanel(app: TimeCapsuleApp, close: () -> Unit) {
                     Btn("10초 뒤 접근(앱 밖에서 보기)", enabled = newest != null, height = 72.dp) {
                         newest?.let { c -> close(); app.scope.launch { kotlinx.coroutines.delay(10_000); app.drive.simulateApproach(c.id) } }
                     }
+                    Btn("도착 제안 띄우기", height = 72.dp) { close(); app.drive.simulateArrivalPrompt() }
+                    Btn("다음 녹음 5초 뒤 내비 안내로 끊기", height = 72.dp) { app.drive.simulateRecordingInterruption(5_000) }
                     if (fakeNavi != null) {
                         Btn("캡슐 지나는 경로 시작", enabled = capsules.isNotEmpty(), height = 72.dp) {
                             val c = capsules.first()

@@ -17,6 +17,7 @@ import app.timecapsule.ui.alertDescription
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -33,6 +34,7 @@ class AlertNotifier(
 ) {
     private val nm = NotificationManagerCompat.from(context)
     private val overlay = OverlayAlert(context)
+    private val playingOverlay = OverlayAlert(context)
 
     fun start() {
         nm.createNotificationChannel(
@@ -56,10 +58,17 @@ class AlertNotifier(
             }
         }
         scope.launch {
-            combine(drive.state, drive.playing, appVisible) { s, p, v ->
-                p.takeIf { !v && (s is DriveState.Playing || s is DriveState.Paused) }
-            }.collect { p ->
-                if (p != null) postPlaying(p) else nm.cancel(ID_PLAYING)
+            combine(drive.state, drive.playing, appVisible, drive.userPaused) { s, p, v, up ->
+                p.takeIf { !v && (s is DriveState.Playing || s is DriveState.Paused) }?.let { it to (s is DriveState.Paused || up) }
+            }.distinctUntilChanged().collect { pair ->
+                if (pair != null) {
+                    val (p, paused) = pair
+                    postPlaying(p)
+                    playingOverlay.showPlaying(playingTitle(p), paused, onPause = { drive.togglePause() }, onStop = { drive.stopPlayback() })
+                } else {
+                    nm.cancel(ID_PLAYING)
+                    playingOverlay.hide()
+                }
             }
         }
     }
@@ -85,7 +94,7 @@ class AlertNotifier(
     private fun postPlaying(p: PlayingUi) {
         val n = NotificationCompat.Builder(context, CHANNEL_PLAYING)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
-            .setContentTitle("캡슐 듣는 중   " + (p.capsule.ownerName?.let { "${it}님의 " } ?: "") + (p.capsule.placeName ?: "이 길"))
+            .setContentTitle("캡슐 듣는 중   " + playingTitle(p))
             .setContentText(p.narration)
             .setOngoing(true)
             .setContentIntent(openApp())
@@ -93,6 +102,8 @@ class AlertNotifier(
             .build()
         post(ID_PLAYING, n)
     }
+
+    private fun playingTitle(p: PlayingUi) = (p.capsule.ownerName?.let { "${it}님   " } ?: "") + (p.capsule.placeName ?: "이 길")
 
     private fun post(id: Int, n: android.app.Notification) {
         try {
