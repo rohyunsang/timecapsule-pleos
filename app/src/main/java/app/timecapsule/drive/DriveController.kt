@@ -27,6 +27,7 @@ import app.timecapsule.vehicle.VehicleSnapshot
 import app.timecapsule.vehicle.VehicleSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -103,10 +104,34 @@ class DriveController(
         if (!requestPreparation()) say("기록 준비를 시작하지 못했어요. 앱 화면에서 다시 시도해 주세요")
     }
     internal fun completePreparation(): Boolean {
-        if (!canEdit() || !microphoneAllowed() || _prepared.value) return false
+        if ((!canEdit() && !byVoice) || !microphoneAllowed() || _prepared.value) return false
         session.start(now()); _prepared.value = true
-        say("이번 주행을 준비했어요. 요청할 때만 녹음해요")
+        if (!byVoice) say("이번 주행을 준비했어요. 요청할 때만 녹음해요")
         return true
+    }
+
+    /** Set while a Gleo voice request prepares the drive itself (the driver asked out loud). */
+    private var byVoice = false
+
+    /**
+     * Gleo AI "녹음해 줘": record right away, even mid-drive. Asking out loud is the explicit
+     * request, so the parked "주행 준비" step is done here without the screen; the app is in front
+     * (Gleo opened it), which is what lets the microphone service start. True once recording.
+     */
+    suspend fun recordByVoice(): Boolean {
+        if (_state.value == DriveState.Recording) return true
+        if (!microphoneAllowed()) { say("설정에서 마이크 권한을 허용해 주세요"); return false }
+        if (!_prepared.value || !session.active(now())) {
+            byVoice = true
+            try {
+                if (!requestPreparation()) return false
+                kotlinx.coroutines.withTimeoutOrNull(3_000) { _prepared.first { it } } ?: return false
+            } finally { byVoice = false }
+        }
+        if (_state.value is DriveState.Playing || _state.value is DriveState.Paused) stopPlayback()
+        if (_state.value is DriveState.ApproachAlert) later()
+        bury()
+        return kotlinx.coroutines.withTimeoutOrNull(2_000) { _state.first { it == DriveState.Recording } } != null
     }
     fun endDrive() {
         operationEpoch++
@@ -274,7 +299,10 @@ class DriveController(
     private var lastPlaybackEndAt = 0L
 
     /** Mic loudness while recording, 0..1. */
-    fun micLevel(): Float = recorder.level()
+    fun micLevel(): Float = recorder.lastLevel()
+    private var silenceJob: Job? = null
+    /** Set when the quiet ended a recording in which nobody spoke: thrown away, not saved. */
+    private var silentOnly = false
 
     fun listen() = dispatch(DriveEvent.PlayRequested)
     fun later() = dispatch(DriveEvent.Later)
@@ -374,6 +402,30 @@ class DriveController(
     /** Dev panel: make [id] 18 years old for the PT demo narration. */
     fun backdate(id: Long, years: Long) = scope.launch { repo.backdate(id, years) }
 
+    /** Dev panel (demo mode only): play [id] without the server share check, to show its weather. */
+    private var devPreviewId: Long? = null
+    fun devPreview(id: Long) {
+        if (!demo()) return
+        devPreviewId = id
+        playCapsule(id)
+    }
+
+    /** Dev panel: the next recording is cut off by a navigation voice [afterMs] after it starts. */
+    fun simulateRecordingInterruption(afterMs: Long) = scope.launch {
+        _state.first { it == DriveState.Recording }
+        delay(afterMs)
+        if (_state.value == DriveState.Recording) dispatch(DriveEvent.SafetySignalOn)
+    }
+
+    /** Dev panel: ask "도착 한마디 남길까요?" now, without door, place or daily-limit checks. */
+    fun simulateArrivalPrompt() {
+        if (_state.value != DriveState.Idle) return
+        _arrivalPrompt.value = true
+        say("도착 한마디 남길까요?")
+        arrivalTimeout?.cancel()
+        arrivalTimeout = scope.launch { delay(Rules.ALERT_TIMEOUT_MS * 3); _arrivalPrompt.value = false }
+    }
+
     /** Dev panel: pretend the car is 1.2 km from [id]. */
     fun simulateApproach(id: Long) {
         if (demo() && _prepared.value && _state.value == DriveState.Idle) dispatch(DriveEvent.CapsuleWithinRange(id))
@@ -430,9 +482,10 @@ class DriveController(
         // Spec F-02: tags describe the moment recording starts.
         recordSnapshot = car.value
         recordPosition = navi.position.value?.point?.takeIf { positionFresh() }
-        val ok = recorder.start { scope.launch { if (_state.value == DriveState.Recording) dispatch(DriveEvent.RecordingEnded) } }
+        val ok = recorder.start(settings.maxRecordSec.value) { scope.launch { if (_state.value == DriveState.Recording) dispatch(DriveEvent.RecordingEnded) } }
         if (ok) {
             _recordingSince.value = SystemClock.elapsedRealtime()
+            watchSilence()
         } else {
             micFailed = true
             say("마이크를 쓸 수 없어요. 마이크 권한을 확인해 주세요")
@@ -440,13 +493,34 @@ class DriveController(
         }
     }
 
+    /** Ends the recording by itself after [Settings.silenceSec] seconds without talking. */
+    private fun watchSilence() {
+        silenceJob?.cancel()
+        val sec = settings.silenceSec.value
+        val watch = app.timecapsule.audio.SilenceWatch(sec * 1000L, SystemClock.elapsedRealtime())
+        silenceJob = scope.launch {
+            while (_state.value == DriveState.Recording) {
+                val quiet = watch.feed(recorder.level(), SystemClock.elapsedRealtime())
+                if (quiet) {
+                    if (!watch.heardVoice) { silentOnly = true; discardRecording = true }
+                    android.util.Log.i("DriveController", "quiet for ${sec}s, voice heard: ${watch.heardVoice}")
+                    dispatch(DriveEvent.RecordingEnded)
+                    break
+                }
+                kotlinx.coroutines.delay(100)
+            }
+        }
+    }
+
     private fun saveRecording(interrupted: Boolean = false) {
+        silenceJob?.cancel()
         _recordingSince.value = null
         if (discardRecording) {
             discardRecording = false
             recorder.cancel()
             pendingOpenOn = null
-            say("녹음을 지웠어요")
+            say(if (silentOnly) "말소리가 없어서 저장하지 않았어요" else "녹음을 지웠어요")
+            silentOnly = false
             return
         }
         val rec = recorder.stop()
@@ -515,7 +589,7 @@ class DriveController(
             // Collection removes only the location requirement. A new shared replay must
             // still verify its recipient; only the current paused playback can resume offline.
             val resuming = _playing.value?.capsule?.id == id && player.isActive
-            if (!resuming && !authorizeShared(c)) {
+            if (!resuming && !(demo() && devPreviewId == c.id) && !authorizeShared(c)) {
                 if (epoch == operationEpoch) { stopPlayback(); say("공유 권한을 확인하지 못했어요. 연결 후 다시 시도해 주세요") }
                 return@launch
             }
