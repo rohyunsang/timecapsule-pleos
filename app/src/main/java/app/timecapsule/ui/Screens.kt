@@ -66,6 +66,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.timecapsule.capsule.AlbumData
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.Role
+import androidx.compose.runtime.saveable.rememberSaveable
 import app.timecapsule.social.Forwarding
 import app.timecapsule.TimeCapsuleApp
 import app.timecapsule.capsule.RouteForecast
@@ -447,21 +453,39 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
     var deleting by remember { mutableStateOf<Capsule?>(null) }
     var sharing by remember { mutableStateOf<Capsule?>(null) }
     var forwarding by remember { mutableStateOf<Capsule?>(null) }
+    var routeTarget by remember { mutableStateOf<Capsule?>(null) }
+    var ownTab by rememberSaveable { mutableStateOf(true) }
+    val position by drive.position.collectAsState()
+    val mine = capsules.filter(AlbumData::mine)
+    val collected = capsules.filter(AlbumData::collected)
+    val visible = if (ownTab) mine else collected
     // F-08: group by trip; capsules outside a trip are grouped by day.
-    val groups = capsules.filterNot { it.draft }.groupBy { c -> c.tripId?.let { "trip:$it" } ?: "day:${c.date()}" }
+    val groups = visible.filterNot { it.draft }.groupBy { c -> c.tripId?.let { "trip:$it" } ?: "day:${c.date()}" }
         .entries.sortedByDescending { e -> e.value.maxOf { it.createdAt } }
 
     Column(Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
         Header("여행 앨범", back) { Btn("수집 지도", onClick = onMap) }
-        if (capsules.isEmpty()) {
-            EmptyState(back)
-            return@Column
+        Row(Modifier.widthIn(max = 1100.dp).fillMaxWidth().align(Alignment.CenterHorizontally),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Btn("내가 남긴 캡슐 ${mine.size}", Modifier.weight(1f).semantics { selected = ownTab; role = Role.Tab },
+                style = if (ownTab) BtnStyle.Filled else BtnStyle.Basic) { ownTab = true }
+            Btn("수집한 캡슐 ${collected.size}", Modifier.weight(1f).semantics { selected = !ownTab; role = Role.Tab },
+                style = if (!ownTab) BtnStyle.Filled else BtnStyle.Basic) { ownTab = false }
+        }
+        if (visible.isEmpty()) {
+            Column(Modifier.fillMaxWidth().padding(48.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(if (ownTab) "아직 남긴 캡슐이 없어요" else "아직 수집한 캡슐이 없어요", style = Type.TitleS, color = Tc.Text)
+                Text(if (ownTab) "길에 남긴 캡슐의 장소와 수집 상태를 여기에서 확인해요."
+                    else "다른 사람의 캡슐을 현장에서 수집하면 여기에 모여요. 친구가 보내 준 캡슐도 여기에서 들어요.",
+                    style = Type.BodyS, color = Tc.TextSub)
+            }
         }
         LazyColumn(
             Modifier.widthIn(max = 1100.dp).fillMaxWidth().align(Alignment.CenterHorizontally),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            capsules.filter { it.draft }.forEach { c ->
+            visible.filter { it.draft }.forEach { c ->
                 item(key = "draft:${c.id}") {
                     ListRow("임시보관 · ${c.durationSec}초", if (c.locationUncertain) "장소 미확정 · 비공개 음성" else "중단된 녹음 · 주차 후 저장해 주세요",
                         onClick = { drive.previewDraft(c) }) {
@@ -481,24 +505,35 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
                                 style = Type.LabelM, color = Tc.TextMute, maxLines = 1,
                             )
                         }
-                        Btn("다시 달리기", icon = Icons.Rounded.Route, height = 72.dp) { drive.driveMemoryRoute(list) }
                     }
                 }
                 item(key = "$key:rows") {
                     Panel {
                         list.sortedBy { it.createdAt }.forEachIndexed { i, c ->
                             if (i > 0) Spacer(Modifier.height(12.dp))
+                            val openingReason = drive.openingReason(c, position)
                             CapsuleRow(
                                 c, locks[c.id]?.openAfter?.takeIf { locks[c.id].isLocked(today) }, { drive.playCapsule(c.id) },
                                 onShare = { sharing = c }.takeIf { c.isMine && !c.locationUncertain && c.audience in setOf("SELF", "FRIENDS") },
                                 onForward = { forwarding = c }.takeIf { Forwarding.eligible(c) },
-                                reason = if (c.isForwarded) "${c.ownerName ?: "친구"}님이 전달 · 어디서든 듣기" else drive.openingReason(c),
+                                onNavigate = { routeTarget = c }.takeIf { AlbumData.canNavigate(c) },
+                                locationBlocked = AlbumData.needsCollection(c) && openingReason != null,
+                                reason = if (c.isForwarded) "${c.ownerName ?: "친구"}님이 전달 · 어디서든 듣기"
+                                    else if (c.collectedAt != null) "수집 완료 · 어디서든 듣기"
+                                    else if (openingReason == null) "도착했어요 · 재생하면 수집돼요"
+                                    else "남긴 장소에서 수집하면 들을 수 있어요",
                             ) { deleting = c }
                         }
                     }
                 }
             }
         }
+    }
+    routeTarget?.let { c ->
+        ConfirmPopup("이 장소로 안내할까요?",
+            "${c.placeName ?: "캡슐 지점"}을 내비게이션 목적지로 설정해요. 기존 경로가 있다면 바뀝니다.",
+            "길 안내 시작", onConfirm = { drive.driveToCapsule(c.id); routeTarget = null },
+            onDismiss = { routeTarget = null })
     }
     forwarding?.let { c -> ForwardCapsuleDialog(app, c) { forwarding = null } }
     sharing?.let { c ->
@@ -540,8 +575,8 @@ private fun ColumnScope.EmptyState(back: () -> Unit) {
 
 /** One capsule: the whole row plays it; delete is a separate, confirmed action. */
 @Composable
-private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onShare: (() -> Unit)? = null, onForward: (() -> Unit)? = null, reason: String? = null, onDelete: () -> Unit) {
-    val locked = lockedUntil != null
+private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onShare: (() -> Unit)? = null, onForward: (() -> Unit)? = null, onNavigate: (() -> Unit)? = null, locationBlocked: Boolean = false, reason: String? = null, onDelete: () -> Unit) {
+    val locked = lockedUntil != null || locationBlocked
     val time = Instant.ofEpochMilli(c.createdAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("a h:mm"))
     val tags = app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).drop(1).joinToString(Sep)
     val density = LocalDensity.current.density
@@ -549,7 +584,7 @@ private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onSha
     Column(Modifier.fillMaxWidth()) {
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Tc.Basic)
-                .clickable(enabled = !locked, onClick = clickWithSound(onPlay)).padding(end = 24.dp),
+                .padding(end = 24.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.width(112.dp).height(128.dp).background(Tc.Line), contentAlignment = Alignment.Center) {
@@ -557,9 +592,11 @@ private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onSha
             }
             Spacer(Modifier.width(24.dp))
             Column(Modifier.weight(1f).padding(vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(c.placeName ?: "장소 기록 없음", style = Type.BodyStrong, color = Tc.Text,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(if (locked) "${LocalDate.ofEpochDay(lockedUntil!!).format(dayFmt)}에 열려요"
+                Text((c.placeName ?: "장소 기록 없음") + if (onNavigate != null) "  › 길 안내" else "",
+                    modifier = Modifier.clickable(enabled = onNavigate != null,
+                        onClick = clickWithSound { onNavigate?.invoke() }).padding(vertical = 8.dp),
+                    style = Type.BodyStrong, color = Tc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (lockedUntil != null) "${LocalDate.ofEpochDay(lockedUntil).format(dayFmt)}에 열려요"
                     else "$time · ${c.durationSec}초 · ${whoOf(c)}", style = Type.LabelM, color = Tc.TextSub,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val detail = listOfNotNull(reason, tags.takeIf { it.isNotBlank() },
@@ -568,14 +605,16 @@ private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onSha
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (locked) {
-                Icon(Icons.Rounded.Lock, contentDescription = "잠긴 캡슐",
-                    tint = Tc.TextMute, modifier = Modifier.padding(start = 12.dp).size(32.dp))
+                Column(Modifier.padding(start = 12.dp).width(88.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Rounded.Lock, contentDescription = "잠긴 캡슐", tint = Tc.TextMute, modifier = Modifier.size(32.dp))
+                    Text(if (lockedUntil != null) "개봉 대기" else "수집 전", style = Type.LabelM, color = Tc.TextMute)
+                }
             } else {
                 Surface(onClick = clickWithSound(onPlay),
                     modifier = Modifier.padding(start = 12.dp).size(72.dp),
                     shape = RoundedCornerShape(Tc.BtnRadius), color = Tc.P.filled) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.PlayArrow, contentDescription = "캡슐 재생",
+                        Icon(Icons.Rounded.PlayArrow, contentDescription = if (AlbumData.needsCollection(c)) "수집하고 듣기" else "캡슐 재생",
                             tint = Tc.P.onFilled, modifier = Modifier.size(44.dp))
                     }
                 }

@@ -19,7 +19,6 @@ import app.timecapsule.geo.PlaceName
 import app.timecapsule.navi.NamedPoint
 import app.timecapsule.navi.NaviEvent
 import app.timecapsule.navi.NaviSource
-import app.timecapsule.navi.PleosNaviSource
 import app.timecapsule.tag.MoodTagEngine
 import app.timecapsule.tag.Narration
 import app.timecapsule.vehicle.SafetySignal
@@ -155,8 +154,8 @@ class DriveController(
         }
 
     }
-    fun openingReason(c: Capsule): String? = OpenPolicy.reason(c, locks.value[c.id], today(), position.value?.point,
-        if (demo()) now() else position.value?.receivedAt ?: 0L, now())
+    fun openingReason(c: Capsule, at: app.timecapsule.navi.NaviPosition? = position.value): String? = OpenPolicy.reason(c, locks.value[c.id], today(), at?.point,
+        if (demo()) now() else at?.receivedAt ?: 0L, now())
     fun confirmDraft(c: Capsule) {
         if (!canEdit() || !c.isMine) return
         if (c.locationUncertain) return say("녹음 장소를 확인하지 못해 캡슐로 저장할 수 없어요. 음성은 임시보관해요")
@@ -312,11 +311,14 @@ class DriveController(
     }
 
     /** Explicit parked-only action; re-read the collection before changing navigation. */
-    fun driveToCollected(id: Long) {
+    fun driveToCollected(id: Long) = driveToCapsule(id, collectedOnly = true)
+
+    fun driveToCapsule(id: Long, collectedOnly: Boolean = false) {
         if (!canEdit()) return
         scope.launch {
             val c = repo.get(id) ?: return@launch
-            if (!canEdit() || !app.timecapsule.map.CollectedMapData.eligible(c)) return@launch
+            if (!canEdit() || !app.timecapsule.capsule.AlbumData.canNavigate(c) ||
+                (collectedOnly && !app.timecapsule.map.CollectedMapData.eligible(c))) return@launch
             val destination = NamedPoint(c.placeName ?: "캡슐 지점", GeoPoint(c.lat, c.lng))
             if (navi.drive(destination, emptyList())) say("Pleos 내비게이션에 길 안내를 요청했어요")
             else say("내비게이션에 연결하지 못했어요")
@@ -360,22 +362,6 @@ class DriveController(
         arrivalTimeout?.cancel()
         _arrivalPrompt.value = false
         if (leaveOne) bury()
-    }
-
-    /**
-     * F-07: drive through the album's capsule spots in time order. NaviHelper takes two
-     * waypoints, so the first two become waypoints and the last one the destination.
-     */
-    fun driveMemoryRoute(album: List<Capsule>) {
-        if (!canEdit()) return
-        val spots = album.filterNot { it.locationUncertain || it.draft || it.isForwarded }.sortedBy { it.createdAt }
-        if (spots.isEmpty()) return say("위치가 기록된 캡슐이 없어요")
-        val named = spots.map { NamedPoint(it.placeName ?: "캡슐 지점", GeoPoint(it.lat, it.lng)) }
-        val dest = named.last()
-        val via = named.dropLast(1).take(PleosNaviSource.MAX_WAYPOINTS)
-        if (!navi.drive(dest, via)) return say("내비게이션에 연결하지 못했어요")
-        val skipped = named.size - 1 - via.size
-        say(if (skipped > 0) "그때 그 길로 안내할게요. 경유지는 두 곳까지라 ${skipped}곳은 빼고 넣었어요" else "그때 그 길로 안내할게요")
     }
 
     fun delete(capsule: Capsule) = scope.launch {
@@ -578,7 +564,7 @@ class DriveController(
             val c = repo.get(id)
             if (epoch != operationEpoch) return@launch
             if (c == null) return@launch stopPlayback()
-            if ((!_prepared.value || !session.active(now())) && !(c.canReplayAnywhere && canEdit())) {
+            if ((!_prepared.value || !session.active(now())) && !canEdit()) {
                 stopPlayback(); say("출발 전에 이번 주행을 준비해 주세요"); return@launch
             }
             val reason = OpenPolicy.reason(c, repo.lockFor(id), today(), position.value?.point,
