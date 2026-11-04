@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.unit.dp
 
 /** Flat capsule-toy shells with a continuous, contrasting microphone across the seam. */
@@ -41,7 +42,12 @@ fun RecordingCapsule(modifier: Modifier = Modifier, input: Float = 0f) {
             drawRoundRect(color, Offset(c.x-r*0.25f, c.y+r*0.51f),
                 Size(r*0.50f, r*0.13f), CornerRadius(r*0.065f))
         }
-        clipRect(bottom = c.y) { microphone(red) }
-        clipRect(top = c.y) { microphone(Color.White) }
+        scale(0.8f, 0.8f, pivot = c) {
+            clipRect(bottom = c.y) { microphone(red) }
+            clipRect(top = c.y) { microphone(Color.White) }
+            // Keep the red microphone head continuous across the shell seam.
+            drawRoundRect(red, Offset(c.x-r*0.19f, c.y-r*0.52f),
+                Size(r*0.38f, r*0.66f), CornerRadius(r*0.19f))
+        }
     }
 }
