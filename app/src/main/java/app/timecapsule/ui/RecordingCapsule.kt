@@ -26,15 +26,11 @@ fun RecordingCapsule(modifier: Modifier = Modifier, input: Float = 0f) {
         drawArc(red, 0f, 180f, true, Offset(c.x-r, c.y-r), Size(r*2, r*2))
         drawCircle(outline.copy(alpha = 0.35f), r, style = Stroke(1.5.dp.toPx()))
         fun microphone(color: Color) {
-            // Filled body, cradle, stem and base keep the mark legible at small sizes.
+            // The cradle is solid through its center and joins the body without an inner cutout.
             drawRoundRect(color, Offset(c.x-r*0.19f, c.y-r*0.52f),
                 Size(r*0.38f, r*0.66f), CornerRadius(r*0.19f))
             val cradle = Path().apply {
                 moveTo(c.x-r*0.36f, c.y-r*0.04f)
-                lineTo(c.x-r*0.22f, c.y-r*0.04f)
-                lineTo(c.x-r*0.22f, c.y+r*0.10f)
-                cubicTo(c.x-r*0.22f, c.y+r*0.36f, c.x+r*0.22f, c.y+r*0.36f, c.x+r*0.22f, c.y+r*0.10f)
-                lineTo(c.x+r*0.22f, c.y-r*0.04f)
                 lineTo(c.x+r*0.36f, c.y-r*0.04f)
                 lineTo(c.x+r*0.36f, c.y+r*0.10f)
                 cubicTo(c.x+r*0.36f, c.y+r*0.55f, c.x-r*0.36f, c.y+r*0.55f, c.x-r*0.36f, c.y+r*0.10f)
