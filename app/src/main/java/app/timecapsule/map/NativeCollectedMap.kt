@@ -1,13 +1,10 @@
 package app.timecapsule.map
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
 import android.graphics.RectF
 import android.os.Bundle
 import app.timecapsule.data.Capsule
+import app.timecapsule.ui.CapsuleArtwork
 import app.timecapsule.geo.GeoPoint
 import okhttp3.Cache
 import okhttp3.OkHttpClient
@@ -39,6 +36,7 @@ class NativeCollectedMap(
     private val onUnavailable: (Boolean) -> Unit,
 ) {
     private val density = context.resources.displayMetrics.density
+    private val mapStyle = context.assets.open("native-map/calm.json").bufferedReader().use { it.readText() }
     private var map: MapLibreMap? = null
     private var style: Style? = null
     private var disposed = false
@@ -61,7 +59,7 @@ class NativeCollectedMap(
         view.onCreate(savedState)
         view.addOnDidFailLoadingMapListener { if (!disposed) onUnavailable(true) }
         view.addOnTileActionListener { operation, _, _, _, _, _, source ->
-            if (!disposed && source == "osm" && operation == TileOperation.Error) {
+            if (!disposed && source == "openmaptiles" && operation == TileOperation.Error) {
                 view.post { if (!disposed) onUnavailable(true) }
             }
         }
@@ -70,6 +68,7 @@ class NativeCollectedMap(
             if (disposed) return@getMapAsync
             map = ready
             ready.setPrefetchZoomDelta(0)
+            ready.setMinZoomPreference(2.0)
             ready.setMaxZoomPreference(19.0)
             ready.addOnMapClickListener { point ->
                 val p = ready.projection.toScreenLocation(point)
@@ -85,7 +84,7 @@ class NativeCollectedMap(
                     true
                 } else false
             }
-            ready.setStyle(Style.Builder().fromJson(STYLE)) { loaded ->
+            ready.setStyle(Style.Builder().fromJson(mapStyle)) { loaded ->
                 if (disposed) return@setStyle
                 style = loaded
                 loaded.addSource(GeoJsonSource(CAPSULES, FeatureCollection.fromFeatures(emptyArray<Feature>())))
@@ -116,7 +115,7 @@ class NativeCollectedMap(
     private fun render() {
         val s = style ?: return
         groups.map { it.size }.distinct().filter { badges.add(it) }.forEach { count ->
-            s.addImage("count-$count", badge(count))
+            s.addImage("count-$count", CapsuleArtwork.bitmap(density, count))
         }
         val features = groups.map { group ->
             val c = group.first()
@@ -139,6 +138,11 @@ class NativeCollectedMap(
         map?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(mapLatitude(point.lat), point.lng), 15.0))
     }
 
+    fun zoomBy(delta: Double) {
+        val ready = map ?: return
+        ready.animateCamera(CameraUpdateFactory.zoomTo((ready.cameraPosition.zoom + delta).coerceIn(2.0, 19.0)))
+    }
+
     fun showAll() {
         val points = groups.map { LatLng(mapLatitude(it.first().lat), it.first().lng) }.distinct()
         if (points.size == 1) map?.moveCamera(CameraUpdateFactory.newLatLngZoom(points.first(), 14.0))
@@ -157,32 +161,12 @@ class NativeCollectedMap(
         view.onDestroy()
     }
 
-    private fun badge(count: Int): Bitmap {
-        val size = (44 * density).toInt()
-        return Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { bitmap ->
-            bitmap.density = (160 * density).toInt()
-            val canvas = Canvas(bitmap)
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-            val center = size/2f
-            paint.color = Color.WHITE
-            canvas.drawCircle(center, center, center, paint)
-            paint.color = Color.rgb(46, 50, 58)
-            canvas.drawCircle(center, center, center-2*density, paint)
-            paint.color = Color.WHITE
-            paint.textSize = 16*density
-            paint.typeface = android.graphics.Typeface.DEFAULT_BOLD
-            paint.textAlign = Paint.Align.CENTER
-            canvas.drawText(if (count > 99) "99+" else count.toString(), center,
-                center-(paint.descent()+paint.ascent())/2, paint)
-        }
-    }
 
     companion object {
         private const val CAPSULES = "capsules"
         private const val MARKERS = "capsule-markers"
         private const val LOCATION = "vehicle"
         private fun mapLatitude(lat: Double) = lat.coerceIn(-85.05112878, 85.05112878)
-        private const val STYLE = """{"version":8,"sources":{"osm":{"type":"raster","tiles":["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],"tileSize":256,"maxzoom":19,"attribution":"© OpenStreetMap contributors"}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#ECECE8"}},{"id":"osm","type":"raster","source":"osm"}]}"""
     }
 }
 

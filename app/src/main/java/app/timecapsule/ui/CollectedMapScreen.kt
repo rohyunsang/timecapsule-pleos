@@ -8,6 +8,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.ui.Alignment
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -54,16 +58,29 @@ fun CollectedMapScreen(drive: DriveController, back: () -> Unit) {
                     onUnavailable = { unavailable = it })
             }
             MapLifecycle(native, savedMap)
-            AndroidView(factory = { native.view }, update = {
-                native.update(collected, selected?.id, current)
-            }, modifier = Modifier.fillMaxWidth().weight(1f))
+            Box(Modifier.fillMaxWidth().weight(1f)) {
+                AndroidView(factory = { native.view }, update = {
+                    native.update(collected, selected?.id, current)
+                }, modifier = Modifier.fillMaxSize())
+                Column(Modifier.align(Alignment.TopEnd).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconBtn(Icons.Rounded.Add, "지도 확대", style = BtnStyle.Basic, size = 64.dp) {
+                        if (drive.canEdit()) native.zoomBy(1.0)
+                    }
+                    IconBtn(Icons.Rounded.Remove, "지도 축소", style = BtnStyle.Basic, size = 64.dp) {
+                        if (drive.canEdit()) native.zoomBy(-1.0)
+                    }
+                }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(if (unavailable) "지도 배경을 불러오지 못했어요. 아래 목록에서 선택해 주세요."
                     else if (current == null) "현재 위치를 확인하고 있어요 · 수집 캡슐은 다시 들을 수 있어요"
                     else "파란 점은 현재 차량 위치예요", style=Type.BodyS, color=Tc.TextSub, modifier=Modifier.weight(1f))
-                Text("© OpenStreetMap contributors", style=Type.BodyS, color=Tc.TextSub,
-                    modifier=Modifier.clickable { runCatching { uriHandler.openUri("https://www.openstreetmap.org/copyright") } }
-                        .padding(12.dp))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("© OpenMapTiles", style=Type.LabelM, color=Tc.TextMute,
+                        modifier=Modifier.clickable { runCatching { uriHandler.openUri("https://openmaptiles.org/") } }.padding(4.dp))
+                    Text("© OpenStreetMap", style=Type.LabelM, color=Tc.TextMute,
+                        modifier=Modifier.clickable { runCatching { uriHandler.openUri("https://www.openstreetmap.org/copyright") } }.padding(4.dp))
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Btn("전체 보기", Modifier.weight(1f)) { if (drive.canEdit()) native.showAll() }
