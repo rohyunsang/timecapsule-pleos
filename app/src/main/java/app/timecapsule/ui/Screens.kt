@@ -1,5 +1,10 @@
 package app.timecapsule.ui
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -479,7 +484,7 @@ fun AlbumScreen(drive: DriveController, onMap: () -> Unit, back: () -> Unit) {
                 item(key = "$key:rows") {
                     Panel {
                         list.sortedBy { it.createdAt }.forEachIndexed { i, c ->
-                            if (i > 0) RowDivider()
+                            if (i > 0) Spacer(Modifier.height(12.dp))
                             CapsuleRow(
                                 c, locks[c.id]?.openAfter?.takeIf { locks[c.id].isLocked(today) }, { drive.playCapsule(c.id) },
                                 onShare = { sharing = c }.takeIf { c.isMine && !c.locationUncertain && c.audience in setOf("SELF", "FRIENDS") },
@@ -534,19 +539,40 @@ private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onSha
     val locked = lockedUntil != null
     val time = Instant.ofEpochMilli(c.createdAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("a h:mm"))
     val tags = app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).drop(1).joinToString(Sep)
-    ListRow(
-        title = "${c.placeName ?: "장소 기록 없음"}   ${c.durationSec}초",
-        sub = if (locked) "${LocalDate.ofEpochDay(lockedUntil!!).format(dayFmt)}에 열리는 편지"
-        else listOf(whoOf(c), reason ?: "", time, tags, if (c.locationUncertain) "위치 불확실" else "").filter { it.isNotEmpty() }.joinToString(Sep),
-        leading = if (locked) Icons.Rounded.Lock else Icons.Rounded.PlayArrow,
-        leadingTint = if (locked) Tc.TextMute else Tc.Text,
-        enabled = !locked,
-        onClick = onPlay,
-    ) {
-        if (onShare != null) {
-            Btn(if (c.audience == "SELF") "친구에게 공개" else "나만 듣기", height = 56.dp, onClick = onShare)
+    val density = LocalDensity.current.density
+    val artwork = remember(density) { CapsuleArtwork.bitmap(density).asImageBitmap() }
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(64.dp)).background(Tc.Basic)
+                .clickable(enabled = !locked, onClick = clickWithSound(onPlay)).padding(end = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.width(112.dp).height(128.dp).background(Tc.Line), contentAlignment = Alignment.Center) {
+                Image(artwork, contentDescription = null, modifier = Modifier.size(88.dp))
+            }
+            Spacer(Modifier.width(24.dp))
+            Column(Modifier.weight(1f).padding(vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(c.placeName ?: "장소 기록 없음", style = Type.BodyStrong, color = Tc.Text,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (locked) "${LocalDate.ofEpochDay(lockedUntil!!).format(dayFmt)}에 열려요"
+                    else "$time · ${c.durationSec}초 · ${whoOf(c)}", style = Type.LabelM, color = Tc.TextSub,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val detail = listOfNotNull(reason, tags.takeIf { it.isNotBlank() },
+                    "위치 불확실".takeIf { c.locationUncertain }).joinToString(Sep)
+                if (detail.isNotBlank()) Text(detail, style = Type.LabelM, color = Tc.TextMute,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Icon(if (locked) Icons.Rounded.Lock else Icons.Rounded.PlayArrow,
+                contentDescription = if (locked) "잠긴 캡슐" else "캡슐 재생",
+                tint = if (locked) Tc.TextMute else Tc.Text, modifier = Modifier.padding(start = 12.dp).size(32.dp))
         }
-        IconBtn(Icons.Rounded.DeleteOutline, "삭제", onClick = onDelete)
+        Row(Modifier.fillMaxWidth().padding(start = 112.dp), horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically) {
+            if (onShare != null) {
+                Btn(if (c.audience == "SELF") "친구에게 공개" else "나만 듣기", height = 56.dp, onClick = onShare)
+            }
+            IconBtn(Icons.Rounded.DeleteOutline, "삭제", size = 56.dp, onClick = onDelete)
+        }
     }
 }
 
