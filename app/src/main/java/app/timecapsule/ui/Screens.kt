@@ -509,9 +509,9 @@ fun AlbumScreen(drive: DriveController, onMap: () -> Unit, back: () -> Unit) {
     }
     deleting?.let { c ->
         ConfirmPopup(
-            "이 캡슐을 지울까요?",
+            "이 캡슐을 삭제할까요?",
             "${c.date().format(dayFmt)} ${c.placeName ?: ""}에서 남긴 목소리가 지워지고 되돌릴 수 없어요.",
-            "지우기",
+            "삭제하기",
             onConfirm = { drive.delete(c); deleting = null },
             onDismiss = { deleting = null },
         )
@@ -543,7 +543,7 @@ private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onSha
     val artwork = remember(density) { CapsuleArtwork.bitmap(density).asImageBitmap() }
     Column(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(64.dp)).background(Tc.Basic)
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Tc.Basic)
                 .clickable(enabled = !locked, onClick = clickWithSound(onPlay)).padding(end = 24.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -562,9 +562,19 @@ private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onSha
                 if (detail.isNotBlank()) Text(detail, style = Type.LabelM, color = Tc.TextMute,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Icon(if (locked) Icons.Rounded.Lock else Icons.Rounded.PlayArrow,
-                contentDescription = if (locked) "잠긴 캡슐" else "캡슐 재생",
-                tint = if (locked) Tc.TextMute else Tc.Text, modifier = Modifier.padding(start = 12.dp).size(32.dp))
+            if (locked) {
+                Icon(Icons.Rounded.Lock, contentDescription = "잠긴 캡슐",
+                    tint = Tc.TextMute, modifier = Modifier.padding(start = 12.dp).size(32.dp))
+            } else {
+                Surface(onClick = clickWithSound(onPlay),
+                    modifier = Modifier.padding(start = 12.dp).size(72.dp),
+                    shape = RoundedCornerShape(Tc.BtnRadius), color = Tc.P.filled) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.PlayArrow, contentDescription = "캡슐 재생",
+                            tint = Tc.P.onFilled, modifier = Modifier.size(44.dp))
+                    }
+                }
+            }
         }
         Row(Modifier.fillMaxWidth().padding(start = 112.dp), horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically) {
