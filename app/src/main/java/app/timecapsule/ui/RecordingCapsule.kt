@@ -7,7 +7,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.unit.dp
@@ -25,20 +25,25 @@ fun RecordingCapsule(modifier: Modifier = Modifier, input: Float = 0f) {
         drawCircle(Color.White, r)
         drawArc(red, 0f, 180f, true, Offset(c.x-r, c.y-r), Size(r*2, r*2))
         drawCircle(outline.copy(alpha = 0.35f), r, style = Stroke(1.5.dp.toPx()))
-        val micWidth = r * 0.24f
-        val micHeight = r * 0.43f
-        val top = c.y - r * 0.37f
-        val stroke = r * 0.065f
         fun microphone(color: Color) {
-            drawRoundRect(color, Offset(c.x-micWidth/2, top), Size(micWidth, micHeight), CornerRadius(micWidth/2))
-            val arcWidth = r * 0.44f
-            val arcHeight = r * 0.44f
-            drawArc(color, 0f, 180f, false,
-                Offset(c.x-arcWidth/2, top+micHeight-arcHeight/2), Size(arcWidth, arcHeight),
-                style = Stroke(stroke, cap = StrokeCap.Round))
-            val baseY = top + micHeight + arcHeight/2
-            drawLine(color, Offset(c.x, baseY), Offset(c.x, baseY+r*0.15f), stroke, StrokeCap.Round)
-            drawLine(color, Offset(c.x-r*0.12f, baseY+r*0.15f), Offset(c.x+r*0.12f, baseY+r*0.15f), stroke, StrokeCap.Round)
+            // Filled body, cradle, stem and base keep the mark legible at small sizes.
+            drawRoundRect(color, Offset(c.x-r*0.19f, c.y-r*0.52f),
+                Size(r*0.38f, r*0.66f), CornerRadius(r*0.19f))
+            val cradle = Path().apply {
+                moveTo(c.x-r*0.36f, c.y-r*0.04f)
+                lineTo(c.x-r*0.22f, c.y-r*0.04f)
+                lineTo(c.x-r*0.22f, c.y+r*0.10f)
+                cubicTo(c.x-r*0.22f, c.y+r*0.36f, c.x+r*0.22f, c.y+r*0.36f, c.x+r*0.22f, c.y+r*0.10f)
+                lineTo(c.x+r*0.22f, c.y-r*0.04f)
+                lineTo(c.x+r*0.36f, c.y-r*0.04f)
+                lineTo(c.x+r*0.36f, c.y+r*0.10f)
+                cubicTo(c.x+r*0.36f, c.y+r*0.55f, c.x-r*0.36f, c.y+r*0.55f, c.x-r*0.36f, c.y+r*0.10f)
+                close()
+            }
+            drawPath(cradle, color)
+            drawRect(color, Offset(c.x-r*0.07f, c.y+r*0.36f), Size(r*0.14f, r*0.20f))
+            drawRoundRect(color, Offset(c.x-r*0.25f, c.y+r*0.51f),
+                Size(r*0.50f, r*0.13f), CornerRadius(r*0.065f))
         }
         clipRect(bottom = c.y) { microphone(red) }
         clipRect(top = c.y) { microphone(Color.White) }
