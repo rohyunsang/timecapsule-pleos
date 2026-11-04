@@ -68,6 +68,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.timecapsule.capsule.AlbumData
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.role
@@ -150,9 +151,10 @@ fun HomeScreen(
             Row(Modifier.fillMaxSize().padding(Tc.Gutter), horizontalArrangement = Arrangement.spacedBy(Tc.Gutter)) {
                 Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
                     AppBar(onPleos, restricted, onDev)
-                    VoiceBar(drive, friendCount)
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        VoiceBar(drive, friendCount)
+                    }
                     NowNotice(drive, restricted, today)
-                    Spacer(Modifier.weight(1f))
                     MenuBar(restricted, go, onLocked)
                 }
                 Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
@@ -177,45 +179,47 @@ private fun AppBar(onPleos: Boolean, restricted: Boolean, onDev: () -> Unit) {
     Header("타임캡슐") { IconBtn(Icons.Rounded.MoreHoriz, "시연 패널", onClick = onDev) }
 }
 
-/**
- * The one main action, shaped like navigation's "어디로 갈까요?" bar: a solid dark bar with a
- * mic, the verb, and what will be saved with it (place and mood) on the second line.
- * Plain icon, no colored badge.
- */
+/** Centered recording control. Starting still goes through the existing preparation policy. */
 @Composable
 private fun VoiceBar(drive: DriveController, friendCount: Int) {
     val car by drive.car.collectAsState()
     val audience by drive.defaultAudience.collectAsState()
     val tags = MoodTagEngine.tagsFor(car).filter { it.label != car.placeName }.map { it.label }
-    val p = Tc.P
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    Surface(
-        onClick = clickWithSound { drive.bury() },
-        modifier = Modifier.fillMaxWidth().heightIn(min = 128.dp),
-        shape = RoundedCornerShape(Tc.PanelRadius),
-        color = if (pressed) p.filled else p.strong,
-        contentColor = p.onStrong,
-        interactionSource = source,
+    val recordRed = Color(0xFFD92D3A)
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(Modifier.padding(horizontal = 32.dp, vertical = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.Mic, null, tint = p.onStrong, modifier = Modifier.size(44.dp))
-            Column(Modifier.padding(start = 24.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("목소리 남기기", style = Type.TitleM)
-                // Who hears it comes first: that is the point of leaving one.
-                Text(
-                    (listOf(
-                        when {
-                            audience == "SELF" -> "나만"
-                            friendCount == 0 -> "친구 모두에게(아직 친구 없음)"
-                            else -> "친구 ${friendCount}명에게"
-                        },
-                        car.placeName ?: "위치 확인 중",
-                    ) + tags).joinToString(Sep),
-                    style = Type.LabelM, color = p.onStrongSub, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
+        Surface(
+            onClick = clickWithSound { drive.bury() },
+            modifier = Modifier.size(144.dp).semantics { contentDescription = "목소리 녹음 시작" },
+            shape = CircleShape,
+            color = if (pressed) Color(0xFFA91E2A) else recordRed,
+            interactionSource = source,
+        ) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(112.dp).border(3.dp, Color.White.copy(alpha = 0.85f), CircleShape), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Mic, null, tint = Color.White, modifier = Modifier.size(56.dp))
+                }
             }
         }
+        Text("목소리 남기기", style = Type.TitleM, color = Tc.Text, textAlign = TextAlign.Center)
+        Text(
+            (listOf(
+                when {
+                    audience == "SELF" -> "나만"
+                    friendCount == 0 -> "친구 모두에게(아직 친구 없음)"
+                    else -> "친구 ${friendCount}명에게"
+                },
+                car.placeName ?: "위치 확인 중",
+            ) + tags).joinToString(Sep),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            style = Type.LabelM, color = Tc.TextSub, textAlign = TextAlign.Center,
+            maxLines = 2, overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
