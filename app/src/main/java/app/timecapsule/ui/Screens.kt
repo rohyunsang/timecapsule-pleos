@@ -606,7 +606,16 @@ private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onSha
             }
             if (locked) {
                 Column(Modifier.padding(start = 12.dp).width(88.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Rounded.Lock, contentDescription = "잠긴 캡슐", tint = Tc.TextMute, modifier = Modifier.size(32.dp))
+                    Surface(onClick = clickWithSound { onNavigate?.invoke() }, enabled = onNavigate != null,
+                        modifier = Modifier.size(72.dp), shape = RoundedCornerShape(Tc.BtnRadius),
+                        color = if (onNavigate != null) Tc.P.filled else Tc.Basic) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.Lock,
+                                contentDescription = if (onNavigate != null) "잠긴 캡슐 장소로 길 안내" else "장소를 확인할 수 없는 잠긴 캡슐",
+                                tint = if (onNavigate != null) Tc.P.onFilled else Tc.TextMute,
+                                modifier = Modifier.size(40.dp))
+                        }
+                    }
                     Text(if (lockedUntil != null) "개봉 대기" else "수집 전", style = Type.LabelM, color = Tc.TextMute)
                 }
             } else {
