@@ -148,21 +148,29 @@ fun HomeScreen(
                 MenuBar(restricted, go, onLocked)
             }
         } else {
-            Row(Modifier.fillMaxSize().padding(Tc.Gutter), horizontalArrangement = Arrangement.spacedBy(Tc.Gutter)) {
-                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
-                    AppBar(onPleos, restricted, onDev)
-                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        VoiceBar(drive, friendCount)
+            Column(Modifier.fillMaxSize().padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                AppBar(onPleos, restricted, onDev)
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                        Surface(Modifier.weight(1f).fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = Tc.Basic) {
+                            Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center) {
+                                Text("지금, 이곳의 목소리", style = Type.LabelStrong, color = Tc.TextSub)
+                                Spacer(Modifier.height(24.dp))
+                                VoiceBar(drive, friendCount)
+                            }
+                        }
+                        NowNotice(drive, restricted, today)
+                        MenuBar(restricted, go, onLocked)
                     }
-                    NowNotice(drive, restricted, today)
-                    MenuBar(restricted, go, onLocked)
-                }
-                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
-                    Spacer(Modifier.height(Tc.Touch - Tc.Gap))
-                    CapsuleList(
-                        playable.take(6), capsules.size, restricted, today, Modifier,
-                        onMore = { if (restricted) onLocked() else go(Screen.ALBUM) },
-                    ) { drive.playCapsule(it) }
+                    Surface(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(24.dp), color = Tc.Surface) {
+                        BoxWithConstraints(Modifier.padding(24.dp)) {
+                            val fits = ((maxHeight - 100.dp) / (Tc.Row + 1.dp)).toInt().coerceIn(1, 6)
+                            CapsuleList(playable.take(fits), capsules.size, restricted, today, Modifier,
+                                onMore = { if (restricted) onLocked() else go(Screen.ALBUM) },
+                            ) { drive.playCapsule(it) }
+                        }
+                    }
                 }
             }
         }
@@ -187,7 +195,6 @@ private fun VoiceBar(drive: DriveController, friendCount: Int) {
     val tags = MoodTagEngine.tagsFor(car).filter { it.label != car.placeName }.map { it.label }
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val recordRed = Color(0xFFD92D3A)
     Column(
         Modifier.fillMaxWidth().padding(vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -195,16 +202,12 @@ private fun VoiceBar(drive: DriveController, friendCount: Int) {
     ) {
         Surface(
             onClick = clickWithSound { drive.bury() },
-            modifier = Modifier.size(144.dp).semantics { contentDescription = "목소리 녹음 시작" },
+            modifier = Modifier.size(176.dp).semantics { contentDescription = "목소리 녹음 시작" },
             shape = CircleShape,
-            color = if (pressed) Color(0xFFA91E2A) else recordRed,
+            color = if (pressed) Tc.Basic else Color.Transparent,
             interactionSource = source,
         ) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Box(Modifier.size(112.dp).border(3.dp, Color.White.copy(alpha = 0.85f), CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Mic, null, tint = Color.White, modifier = Modifier.size(56.dp))
-                }
-            }
+            RecordingCapsule(Modifier.fillMaxSize())
         }
         Text("목소리 남기기", style = Type.TitleM, color = Tc.Text, textAlign = TextAlign.Center)
         Text(
@@ -280,21 +283,21 @@ private fun CapsuleList(
     onPlay: (Long) -> Unit,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Section("캡슐 $total") {
+        Section("최근 캡슐") {
             if (total > 0 && !driving) {
-                Btn("전체", icon = null, style = BtnStyle.Quiet, height = 56.dp, onClick = onMore)
+                Btn("전체 $total", icon = null, style = BtnStyle.Quiet, height = 88.dp, onClick = onMore)
             }
         }
         Panel {
             when {
-                total == 0 -> ListRow("아직 묻은 캡슐이 없어요", "위의 버튼을 누르고 말하면 첫 캡슐이 생겨요", leading = Icons.Rounded.Mic, leadingTint = Tc.TextMute)
+                total == 0 -> ListRow("아직 묻은 캡슐이 없어요", "녹음 버튼을 누르고 첫 목소리를 남겨 보세요", leading = Icons.Rounded.Mic, leadingTint = Tc.TextMute)
                 driving -> ListRow("목록은 차를 세우면 보여요", "운전 중에는 캡슐이 알림으로 찾아와요", leading = Icons.Rounded.Lock, leadingTint = Tc.TextMute)
                 else -> recent.forEachIndexed { i, c ->
                     if (i > 0) RowDivider()
                     ListRow(
                         (c.ownerName?.let { "${it}님   " } ?: "") + (c.placeName ?: "장소 기록 없음"),
-                        "${c.date().format(shortFmt)}   ${Narration.elapsed(c.date(), today)}",
-                        leading = Icons.Rounded.PlayArrow,
+                        "${Narration.elapsed(c.date(), today)} · ${c.durationSec}초 · ${if (c.collectedAt != null || c.sourceRemoteId != null) "바로 듣기" else "수집 전"}",
+                        leading = if (c.collectedAt != null || c.sourceRemoteId != null) Icons.Rounded.PlayArrow else Icons.Rounded.Lock,
                         onClick = { onPlay(c.id) },
                     )
                 }

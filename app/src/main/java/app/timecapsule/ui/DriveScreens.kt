@@ -23,6 +23,10 @@ import androidx.compose.material.icons.rounded.PauseCircle
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -34,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,11 +77,7 @@ private fun rememberNow(key: Any?): Long {
     return now
 }
 
-/**
- * Screen 04: recording. A mic in a circle that swells with the voice, so it is plain that the
- * car is listening; the ring around it runs down over the 30 seconds. Today's weather sits
- * faintly behind, because it is buried with the voice. The two ways out stay fixed at the bottom.
- */
+/** Recording uses measured input, a large timer, and fixed completion controls. */
 /** "최대 30초", "최대 1분", "최대 2분 30초". */
 fun lengthLabel(sec: Int): String = "최대 " + when {
     sec < 60 -> "${sec}초"
@@ -94,66 +95,74 @@ fun RecordingScreen(
     val elapsed = since?.let { ((now - it) / 1000).toInt() } ?: 0
     val shown = elapsed.coerceAtMost(maxSec)
     val tooShort = elapsed < Rules.MIN_RECORD_SEC
-    // Mic level polled ~16 times a second and eased, so the circle breathes instead of jumping.
-    var target by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(Unit) { while (true) { target = level(); delay(60) } }
-    val voice by animateFloatAsState(target, tween(120), label = "voice")
-    val left by animateFloatAsState(1f - shown / maxSec.toFloat(), tween(900, easing = LinearEasing), label = "left")
-    val track = Tc.Basic; val ink = Tc.Text; val paper = Tc.Bg
-
-    Box(Modifier.fillMaxSize().background(Tc.Bg)) {
-        WeatherBackdrop(sky, night, animate, Modifier.fillMaxSize().alpha(0.55f))
-        Column(Modifier.fillMaxSize().padding(Tc.Gutter)) {
-            Row(Modifier.fillMaxWidth().padding(start = Tc.Inset, end = Tc.Inset, top = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                Dot(Tc.Rec, 12.dp)
-                Text("  녹음 중", style = Type.TitleS, color = Tc.Text)
-                Spacer(Modifier.weight(1f))
-                Text(lengthLabel(maxSec), style = Type.LabelM, color = Tc.TextMute)
-            }
-            Column(
-                Modifier.weight(1f).fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
-            ) {
-                Box(Modifier.size(300.dp), contentAlignment = Alignment.Center) {
-                    Canvas(Modifier.fillMaxSize()) {
-                        val c = center
-                        val core = 70.dp.toPx()
-                        // Voice: a soft halo that grows with loudness.
-                        val halo = core + 60.dp.toPx() * voice
-                        drawCircle(ink.copy(alpha = 0.04f + 0.08f * voice), halo, c)
-                        drawCircle(ink.copy(alpha = 0.05f), core + 14.dp.toPx() + 22.dp.toPx() * voice, c)
-                        // Time left: a thin ring that runs down clockwise from the top.
-                        val stroke = 3.dp.toPx()
-                        val r = size.minDimension / 2 - stroke
-                        drawCircle(track, r, c, style = Stroke(stroke))
-                        drawArc(
-                            ink, -90f, -360f * left, false,
-                            topLeft = Offset(c.x - r, c.y - r), size = Size(r * 2, r * 2),
-                            style = Stroke(stroke, cap = StrokeCap.Round),
-                        )
-                        drawCircle(ink, core, c)
+    val samples = remember(since) { mutableStateListOf<Float>().apply { repeat(48) { add(0f) } } }
+    var input by remember(since) { mutableFloatStateOf(0f) }
+    val breathing by animateFloatAsState(input, tween(180), label = "recording-capsule-input")
+    LaunchedEffect(since, animate) {
+        while (true) {
+            val value = level().coerceIn(0f, 1f)
+            input = if (animate) value else 0f
+            if (animate) { samples.removeAt(0); samples.add(value) }
+            delay(100)
+        }
+    }
+    val red = Color(0xFFD92D3A)
+    val waveform = if (Tc.P.isDark) Color(0xFFFF7B85) else red
+    Column(Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Dot(red, 12.dp)
+            Text("녹음 중", style = Type.TitleS, color = Tc.Text)
+            Spacer(Modifier.weight(1f))
+            Text(lengthLabel(maxSec), style = Type.LabelM, color = Tc.TextSub)
+        }
+        Surface(Modifier.weight(1f).fillMaxWidth(), color = Tc.Basic, shape = RoundedCornerShape(24.dp)) {
+            BoxWithConstraints(Modifier.fillMaxSize().padding(24.dp)) {
+                val compact = maxHeight < 460.dp
+                Column(Modifier.fillMaxSize().widthIn(max = 960.dp).align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 16.dp, Alignment.CenterVertically)) {
+                    Text(place ?: "위치 확인 중", style = Type.TitleS, color = Tc.Text)
+                    Text("%02d:%02d".format(shown / 60, shown % 60),
+                        style = Type.Display.copy(fontSize = if (compact) 72.sp else 104.sp, lineHeight = if (compact) 84.sp else 116.sp, fontFeatureSettings = "tnum"), color = Tc.Text)
+                    RecordingCapsule(Modifier.size(if (compact) 120.dp else 176.dp).graphicsLayer {
+                        scaleX = 1f + breathing * 0.08f
+                        scaleY = 1f + breathing * 0.08f
+                    }, input = breathing)
+                    Canvas(Modifier.fillMaxWidth(0.8f).height(if (compact) 40.dp else 64.dp)) {
+                        val step = size.width / samples.size
+                        samples.forEachIndexed { index, value ->
+                            val half = (4.dp.toPx() + value * (size.height / 2 - 4.dp.toPx())).coerceAtLeast(2f)
+                            val x = step * (index + 0.5f)
+                            drawLine(waveform.copy(alpha = 0.35f + 0.65f * (index + 1) / samples.size),
+                                Offset(x, center.y - half), Offset(x, center.y + half),
+                                strokeWidth = minOf(6.dp.toPx(), step * 0.6f), cap = StrokeCap.Round)
+                        }
                     }
-                    Icon(Icons.Rounded.Mic, null, tint = paper, modifier = Modifier.size(64.dp))
+                    if (tags.isNotEmpty()) Text(tags.map { it.label }.filter { it != place }.joinToString(Sep),
+                        style = Type.LabelM, color = Tc.TextSub, textAlign = TextAlign.Center, maxLines = 2)
+                    LinearProgressIndicator(progress = { shown / maxSec.coerceAtLeast(1).toFloat() },
+                        modifier = Modifier.fillMaxWidth(0.7f).height(4.dp), color = waveform,
+                        trackColor = Tc.Bg, drawStopIndicator = {})
+                    Text("${(maxSec - shown).coerceAtLeast(0)}초 남음", style = Type.LabelM, color = Tc.TextSub)
                 }
-                Text("%d:%02d".format(shown / 60, shown % 60), style = Type.TitleS.copy(fontFeatureSettings = "tnum"), color = Tc.Text)
-                Text(
-                    (listOf(place ?: "위치 확인 중") + tags.map { it.label }).joinToString(Sep),
-                    style = Type.BodyS, color = Tc.TextMute, textAlign = TextAlign.Center, maxLines = 2,
-                )
             }
-            Text(
-                when {
-                    tooShort -> "3초 이상 말해 주세요"
-                    silenceSec > 0 -> "다 말했으면 묻기를 누르세요. ${silenceSec}초 동안 말이 없으면 저절로 묻혀요"
-                    else -> "다 말했으면 묻기를 누르세요"
-                },
-                style = Type.BodyM, color = Tc.TextSub, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Btn("지우기", Modifier.weight(1f), icon = Icons.Rounded.Close, height = Tc.TouchLarge, onClick = onCancel)
-                Btn("묻기", Modifier.weight(1f), icon = Icons.Rounded.Check, style = BtnStyle.Filled, enabled = !tooShort, height = Tc.TouchLarge, onClick = onStop)
+        }
+        Text(when {
+            tooShort -> "3초 이상 말해 주세요"
+            silenceSec > 0 -> "말을 마치면 저장하세요 · ${silenceSec}초 동안 말이 없으면 자동 저장돼요"
+            else -> "말을 마치면 녹음 완료를 눌러 주세요"
+        }, style = Type.LabelM, color = Tc.TextSub, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            Btn("녹음 취소", Modifier.weight(1f), icon = Icons.Rounded.Close, height = Tc.TouchLarge, onClick = onCancel)
+            Surface(onClick = clickWithSound(onStop), enabled = !tooShort,
+                modifier = Modifier.weight(2f).height(Tc.TouchLarge), shape = RoundedCornerShape(20.dp),
+                color = if (tooShort) Tc.Basic else red) {
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Stop, null, Modifier.size(36.dp), tint = if (tooShort) Tc.TextMute else Color.White)
+                    Text("녹음 완료 · 저장", style = Type.Button, color = if (tooShort) Tc.TextMute else Color.White)
+                }
             }
         }
     }
