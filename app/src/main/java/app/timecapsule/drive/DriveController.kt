@@ -82,6 +82,13 @@ class DriveController(
     val prepared: StateFlow<Boolean> = _prepared.asStateFlow()
     private val _editable = MutableStateFlow(false)
     val editable: StateFlow<Boolean> = _editable.asStateFlow()
+    private val _microphonePermissionNeeded = MutableStateFlow(false)
+    val microphonePermissionNeeded: StateFlow<Boolean> = _microphonePermissionNeeded.asStateFlow()
+    fun dismissMicrophonePermission() { _microphonePermissionNeeded.value = false }
+    private fun requireMicrophonePermission() {
+        _microphonePermissionNeeded.value = true
+        say("마이크 권한이 필요해요. 주차 후 설정에서 허용해 주세요")
+    }
     private var operationEpoch = 0L
     private var saving = false
     var authorizeShared: suspend (Capsule) -> Boolean = { it.isMine }
@@ -99,7 +106,7 @@ class DriveController(
     } == true
     fun prepareDrive() {
         if (!canEdit()) return say("주차 후 차량 상태를 확인해 주세요")
-        if (!microphoneAllowed()) return say("설정에서 마이크 권한을 허용해 주세요")
+        if (!microphoneAllowed()) return requireMicrophonePermission()
         if (!requestPreparation()) say("기록 준비를 시작하지 못했어요. 앱 화면에서 다시 시도해 주세요")
     }
     internal fun completePreparation(): Boolean {
@@ -119,7 +126,7 @@ class DriveController(
      */
     suspend fun recordByVoice(): Boolean {
         if (_state.value == DriveState.Recording) return true
-        if (!microphoneAllowed()) { say("설정에서 마이크 권한을 허용해 주세요"); return false }
+        if (!microphoneAllowed()) { requireMicrophonePermission(); return false }
         if (!_prepared.value || !session.active(now())) {
             byVoice = true
             try {
@@ -273,8 +280,9 @@ class DriveController(
      */
     fun bury(openOn: LocalDate? = null, audience: String? = null, recipients: List<String> = emptyList()) {
         if (_state.value != DriveState.Idle || saving) return
+        if (!microphoneAllowed()) return requireMicrophonePermission()
         if (!_prepared.value || !session.active(now())) return say("출발 전에 이번 주행을 준비해 주세요")
-        if (!vehicleKnown() || signals.value.isNotEmpty() || !microphoneAllowed()) return say("지금은 녹음을 시작할 수 없어요")
+        if (!vehicleKnown() || signals.value.isNotEmpty()) return say("지금은 녹음을 시작할 수 없어요")
         player.stop()
         pendingOpenOn = openOn
         pendingAudience = audience ?: settings.defaultAudience.value
