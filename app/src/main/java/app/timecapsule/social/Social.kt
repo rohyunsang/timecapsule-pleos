@@ -39,6 +39,10 @@ data class RemoteCapsule(
     val recipients: List<String>,
     /** Uids allowed to receive it: all friends (FRIENDS) or the recipients (SOME). */
     val visibleTo: List<String>,
+    /** Non-null for an audio copy forwarded by ownerUid; the author is preserved separately. */
+    val sourceRemoteId: String? = null,
+    val originalOwnerUid: String? = null,
+    val originalOwnerName: String? = null,
 )
 
 interface SocialBackend {

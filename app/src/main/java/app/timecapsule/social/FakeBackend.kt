@@ -120,7 +120,8 @@ class FakeBackend(context: Context) : SocialBackend {
     }
 
     override suspend fun upload(capsule: RemoteCapsule, audio: ByteArray): Result<String> {
-        val id = "fake-capsule-${++seq}"
+        if (me.value?.uid != capsule.ownerUid) return Result.failure(IllegalStateException("계정이 바뀌었어요"))
+        val id = capsule.id.takeIf { capsule.sourceRemoteId != null && it.isNotBlank() } ?: "fake-capsule-${++seq}"
         capsules[id] = capsule.copy(id = id)
         audioById[id] = audio
         refresh()

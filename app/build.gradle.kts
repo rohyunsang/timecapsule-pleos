@@ -18,6 +18,7 @@ android {
         // Pleos requires API 28+ (signing key rotation / lineage).
         minSdk = 28
         targetSdk = 35
+        testInstrumentationRunner = "app.timecapsule.ForwardingSmokeRunner"
         versionCode = 1
         versionName = "0.1.0-proto"
 

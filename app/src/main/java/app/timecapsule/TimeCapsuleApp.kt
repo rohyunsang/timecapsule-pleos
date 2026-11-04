@@ -68,7 +68,7 @@ class TimeCapsuleApp : Application() {
     override fun onCreate() {
         super.onCreate()
         db = Room.databaseBuilder(this, AppDatabase::class.java, "timecapsule.db")
-            .addMigrations(app.timecapsule.data.Migrations.FROM_1, app.timecapsule.data.Migrations.FROM_2, app.timecapsule.data.Migrations.FROM_3)
+            .addMigrations(app.timecapsule.data.Migrations.FROM_1, app.timecapsule.data.Migrations.FROM_2, app.timecapsule.data.Migrations.FROM_3, app.timecapsule.data.Migrations.FROM_4)
             .build()
         settings = Settings(this)
         repo = CapsuleRepository(db)

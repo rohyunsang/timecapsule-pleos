@@ -41,3 +41,21 @@ python3 scripts/verify-migrations.py
 ## 권리
 
 기존 저장소의 All rights reserved 정책을 유지합니다. 제출 여부와 실차 검증 여부는 별도입니다.
+
+## 수집한 캡슐을 친구에게 보내기
+
+앨범에서 다른 사람이 남긴 캡슐을 직접 수집한 경우에만 **친구에게 보내기** 버튼이 나타납니다. 친구 한 명을 선택하고 전송을 확인하면 음성 사본이 전달됩니다. 내가 남긴 캡슐이나 아직 수집하지 않은 캡슐, 전달받은 사본은 이 버튼의 대상이 아닙니다.
+
+받은 친구는 원래 장소로 이동하거나 먼저 수집하지 않아도 앨범에서 바로 들을 수 있습니다. 원작자와 전달자가 구분되어 표시되며, 실제 방문 기록이나 수집 지도에는 추가되지 않습니다. 차량 안전 제한과 새 재생 시 서버 권한 확인은 유지되므로 인터넷 연결이 필요합니다. 원본을 삭제해도 이미 전달한 사본은 남습니다. 같은 원본을 같은 친구에게 다시 보내면 기존 전달 건을 사용합니다.
+
+검증 명령은 다음과 같습니다. 기기 테스트는 별도 임시 파일·설정·메모리 DB와 FakeBackend만 사용하며 실제 친구에게 전송하지 않습니다.
+
+```sh
+bash gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest
+python3 scripts/verify-migrations.py
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb shell am instrument --user 10 -w app.timecapsule.proto.test/app.timecapsule.ForwardingSmokeRunner
+```
+
+AAOS의 현재 사용자 번호가 다르면 `--user 10`을 해당 번호로 바꿉니다. 기기 테스트는 수집 전 전송 거부, 수집 후 전달, 재시도 중복 방지, 수신 동기화, 음성 일치, 위치 없는 재생 정책과 송신자 앨범을 확인합니다. 실제 Firebase 계정 간 전송과 실차 오디오 재생은 별도로 검증해야 합니다.

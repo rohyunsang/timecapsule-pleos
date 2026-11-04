@@ -201,7 +201,9 @@ class FirebaseBackend(
     override suspend fun upload(capsule: RemoteCapsule, audio: ByteArray): Result<String> = runCatching {
         ensureAuth()
         // Same id on every retry, so a write that went through while offline is not duplicated.
-        val ref = db.collection("capsules").document("${capsule.ownerUid}_${capsule.createdAt}")
+        check(me.value?.uid == capsule.ownerUid && auth.currentUser?.uid == capsule.ownerUid) { "계정이 바뀌었어요. 다시 시도해 주세요" }
+        val ref = db.collection("capsules").document(capsule.id.takeIf { capsule.sourceRemoteId != null && it.isNotBlank() }
+            ?: "${capsule.ownerUid}_${capsule.createdAt}")
         // Audio first: a capsule doc never points at missing audio.
         withTimeout(WRITE_TIMEOUT_MS) {
             db.collection("audio").document(ref.id)
@@ -293,6 +295,8 @@ class FirebaseBackend(
         "durationSec" to c.durationSec, "tags" to c.tags, "rawVehicleState" to c.rawVehicleState,
         "openAfter" to c.openAfter, "audience" to c.audience.name, "recipients" to c.recipients,
         "visibleTo" to c.visibleTo,
+        "sourceRemoteId" to c.sourceRemoteId, "originalOwnerUid" to c.originalOwnerUid,
+        "originalOwnerName" to c.originalOwnerName,
     )
 
     @Suppress("UNCHECKED_CAST")
@@ -313,6 +317,8 @@ class FirebaseBackend(
             audience = runCatching { Audience.valueOf(d.getString("audience")!!) }.getOrDefault(Audience.FRIENDS),
             recipients = (d.get("recipients") as? List<String>).orEmpty(),
             visibleTo = (d.get("visibleTo") as? List<String>).orEmpty(),
+            sourceRemoteId = d.getString("sourceRemoteId"), originalOwnerUid = d.getString("originalOwnerUid"),
+            originalOwnerName = d.getString("originalOwnerName"),
         )
     }.getOrNull()
 
