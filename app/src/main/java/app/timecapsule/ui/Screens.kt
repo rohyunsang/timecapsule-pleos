@@ -575,13 +575,13 @@ private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onSha
                     }
                 }
             }
+            IconBtn(Icons.Rounded.DeleteOutline, "삭제", size = 72.dp, onClick = onDelete)
         }
-        Row(Modifier.fillMaxWidth().padding(start = 112.dp), horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically) {
-            if (onShare != null) {
+        if (onShare != null) {
+            Row(Modifier.fillMaxWidth().padding(start = 112.dp), horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically) {
                 Btn(if (c.audience == "SELF") "친구에게 공개" else "나만 듣기", height = 56.dp, onClick = onShare)
             }
-            IconBtn(Icons.Rounded.DeleteOutline, "삭제", size = 56.dp, onClick = onDelete)
         }
     }
 }
