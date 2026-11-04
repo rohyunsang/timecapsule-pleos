@@ -1,14 +1,10 @@
 package app.timecapsule.map
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.RectF
 import android.os.Bundle
 import app.timecapsule.data.Capsule
+import app.timecapsule.ui.CapsuleArtwork
 import app.timecapsule.geo.GeoPoint
 import okhttp3.Cache
 import okhttp3.OkHttpClient
@@ -40,6 +36,7 @@ class NativeCollectedMap(
     private val onUnavailable: (Boolean) -> Unit,
 ) {
     private val density = context.resources.displayMetrics.density
+    private val mapStyle = context.assets.open("native-map/calm.json").bufferedReader().use { it.readText() }
     private var map: MapLibreMap? = null
     private var style: Style? = null
     private var disposed = false
@@ -62,7 +59,7 @@ class NativeCollectedMap(
         view.onCreate(savedState)
         view.addOnDidFailLoadingMapListener { if (!disposed) onUnavailable(true) }
         view.addOnTileActionListener { operation, _, _, _, _, _, source ->
-            if (!disposed && source == "osm" && operation == TileOperation.Error) {
+            if (!disposed && source == "openmaptiles" && operation == TileOperation.Error) {
                 view.post { if (!disposed) onUnavailable(true) }
             }
         }
@@ -71,6 +68,7 @@ class NativeCollectedMap(
             if (disposed) return@getMapAsync
             map = ready
             ready.setPrefetchZoomDelta(0)
+            ready.setMinZoomPreference(2.0)
             ready.setMaxZoomPreference(19.0)
             ready.addOnMapClickListener { point ->
                 val p = ready.projection.toScreenLocation(point)
@@ -86,7 +84,7 @@ class NativeCollectedMap(
                     true
                 } else false
             }
-            ready.setStyle(Style.Builder().fromJson(STYLE)) { loaded ->
+            ready.setStyle(Style.Builder().fromJson(mapStyle)) { loaded ->
                 if (disposed) return@setStyle
                 style = loaded
                 loaded.addSource(GeoJsonSource(CAPSULES, FeatureCollection.fromFeatures(emptyArray<Feature>())))
@@ -117,7 +115,7 @@ class NativeCollectedMap(
     private fun render() {
         val s = style ?: return
         groups.map { it.size }.distinct().filter { badges.add(it) }.forEach { count ->
-            s.addImage("count-$count", badge(count))
+            s.addImage("count-$count", CapsuleArtwork.bitmap(density, count))
         }
         val features = groups.map { group ->
             val c = group.first()
@@ -140,6 +138,11 @@ class NativeCollectedMap(
         map?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(mapLatitude(point.lat), point.lng), 15.0))
     }
 
+    fun zoomBy(delta: Double) {
+        val ready = map ?: return
+        ready.animateCamera(CameraUpdateFactory.zoomTo((ready.cameraPosition.zoom + delta).coerceIn(2.0, 19.0)))
+    }
+
     fun showAll() {
         val points = groups.map { LatLng(mapLatitude(it.first().lat), it.first().lng) }.distinct()
         if (points.size == 1) map?.moveCamera(CameraUpdateFactory.newLatLngZoom(points.first(), 14.0))
@@ -158,69 +161,12 @@ class NativeCollectedMap(
         view.onDestroy()
     }
 
-    private fun badge(count: Int): Bitmap {
-        val size = (64 * density).toInt()
-        return Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { bitmap ->
-            bitmap.density = (160 * density).toInt()
-            val canvas = Canvas(bitmap)
-            canvas.scale(density, density)
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-            val shell = RectF(8f, 19f, 56f, 45f)
-            val shape = Path().apply { addRoundRect(shell, 13f, 13f, Path.Direction.CW) }
-
-            canvas.save()
-            canvas.rotate(-35f, 32f, 32f)
-            // A white silhouette keeps the capsule legible over detailed map tiles.
-            paint.color = Color.WHITE
-            canvas.drawRoundRect(RectF(5f, 16f, 59f, 48f), 16f, 16f, paint)
-            canvas.save()
-            canvas.clipPath(shape)
-            paint.color = Color.rgb(241, 235, 220)
-            canvas.drawRect(shell, paint)
-            paint.color = Color.rgb(66, 71, 82)
-            canvas.drawRect(8f, 19f, 32f, 45f, paint)
-            paint.color = Color.argb(55, 255, 255, 255)
-            canvas.drawRoundRect(RectF(12f, 22f, 52f, 25f), 1.5f, 1.5f, paint)
-            // The seam and short waveform suggest a container holding a voice.
-            paint.color = Color.rgb(143, 145, 148)
-            paint.strokeWidth = 1.2f
-            canvas.drawLine(32f, 19f, 32f, 45f, paint)
-            paint.color = Color.WHITE
-            paint.strokeWidth = 2f
-            paint.strokeCap = Paint.Cap.ROUND
-            for ((x, height) in listOf(17f to 4f, 22f to 9f, 27f to 5f)) {
-                canvas.drawLine(x, 33f - height / 2, x, 33f + height / 2, paint)
-            }
-            canvas.restore()
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 1.2f
-            paint.color = Color.rgb(66, 71, 82)
-            canvas.drawRoundRect(shell, 13f, 13f, paint)
-            canvas.restore()
-
-            // A single capsule needs no number; stacked collections retain their count.
-            if (count > 1) {
-                paint.style = Paint.Style.FILL
-                paint.color = Color.WHITE
-                canvas.drawCircle(51f, 13f, 12f, paint)
-                paint.color = Color.rgb(66, 71, 82)
-                canvas.drawCircle(51f, 13f, 10f, paint)
-                paint.color = Color.WHITE
-                paint.textSize = if (count > 99) 9f else 12f
-                paint.typeface = android.graphics.Typeface.DEFAULT_BOLD
-                paint.textAlign = Paint.Align.CENTER
-                canvas.drawText(if (count > 99) "99+" else count.toString(), 51f,
-                    13f - (paint.descent() + paint.ascent()) / 2, paint)
-            }
-        }
-    }
 
     companion object {
         private const val CAPSULES = "capsules"
         private const val MARKERS = "capsule-markers"
         private const val LOCATION = "vehicle"
         private fun mapLatitude(lat: Double) = lat.coerceIn(-85.05112878, 85.05112878)
-        private const val STYLE = """{"version":8,"sources":{"osm":{"type":"raster","tiles":["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],"tileSize":256,"maxzoom":19,"attribution":"© OpenStreetMap contributors"}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#ECECE8"}},{"id":"osm","type":"raster","source":"osm"}]}"""
     }
 }
 
