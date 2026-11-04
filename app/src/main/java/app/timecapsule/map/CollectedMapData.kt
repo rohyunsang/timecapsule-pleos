@@ -7,7 +7,7 @@ import app.timecapsule.navi.NaviPosition
 
 /** Only verified collections may become selectable map destinations. */
 object CollectedMapData {
-    fun eligible(c: Capsule) = c.collectedAt != null && !c.draft && !c.locationUncertain &&
+    fun eligible(c: Capsule) = !c.isForwarded && c.collectedAt != null && !c.draft && !c.locationUncertain &&
         OpenPolicy.valid(GeoPoint(c.lat, c.lng))
 
     fun groups(capsules: List<Capsule>): List<List<Capsule>> = capsules.filter(::eligible)

@@ -149,7 +149,7 @@ class DriveController(
             return
         }
         if (!microphoneAllowed() || session.expired(now(), canEdit())) { endDrive(); return }
-        if (!vehicleKnown() || (!positionFresh() && _state.value != DriveState.Recording && _playing.value?.capsule?.collectedAt == null)) {
+        if (!vehicleKnown() || (!positionFresh() && _state.value != DriveState.Recording && _playing.value?.capsule?.canReplayAnywhere != true)) {
             if (_state.value == DriveState.Recording || _state.value is DriveState.Playing || _state.value is DriveState.ApproachAlert)
                 dispatch(DriveEvent.SafetySignalOn)
         }
@@ -368,7 +368,7 @@ class DriveController(
      */
     fun driveMemoryRoute(album: List<Capsule>) {
         if (!canEdit()) return
-        val spots = album.filterNot { it.locationUncertain || it.draft }.sortedBy { it.createdAt }
+        val spots = album.filterNot { it.locationUncertain || it.draft || it.isForwarded }.sortedBy { it.createdAt }
         if (spots.isEmpty()) return say("위치가 기록된 캡슐이 없어요")
         val named = spots.map { NamedPoint(it.placeName ?: "캡슐 지점", GeoPoint(it.lat, it.lng)) }
         val dest = named.last()
@@ -578,7 +578,7 @@ class DriveController(
             val c = repo.get(id)
             if (epoch != operationEpoch) return@launch
             if (c == null) return@launch stopPlayback()
-            if ((!_prepared.value || !session.active(now())) && !(c.collectedAt != null && canEdit())) {
+            if ((!_prepared.value || !session.active(now())) && !(c.canReplayAnywhere && canEdit())) {
                 stopPlayback(); say("출발 전에 이번 주행을 준비해 주세요"); return@launch
             }
             val reason = OpenPolicy.reason(c, repo.lockFor(id), today(), position.value?.point,
@@ -605,14 +605,14 @@ class DriveController(
             _state.value = DriveState.Playing(id)
             _userPaused.value = false
             if (_playing.value?.capsule?.id == id && player.isActive) { player.resume(); return@launch }
-            val narration = Narration.build(dateOf(fresh), today(), MoodTagEngine.fromStored(fresh.tags), from = fresh.ownerName)
+            val narration = Narration.build(dateOf(fresh), today(), MoodTagEngine.fromStored(fresh.tags), from = fresh.originalOwnerName ?: fresh.ownerName)
             _playing.value = PlayingUi(fresh, narration)
             if (_reprompt.value?.id == id) _reprompt.value = null
             val spoken = listOfNotNull(narration, app.timecapsule.tag.TheDay.spoken(fresh.rawVehicleState)).joinToString(" ")
             player.play(spoken, fresh.audioPath, onStarted = {
                 val collected = fresh.copy(collectedAt = fresh.collectedAt ?: System.currentTimeMillis())
                 _playing.value = PlayingUi(collected, narration)
-                scope.launch { repo.collect(id, collected.collectedAt!!) }
+                if (!fresh.isForwarded) scope.launch { repo.collect(id, collected.collectedAt!!) }
             }) {
                 scope.launch {
                     repo.logNotify(id, today(), "played")

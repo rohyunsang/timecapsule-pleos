@@ -66,6 +66,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.timecapsule.social.Forwarding
 import app.timecapsule.TimeCapsuleApp
 import app.timecapsule.capsule.RouteForecast
 import app.timecapsule.capsule.Rules
@@ -436,7 +437,8 @@ fun LetterScreen(app: TimeCapsuleApp, back: () -> Unit) {
 // ---- Album (screen 03, parked only) -----------------------------------------------------
 
 @Composable
-fun AlbumScreen(drive: DriveController, onMap: () -> Unit, back: () -> Unit) {
+fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
+    val drive = app.drive
     val capsules by drive.capsules.collectAsState()
     val locks by drive.locks.collectAsState()
     val trips by drive.trips.collectAsState()
@@ -444,6 +446,7 @@ fun AlbumScreen(drive: DriveController, onMap: () -> Unit, back: () -> Unit) {
     val tripById = trips.associateBy { it.id }
     var deleting by remember { mutableStateOf<Capsule?>(null) }
     var sharing by remember { mutableStateOf<Capsule?>(null) }
+    var forwarding by remember { mutableStateOf<Capsule?>(null) }
     // F-08: group by trip; capsules outside a trip are grouped by day.
     val groups = capsules.filterNot { it.draft }.groupBy { c -> c.tripId?.let { "trip:$it" } ?: "day:${c.date()}" }
         .entries.sortedByDescending { e -> e.value.maxOf { it.createdAt } }
@@ -488,7 +491,8 @@ fun AlbumScreen(drive: DriveController, onMap: () -> Unit, back: () -> Unit) {
                             CapsuleRow(
                                 c, locks[c.id]?.openAfter?.takeIf { locks[c.id].isLocked(today) }, { drive.playCapsule(c.id) },
                                 onShare = { sharing = c }.takeIf { c.isMine && !c.locationUncertain && c.audience in setOf("SELF", "FRIENDS") },
-                                reason = drive.openingReason(c),
+                                onForward = { forwarding = c }.takeIf { Forwarding.eligible(c) },
+                                reason = if (c.isForwarded) "${c.ownerName ?: "친구"}님이 전달 · 어디서든 듣기" else drive.openingReason(c),
                             ) { deleting = c }
                         }
                     }
@@ -496,6 +500,7 @@ fun AlbumScreen(drive: DriveController, onMap: () -> Unit, back: () -> Unit) {
             }
         }
     }
+    forwarding?.let { c -> ForwardCapsuleDialog(app, c) { forwarding = null } }
     sharing?.let { c ->
         val toFriends = c.audience == "SELF"
         ConfirmPopup(
@@ -535,7 +540,7 @@ private fun ColumnScope.EmptyState(back: () -> Unit) {
 
 /** One capsule: the whole row plays it; delete is a separate, confirmed action. */
 @Composable
-private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onShare: (() -> Unit)? = null, reason: String? = null, onDelete: () -> Unit) {
+private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onShare: (() -> Unit)? = null, onForward: (() -> Unit)? = null, reason: String? = null, onDelete: () -> Unit) {
     val locked = lockedUntil != null
     val time = Instant.ofEpochMilli(c.createdAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("a h:mm"))
     val tags = app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).drop(1).joinToString(Sep)
@@ -577,10 +582,11 @@ private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onSha
             }
             IconBtn(Icons.Rounded.DeleteOutline, "삭제", size = 72.dp, onClick = onDelete)
         }
-        if (onShare != null) {
+        if (onShare != null || onForward != null) {
             Row(Modifier.fillMaxWidth().padding(start = 112.dp), horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically) {
-                Btn(if (c.audience == "SELF") "친구에게 공개" else "나만 듣기", height = 56.dp, onClick = onShare)
+                if (onShare != null) Btn(if (c.audience == "SELF") "친구에게 공개" else "나만 듣기", height = 56.dp, onClick = onShare)
+                if (onForward != null) Btn("친구에게 보내기", height = 56.dp, onClick = onForward)
             }
         }
     }
@@ -588,6 +594,7 @@ private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onSha
 
 /** Who left it (a friend), or who hears it (mine). */
 private fun whoOf(c: Capsule): String = when {
+    c.isForwarded -> "${c.originalOwnerName ?: "친구"}님이 남김"
     c.ownerName != null -> "${c.ownerName}님이 남김"
     c.audience == "SELF" -> "나만"
     c.audience == "SOME" -> "받는 사람 지정"
