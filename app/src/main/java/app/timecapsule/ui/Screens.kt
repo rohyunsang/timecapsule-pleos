@@ -40,6 +40,7 @@ import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.MailOutline
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.PhotoLibrary
@@ -455,6 +456,9 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
     var forwarding by remember { mutableStateOf<Capsule?>(null) }
     var routeTarget by remember { mutableStateOf<Capsule?>(null) }
     var ownTab by rememberSaveable { mutableStateOf(true) }
+    var draftsExpanded by rememberSaveable { mutableStateOf(false) }
+    val ownListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val collectedListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val position by drive.position.collectAsState()
     val mine = capsules.filter(AlbumData::mine)
     val collected = capsules.filter(AlbumData::collected)
@@ -463,67 +467,63 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
     val groups = visible.filterNot { it.draft }.groupBy { c -> c.tripId?.let { "trip:$it" } ?: "day:${c.date()}" }
         .entries.sortedByDescending { e -> e.value.maxOf { it.createdAt } }
 
-    Column(Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
-        Header("여행 앨범", back) { Btn("수집 지도", onClick = onMap) }
-        Row(Modifier.widthIn(max = 1100.dp).fillMaxWidth().align(Alignment.CenterHorizontally),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Btn("내가 남긴 캡슐 ${mine.size}", Modifier.weight(1f).semantics { selected = ownTab; role = Role.Tab },
-                style = if (ownTab) BtnStyle.Filled else BtnStyle.Basic) { ownTab = true }
-            Btn("수집한 캡슐 ${collected.size}", Modifier.weight(1f).semantics { selected = !ownTab; role = Role.Tab },
-                style = if (!ownTab) BtnStyle.Filled else BtnStyle.Basic) { ownTab = false }
-        }
-        if (visible.isEmpty()) {
-            Column(Modifier.fillMaxWidth().padding(48.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(if (ownTab) "아직 남긴 캡슐이 없어요" else "아직 수집한 캡슐이 없어요", style = Type.TitleS, color = Tc.Text)
-                Text(if (ownTab) "길에 남긴 캡슐의 장소와 수집 상태를 여기에서 확인해요."
-                    else "다른 사람의 캡슐을 현장에서 수집하면 여기에 모여요. 친구가 보내 준 캡슐도 여기에서 들어요.",
-                    style = Type.BodyS, color = Tc.TextSub)
+    Column(Modifier.fillMaxSize().background(Tc.Bg).padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.widthIn(max = 1320.dp).fillMaxWidth()) {
+            Header("여행 앨범", back) { IconBtn(Icons.Rounded.Map, "수집 지도", onClick = onMap) }
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                AlbumTab("내가 남긴 캡슐", mine.size, ownTab, Modifier.weight(1f)) { ownTab = true }
+                AlbumTab("수집한 캡슐", collected.size, !ownTab, Modifier.weight(1f)) { ownTab = false }
             }
         }
-        LazyColumn(
-            Modifier.widthIn(max = 1100.dp).fillMaxWidth().align(Alignment.CenterHorizontally),
+        if (visible.isEmpty()) {
+            Column(Modifier.fillMaxWidth().weight(1f), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
+                Icon(Icons.Rounded.PhotoLibrary, null, Modifier.size(64.dp), tint = Tc.TextMute)
+                Text(if (ownTab) "아직 남긴 캡슐이 없어요" else "아직 수집한 캡슐이 없어요", style = Type.TitleS, color = Tc.Text)
+                Text(if (ownTab) "길에 남긴 캡슐을 여기에서 확인하세요."
+                    else "수집하거나 친구에게 받은 캡슐이 여기에 모여요.",
+                    style = Type.BodyS, color = Tc.TextSub, textAlign = TextAlign.Center)
+            }
+        } else LazyColumn(
+            Modifier.widthIn(max = 1320.dp).fillMaxWidth().weight(1f),
+            state = if (ownTab) ownListState else collectedListState,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 24.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            visible.filter { it.draft }.forEach { c ->
-                item(key = "draft:${c.id}") {
-                    ListRow("임시보관 · ${c.durationSec}초", if (c.locationUncertain) "장소 미확정 · 비공개 음성" else "중단된 녹음 · 주차 후 저장해 주세요",
-                        onClick = { drive.previewDraft(c) }) {
-                        if (!c.locationUncertain) Btn("저장", height = 56.dp) { drive.confirmDraft(c) }
-                        IconBtn(Icons.Rounded.DeleteOutline, "삭제", onClick = { deleting = c })
+            val drafts = visible.filter { it.draft }
+            if (drafts.isNotEmpty()) {
+                item(key = "draft-summary") {
+                    AlbumDraftHeader(drafts.size, draftsExpanded) { draftsExpanded = !draftsExpanded }
+                }
+                if (draftsExpanded) drafts.forEach { c ->
+                    item(key = "draft:${c.id}") {
+                        AlbumDraftRow(c, onPreview = { drive.previewDraft(c) },
+                            onSave = { drive.confirmDraft(c) }.takeUnless { c.locationUncertain },
+                            onDelete = { deleting = c })
                     }
                 }
             }
             groups.forEach { (key, list) ->
                 val trip = if (key.startsWith("trip:")) tripById[key.removePrefix("trip:").toLong()] else null
                 item(key = key) {
-                    Row(Modifier.fillMaxWidth().padding(start = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(groupTitle(trip, list), style = Type.BodyStrong, color = Tc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(
-                                "${Narration.elapsed(list.first().date(), today)}   ${list.size}개" + (trip?.let { tripSummary(it) } ?: ""),
-                                style = Type.LabelM, color = Tc.TextMute, maxLines = 1,
-                            )
-                        }
+                    Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text(groupTitle(trip, list), style = Type.LabelStrong, color = Tc.TextSub, modifier = Modifier.weight(1f),
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${list.size}개", style = Type.LabelM, color = Tc.TextMute)
                     }
                 }
-                item(key = "$key:rows") {
-                    Panel {
-                        list.sortedBy { it.createdAt }.forEachIndexed { i, c ->
-                            if (i > 0) Spacer(Modifier.height(12.dp))
-                            val openingReason = drive.openingReason(c, position)
-                            CapsuleRow(
-                                c, locks[c.id]?.openAfter?.takeIf { locks[c.id].isLocked(today) }, { drive.playCapsule(c.id) },
-                                onShare = { sharing = c }.takeIf { c.isMine && !c.locationUncertain && c.audience in setOf("SELF", "FRIENDS") },
-                                onForward = { forwarding = c }.takeIf { Forwarding.eligible(c) },
-                                onNavigate = { routeTarget = c }.takeIf { AlbumData.canNavigate(c) },
-                                locationBlocked = AlbumData.needsCollection(c) && openingReason != null,
-                                reason = if (c.isForwarded) "${c.ownerName ?: "친구"}님이 전달 · 어디서든 듣기"
-                                    else if (c.collectedAt != null) "수집 완료 · 어디서든 듣기"
-                                    else if (openingReason == null) "도착했어요 · 재생하면 수집돼요"
-                                    else "남긴 장소에서 수집하면 들을 수 있어요",
-                            ) { deleting = c }
-                        }
+                list.sortedBy { it.createdAt }.forEach { c ->
+                    item(key = "capsule:${c.id}") {
+                        val openingReason = drive.openingReason(c, position)
+                        CapsuleRow(c, locks[c.id]?.openAfter?.takeIf { locks[c.id].isLocked(today) },
+                            onPlay = { drive.playCapsule(c.id) },
+                            onShare = { sharing = c }.takeIf { c.isMine && !c.locationUncertain && c.audience in setOf("SELF", "FRIENDS") },
+                            onForward = { forwarding = c }.takeIf { Forwarding.eligible(c) },
+                            onNavigate = { routeTarget = c }.takeIf { AlbumData.canNavigate(c) },
+                            locationBlocked = AlbumData.needsCollection(c) && openingReason != null,
+                            onDelete = { deleting = c })
                     }
                 }
             }
@@ -556,97 +556,6 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
             onDismiss = { deleting = null },
         )
     }
-}
-
-@Composable
-private fun ColumnScope.EmptyState(back: () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().weight(1f),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-    ) {
-        Icon(Icons.Rounded.PhotoLibrary, null, tint = Tc.TextMute, modifier = Modifier.size(72.dp))
-        Text("아직 묻은 캡슐이 없어요", style = Type.TitleS, color = Tc.Text, textAlign = TextAlign.Center)
-        Text("홈에서 목소리 남기기를 누르면 첫 캡슐이 생겨요", style = Type.BodyS, color = Tc.TextMute, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(8.dp))
-        Btn("홈으로", style = BtnStyle.Filled, onClick = back)
-    }
-}
-
-/** One capsule: the whole row plays it; delete is a separate, confirmed action. */
-@Composable
-private fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onShare: (() -> Unit)? = null, onForward: (() -> Unit)? = null, onNavigate: (() -> Unit)? = null, locationBlocked: Boolean = false, reason: String? = null, onDelete: () -> Unit) {
-    val locked = lockedUntil != null || locationBlocked
-    val time = Instant.ofEpochMilli(c.createdAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("a h:mm"))
-    val tags = app.timecapsule.tag.TheDay.facts(c.createdAt, c.rawVehicleState).drop(1).joinToString(Sep)
-    val density = LocalDensity.current.density
-    val artwork = remember(density) { CapsuleArtwork.bitmap(density).asImageBitmap() }
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Tc.Basic)
-                .padding(end = 24.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.width(112.dp).height(128.dp).background(Tc.Line), contentAlignment = Alignment.Center) {
-                Image(artwork, contentDescription = null, modifier = Modifier.size(88.dp))
-            }
-            Spacer(Modifier.width(24.dp))
-            Column(Modifier.weight(1f).padding(vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text((c.placeName ?: "장소 기록 없음") + if (onNavigate != null) "  › 길 안내" else "",
-                    modifier = Modifier.clickable(enabled = onNavigate != null,
-                        onClick = clickWithSound { onNavigate?.invoke() }).padding(vertical = 8.dp),
-                    style = Type.BodyStrong, color = Tc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(if (lockedUntil != null) "${LocalDate.ofEpochDay(lockedUntil).format(dayFmt)}에 열려요"
-                    else "$time · ${c.durationSec}초 · ${whoOf(c)}", style = Type.LabelM, color = Tc.TextSub,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val detail = listOfNotNull(reason, tags.takeIf { it.isNotBlank() },
-                    "위치 불확실".takeIf { c.locationUncertain }).joinToString(Sep)
-                if (detail.isNotBlank()) Text(detail, style = Type.LabelM, color = Tc.TextMute,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            if (locked) {
-                Column(Modifier.padding(start = 12.dp).width(88.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Surface(onClick = clickWithSound { onNavigate?.invoke() }, enabled = onNavigate != null,
-                        modifier = Modifier.size(72.dp), shape = RoundedCornerShape(Tc.BtnRadius),
-                        color = if (onNavigate != null) Tc.P.filled else Tc.Basic) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Rounded.Lock,
-                                contentDescription = if (onNavigate != null) "잠긴 캡슐 장소로 길 안내" else "장소를 확인할 수 없는 잠긴 캡슐",
-                                tint = if (onNavigate != null) Tc.P.onFilled else Tc.TextMute,
-                                modifier = Modifier.size(40.dp))
-                        }
-                    }
-                    Text(if (lockedUntil != null) "개봉 대기" else "수집 전", style = Type.LabelM, color = Tc.TextMute)
-                }
-            } else {
-                Surface(onClick = clickWithSound(onPlay),
-                    modifier = Modifier.padding(start = 12.dp).size(72.dp),
-                    shape = RoundedCornerShape(Tc.BtnRadius), color = Tc.P.filled) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.PlayArrow, contentDescription = if (AlbumData.needsCollection(c)) "수집하고 듣기" else "캡슐 재생",
-                            tint = Tc.P.onFilled, modifier = Modifier.size(44.dp))
-                    }
-                }
-            }
-            IconBtn(Icons.Rounded.DeleteOutline, "삭제", size = 72.dp, onClick = onDelete)
-        }
-        if (onShare != null || onForward != null) {
-            Row(Modifier.fillMaxWidth().padding(start = 112.dp), horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically) {
-                if (onShare != null) Btn(if (c.audience == "SELF") "친구에게 공개" else "나만 듣기", height = 56.dp, onClick = onShare)
-                if (onForward != null) Btn("친구에게 보내기", height = 56.dp, onClick = onForward)
-            }
-        }
-    }
-}
-
-/** Who left it (a friend), or who hears it (mine). */
-private fun whoOf(c: Capsule): String = when {
-    c.isForwarded -> "${c.originalOwnerName ?: "친구"}님이 남김"
-    c.ownerName != null -> "${c.ownerName}님이 남김"
-    c.audience == "SELF" -> "나만"
-    c.audience == "SOME" -> "받는 사람 지정"
-    else -> "친구 모두"
 }
 
 private fun groupTitle(trip: Trip?, list: List<Capsule>): String {
