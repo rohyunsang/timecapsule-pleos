@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.RectF
 import android.os.Bundle
 import app.timecapsule.data.Capsule
-import app.timecapsule.ui.CapsuleArtwork
 import app.timecapsule.geo.GeoPoint
 import okhttp3.Cache
 import okhttp3.OkHttpClient
@@ -32,7 +31,7 @@ import java.io.File
 class NativeCollectedMap(
     context: Context,
     savedState: Bundle,
-    private val onSelect: (Long) -> Unit,
+    private val onSelect: (List<Long>) -> Unit,
     private val onUnavailable: (Boolean) -> Unit,
 ) {
     private val density = context.resources.displayMetrics.density
@@ -44,7 +43,8 @@ class NativeCollectedMap(
     private var groups = emptyList<List<Capsule>>()
     private var selectedId: Long? = null
     private var current: GeoPoint? = null
-    private val badges = mutableSetOf<Int>()
+    private val badges = mutableSetOf<String>()
+    private var states = emptyMap<Long, CapsuleMapData.State>()
     val view: MapView
 
     init {
@@ -72,15 +72,19 @@ class NativeCollectedMap(
             ready.setMaxZoomPreference(19.0)
             ready.addOnMapClickListener { point ->
                 val p = ready.projection.toScreenLocation(point)
-                val radius = 24f * density
+                val radius = 36f * density
                 val feature = ready.queryRenderedFeatures(RectF(p.x-radius,p.y-radius,p.x+radius,p.y+radius), MARKERS)
-                    .firstOrNull()
+                    .minByOrNull { candidate ->
+                        val location = candidate.geometry() as? Point
+                        if (location == null) Float.MAX_VALUE else {
+                            val screen = ready.projection.toScreenLocation(LatLng(location.latitude(), location.longitude()))
+                            (screen.x-p.x)*(screen.x-p.x) + (screen.y-p.y)*(screen.y-p.y)
+                        }
+                    }
                 val id = feature?.getStringProperty("id")?.toLongOrNull()
                 val group = groups.firstOrNull { it.first().id == id }
                 if (group != null) {
-                    // Repeated taps cycle capsules at an identical location; the list remains accessible.
-                    val index = group.indexOfFirst { it.id == selectedId }
-                    onSelect(group[(index + 1) % group.size].id)
+                    onSelect(group.map { it.id })
                     true
                 } else false
             }
@@ -89,7 +93,7 @@ class NativeCollectedMap(
                 style = loaded
                 loaded.addSource(GeoJsonSource(CAPSULES, FeatureCollection.fromFeatures(emptyArray<Feature>())))
                 loaded.addLayer(CircleLayer("selection", CAPSULES).withProperties(
-                    circleRadius(27f), circleColor("#3B6FCD"), circleOpacity(0.3f)
+                    circleRadius(43f), circleColor("#24272B"), circleOpacity(0.18f)
                 ).withFilter(eq(get("selected"), literal(true))))
                 loaded.addLayer(SymbolLayer(MARKERS, CAPSULES).withProperties(
                     iconImage(get("badge")), iconAllowOverlap(true), iconIgnorePlacement(true)
@@ -103,9 +107,10 @@ class NativeCollectedMap(
         }
     }
 
-    fun update(capsules: List<Capsule>, selected: Long?, position: GeoPoint?) {
-        val nextGroups = CollectedMapData.groups(capsules)
-        if (groups == nextGroups && selectedId == selected && current == position) return
+    fun update(capsules: List<Capsule>, selected: Long?, position: GeoPoint?, nextStates: Map<Long, CapsuleMapData.State>) {
+        val nextGroups = CapsuleMapData.groups(capsules)
+        if (groups == nextGroups && selectedId == selected && current == position && states == nextStates) return
+        states = nextStates
         groups = nextGroups
         selectedId = selected
         current = position
@@ -114,14 +119,16 @@ class NativeCollectedMap(
 
     private fun render() {
         val s = style ?: return
-        groups.map { it.size }.distinct().filter { badges.add(it) }.forEach { count ->
-            s.addImage("count-$count", CapsuleArtwork.bitmap(density, count))
-        }
         val features = groups.map { group ->
-            val c = group.first()
+            val c = group.firstOrNull { it.id == selectedId } ?: group.first()
+            val open = group.all { states[it.id] == CapsuleMapData.State.OPEN }
+            val mixed = !open && group.any { states[it.id] == CapsuleMapData.State.OPEN }
+            val label = if (group.map { it.ownerUid }.distinct().size > 1) "모음" else CapsuleMapData.avatar(c)
+            val badge = "$label:$open:$mixed:${group.size}"
+            if (badges.add(badge)) s.addImage(badge, CapsuleMapArtwork.bitmap(density, label, open, mixed, group.size))
             Feature.fromGeometry(Point.fromLngLat(c.lng, mapLatitude(c.lat))).apply {
-                addStringProperty("id", c.id.toString())
-                addStringProperty("badge", "count-${group.size}")
+                addStringProperty("id", group.first().id.toString())
+                addStringProperty("badge", badge)
                 addBooleanProperty("selected", group.any { it.id == selectedId })
             }
         }
@@ -147,7 +154,7 @@ class NativeCollectedMap(
         val points = groups.map { LatLng(mapLatitude(it.first().lat), it.first().lng) }.distinct()
         if (points.size == 1) map?.moveCamera(CameraUpdateFactory.newLatLngZoom(points.first(), 14.0))
         else if (points.isNotEmpty()) map?.moveCamera(CameraUpdateFactory.newLatLngBounds(
-            LatLngBounds.Builder().includes(points).build(), (48*density).toInt()
+            LatLngBounds.Builder().includes(points).build(), (160*density).toInt()
         ))
     }
 
