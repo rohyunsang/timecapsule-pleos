@@ -91,6 +91,13 @@ class SocialSync(
         }
     }
 
+    /** Send an independent copy only after checking the collected source against the server. */
+    suspend fun forward(id: Long, friendUid: String, allowed: () -> Boolean): Result<Unit> = lock.withLock {
+        Forwarding.send(backend, id, friendUid, allowed, repo::get) { capsuleId ->
+            repo.lockFor(capsuleId)?.openAfter?.let { it <= java.time.LocalDate.now().toEpochDay() } != false
+        }
+    }
+
     private fun audienceUids(c: Capsule): List<String> = when (c.audience) {
         Audience.FRIENDS.name -> c.recipients.split(',').filter { id -> backend.friends.value.any { it.uid == id } }
         Audience.SOME.name -> c.recipients.split(',').filter { it.isNotBlank() }
@@ -154,7 +161,8 @@ class SocialSync(
         // Only mine and current friends'. An ex-friend's capsule can still list me until their
         // car updates it; it must not reach me in the meantime.
         val friendUids = friends.map { it.uid }.toSet()
-        val list = all.filter { it.ownerUid == me.uid || it.ownerUid in friendUids }
+        val list = all.filter { (it.ownerUid == me.uid && it.sourceRemoteId == null) ||
+            (it.ownerUid in friendUids && (me.uid in it.visibleTo || it.audience == Audience.DEMO)) }
         for (r in list) {
             if (r.id in hidden || repo.byRemoteId(r.id) != null) continue
             val bytes = backend.audio(r.id) ?: continue
@@ -173,6 +181,8 @@ class SocialSync(
                     tags = r.tags, rawVehicleState = r.rawVehicleState, carModel = null, odometerKm = null,
                     ownerUid = if (mine) null else r.ownerUid, ownerName = if (mine) null else r.ownerName,
                     audience = r.audience.name, recipients = r.recipients.joinToString(","), remoteId = r.id,
+                    sourceRemoteId = r.sourceRemoteId, originalOwnerUid = r.originalOwnerUid,
+                    originalOwnerName = r.originalOwnerName,
                 ),
                 r.openAfter,
             )

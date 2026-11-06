@@ -10,8 +10,8 @@ source = (root / 'app/src/main/java/app/timecapsule/data/Migrations.kt').read_te
 create = re.search(r'db.execSQL\("""(CREATE TABLE capsule_new.*?)"""\)', source, re.S).group(1)
 original = re.search(r'val original = "([^"]+)"', source).group(1)
 sharing = re.search(r'val sharing = if \(social\) "([^"]+)" else "([^"]+)"', source)
-expected = json.loads((root / 'app/schemas/app.timecapsule.data.AppDatabase/4.json').read_text())['database']
-for version in (1, 2, 3):
+expected = json.loads((root / 'app/schemas/app.timecapsule.data.AppDatabase/5.json').read_text())['database']
+for version in (1, 2, 3, 4):
     schema = json.loads((root / f'app/schemas/app.timecapsule.data.AppDatabase/{version}.json').read_text())['database']
     db = sqlite3.connect(':memory:')
     for entity in schema['entities']:
@@ -28,7 +28,11 @@ for version in (1, 2, 3):
         db.execute(f"INSERT INTO capsule_new SELECT {original},{sharing.group(1 if version == 2 else 2)},0 FROM capsule")
         db.execute('DROP TABLE capsule')
         db.execute('ALTER TABLE capsule_new RENAME TO capsule')
-    db.execute(re.search(r'db.execSQL\("(ALTER TABLE capsule ADD COLUMN collectedAt INTEGER)"\)', source).group(1))
+    if version < 4:
+        db.execute(re.search(r'db.execSQL\("(ALTER TABLE capsule ADD COLUMN collectedAt INTEGER)"\)', source).group(1))
+    for sql in re.findall(r'db.execSQL\("(ALTER TABLE capsule ADD COLUMN (?:sourceRemoteId|originalOwnerUid|originalOwnerName) TEXT)"\)', source):
+        db.execute(sql)
+    assert db.execute('SELECT sourceRemoteId,originalOwnerUid,originalOwnerName FROM capsule').fetchone() == (None,None,None)
     assert db.execute('SELECT collectedAt FROM capsule').fetchone() == (None,)
     # Existing play logs never imply collection. A successful explicit collection is durable/idempotent.
     db.execute('UPDATE capsule SET collectedAt=COALESCE(collectedAt,1234) WHERE id=42')
@@ -42,4 +46,4 @@ for version in (1, 2, 3):
     for e in expected['entities']:
         baseline.execute(e['createSql'].replace('${TABLE_NAME}',e['tableName']))
         assert db.execute(f"PRAGMA table_info({e['tableName']})").fetchall() == baseline.execute(f"PRAGMA table_info({e['tableName']})").fetchall()
-    print(f'Room {version} -> 4: capsule, date lock, sharing fields and schema preserved')
+    print(f'Room {version} -> 5: capsule, date lock, sharing fields and schema preserved')

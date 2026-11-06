@@ -47,8 +47,15 @@ data class Capsule(
     val remoteId: String? = null,
     @ColumnInfo(defaultValue = "0") val draft: Boolean = false,
     val collectedAt: Long? = null,
+    /** Non-null for an audio copy forwarded by ownerUid; the author is preserved separately. */
+    val sourceRemoteId: String? = null,
+    val originalOwnerUid: String? = null,
+    val originalOwnerName: String? = null,
+
 ) {
     val isMine get() = ownerUid == null
+    val isForwarded get() = sourceRemoteId != null
+    val canReplayAnywhere get() = collectedAt != null || isForwarded
 }
 
 @Entity(tableName = "letter_lock")
@@ -164,7 +171,7 @@ interface CapsuleDao {
     suspend fun deleteAllTrips()
 }
 
-@Database(entities = [Capsule::class, LetterLock::class, Trip::class, NotifyLog::class], version = 4)
+@Database(entities = [Capsule::class, LetterLock::class, Trip::class, NotifyLog::class], version = 5)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun capsuleDao(): CapsuleDao
 }

@@ -1,6 +1,10 @@
 package app.timecapsule
 
 import app.timecapsule.weather.Sky
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import app.timecapsule.ui.ConfirmPopup
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -188,7 +192,7 @@ private fun Root(app: TimeCapsuleApp) {
                     friendCount = friends.size,
                 )
                 Screen.LETTER -> LetterScreen(app) { screen = Screen.HOME }
-                Screen.ALBUM -> AlbumScreen(drive, onMap = { screen = Screen.MAP }) { screen = Screen.HOME }
+                Screen.ALBUM -> AlbumScreen(app, onMap = { screen = Screen.MAP }) { screen = Screen.HOME }
                 Screen.MAP -> CollectedMapScreen(drive) { screen = Screen.ALBUM }
                 Screen.SETTINGS -> SettingsScreen(app) { screen = Screen.HOME }
                 Screen.FRIENDS -> FriendsScreen(app) { screen = Screen.HOME }
@@ -197,5 +201,22 @@ private fun Root(app: TimeCapsuleApp) {
         val hearing by app.voiceAnswer.listening.collectAsState()
         alert?.let { AlertCard(it, drive::listen, drive::later, hearing) }
         if (dev && s != DriveState.Recording) DevPanel(app) { dev = false }
+        val microphonePermissionNeeded by drive.microphonePermissionNeeded.collectAsState()
+        if (microphonePermissionNeeded && !restricted) ConfirmPopup(
+            title = "마이크 권한이 필요해요",
+            body = "Android 앱 설정에서 권한 → 마이크를 허용해 주세요. 돌아온 뒤 녹음 버튼이나 준비하기를 다시 눌러 주세요.",
+            confirm = "설정으로 이동",
+            onConfirm = {
+                drive.dismissMicrophonePermission()
+                if (drive.canEdit()) {
+                    val settingsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", context.packageName, null))
+                    runCatching { context.startActivity(settingsIntent) }.onFailure {
+                        Toast.makeText(context, "설정을 열지 못했어요. 차량 설정 → 앱 → 타임캡슐 → 권한에서 마이크를 허용해 주세요", Toast.LENGTH_LONG).show()
+                    }
+                }
+            },
+            onDismiss = drive::dismissMicrophonePermission,
+        )
     }
 }

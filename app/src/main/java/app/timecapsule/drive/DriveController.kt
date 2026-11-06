@@ -19,7 +19,6 @@ import app.timecapsule.geo.PlaceName
 import app.timecapsule.navi.NamedPoint
 import app.timecapsule.navi.NaviEvent
 import app.timecapsule.navi.NaviSource
-import app.timecapsule.navi.PleosNaviSource
 import app.timecapsule.tag.MoodTagEngine
 import app.timecapsule.tag.Narration
 import app.timecapsule.vehicle.SafetySignal
@@ -83,6 +82,13 @@ class DriveController(
     val prepared: StateFlow<Boolean> = _prepared.asStateFlow()
     private val _editable = MutableStateFlow(false)
     val editable: StateFlow<Boolean> = _editable.asStateFlow()
+    private val _microphonePermissionNeeded = MutableStateFlow(false)
+    val microphonePermissionNeeded: StateFlow<Boolean> = _microphonePermissionNeeded.asStateFlow()
+    fun dismissMicrophonePermission() { _microphonePermissionNeeded.value = false }
+    private fun requireMicrophonePermission() {
+        _microphonePermissionNeeded.value = true
+        say("마이크 권한이 필요해요. 주차 후 설정에서 허용해 주세요")
+    }
     private var operationEpoch = 0L
     private var saving = false
     var authorizeShared: suspend (Capsule) -> Boolean = { it.isMine }
@@ -100,7 +106,7 @@ class DriveController(
     } == true
     fun prepareDrive() {
         if (!canEdit()) return say("주차 후 차량 상태를 확인해 주세요")
-        if (!microphoneAllowed()) return say("설정에서 마이크 권한을 허용해 주세요")
+        if (!microphoneAllowed()) return requireMicrophonePermission()
         if (!requestPreparation()) say("기록 준비를 시작하지 못했어요. 앱 화면에서 다시 시도해 주세요")
     }
     internal fun completePreparation(): Boolean {
@@ -120,7 +126,7 @@ class DriveController(
      */
     suspend fun recordByVoice(): Boolean {
         if (_state.value == DriveState.Recording) return true
-        if (!microphoneAllowed()) { say("설정에서 마이크 권한을 허용해 주세요"); return false }
+        if (!microphoneAllowed()) { requireMicrophonePermission(); return false }
         if (!_prepared.value || !session.active(now())) {
             byVoice = true
             try {
@@ -149,14 +155,14 @@ class DriveController(
             return
         }
         if (!microphoneAllowed() || session.expired(now(), canEdit())) { endDrive(); return }
-        if (!vehicleKnown() || (!positionFresh() && _state.value != DriveState.Recording && _playing.value?.capsule?.collectedAt == null)) {
+        if (!vehicleKnown() || (!positionFresh() && _state.value != DriveState.Recording && _playing.value?.capsule?.canReplayAnywhere != true)) {
             if (_state.value == DriveState.Recording || _state.value is DriveState.Playing || _state.value is DriveState.ApproachAlert)
                 dispatch(DriveEvent.SafetySignalOn)
         }
 
     }
-    fun openingReason(c: Capsule): String? = OpenPolicy.reason(c, locks.value[c.id], today(), position.value?.point,
-        if (demo()) now() else position.value?.receivedAt ?: 0L, now())
+    fun openingReason(c: Capsule, at: app.timecapsule.navi.NaviPosition? = position.value): String? = OpenPolicy.reason(c, locks.value[c.id], today(), at?.point,
+        if (demo()) now() else at?.receivedAt ?: 0L, now())
     fun confirmDraft(c: Capsule) {
         if (!canEdit() || !c.isMine) return
         if (c.locationUncertain) return say("녹음 장소를 확인하지 못해 캡슐로 저장할 수 없어요. 음성은 임시보관해요")
@@ -274,8 +280,9 @@ class DriveController(
      */
     fun bury(openOn: LocalDate? = null, audience: String? = null, recipients: List<String> = emptyList()) {
         if (_state.value != DriveState.Idle || saving) return
+        if (!microphoneAllowed()) return requireMicrophonePermission()
         if (!_prepared.value || !session.active(now())) return say("출발 전에 이번 주행을 준비해 주세요")
-        if (!vehicleKnown() || signals.value.isNotEmpty() || !microphoneAllowed()) return say("지금은 녹음을 시작할 수 없어요")
+        if (!vehicleKnown() || signals.value.isNotEmpty()) return say("지금은 녹음을 시작할 수 없어요")
         player.stop()
         pendingOpenOn = openOn
         pendingAudience = audience ?: settings.defaultAudience.value
@@ -309,6 +316,21 @@ class DriveController(
     fun stopPlayback() {
         operationEpoch++
         dispatch(DriveEvent.PlaybackFinished)
+    }
+
+    /** Explicit parked-only action; re-read the collection before changing navigation. */
+    fun driveToCollected(id: Long) = driveToCapsule(id, collectedOnly = true)
+
+    fun driveToCapsule(id: Long, collectedOnly: Boolean = false) {
+        if (!canEdit()) return
+        scope.launch {
+            val c = repo.get(id) ?: return@launch
+            if (!canEdit() || !app.timecapsule.capsule.AlbumData.canNavigate(c) ||
+                (collectedOnly && !app.timecapsule.map.CollectedMapData.eligible(c))) return@launch
+            val destination = NamedPoint(c.placeName ?: "캡슐 지점", GeoPoint(c.lat, c.lng))
+            if (navi.drive(destination, emptyList())) say("Pleos 내비게이션에 길 안내를 요청했어요")
+            else say("내비게이션에 연결하지 못했어요")
+        }
     }
 
     fun playCollected(id: Long) {
@@ -348,22 +370,6 @@ class DriveController(
         arrivalTimeout?.cancel()
         _arrivalPrompt.value = false
         if (leaveOne) bury()
-    }
-
-    /**
-     * F-07: drive through the album's capsule spots in time order. NaviHelper takes two
-     * waypoints, so the first two become waypoints and the last one the destination.
-     */
-    fun driveMemoryRoute(album: List<Capsule>) {
-        if (!canEdit()) return
-        val spots = album.filterNot { it.locationUncertain || it.draft }.sortedBy { it.createdAt }
-        if (spots.isEmpty()) return say("위치가 기록된 캡슐이 없어요")
-        val named = spots.map { NamedPoint(it.placeName ?: "캡슐 지점", GeoPoint(it.lat, it.lng)) }
-        val dest = named.last()
-        val via = named.dropLast(1).take(PleosNaviSource.MAX_WAYPOINTS)
-        if (!navi.drive(dest, via)) return say("내비게이션에 연결하지 못했어요")
-        val skipped = named.size - 1 - via.size
-        say(if (skipped > 0) "그때 그 길로 안내할게요. 경유지는 두 곳까지라 ${skipped}곳은 빼고 넣었어요" else "그때 그 길로 안내할게요")
     }
 
     fun delete(capsule: Capsule) = scope.launch {
@@ -566,7 +572,7 @@ class DriveController(
             val c = repo.get(id)
             if (epoch != operationEpoch) return@launch
             if (c == null) return@launch stopPlayback()
-            if ((!_prepared.value || !session.active(now())) && !(c.collectedAt != null && canEdit())) {
+            if ((!_prepared.value || !session.active(now())) && !canEdit()) {
                 stopPlayback(); say("출발 전에 이번 주행을 준비해 주세요"); return@launch
             }
             val reason = OpenPolicy.reason(c, repo.lockFor(id), today(), position.value?.point,
@@ -593,14 +599,14 @@ class DriveController(
             _state.value = DriveState.Playing(id)
             _userPaused.value = false
             if (_playing.value?.capsule?.id == id && player.isActive) { player.resume(); return@launch }
-            val narration = Narration.build(dateOf(fresh), today(), MoodTagEngine.fromStored(fresh.tags), from = fresh.ownerName)
+            val narration = Narration.build(dateOf(fresh), today(), MoodTagEngine.fromStored(fresh.tags), from = fresh.originalOwnerName ?: fresh.ownerName)
             _playing.value = PlayingUi(fresh, narration)
             if (_reprompt.value?.id == id) _reprompt.value = null
             val spoken = listOfNotNull(narration, app.timecapsule.tag.TheDay.spoken(fresh.rawVehicleState)).joinToString(" ")
             player.play(spoken, fresh.audioPath, onStarted = {
                 val collected = fresh.copy(collectedAt = fresh.collectedAt ?: System.currentTimeMillis())
                 _playing.value = PlayingUi(collected, narration)
-                scope.launch { repo.collect(id, collected.collectedAt!!) }
+                if (!fresh.isForwarded) scope.launch { repo.collect(id, collected.collectedAt!!) }
             }) {
                 scope.launch {
                     repo.logNotify(id, today(), "played")
