@@ -53,7 +53,7 @@ fun CollectedMapScreen(drive: DriveController, back: () -> Unit) {
         while (true) { value = SystemClock.elapsedRealtime(); delay(2_000) }
     }
     val today = remember(now) { LocalDate.now() }
-    val states = mapped.associate { it.id to CapsuleMapData.state(it, locks[it.id], today) }
+    val states = mapped.associate { it.id to CapsuleMapData.state(it, locks[it.id], today, position?.point, position?.receivedAt ?: 0L, maxOf(now, SystemClock.elapsedRealtime())) }
     val current = CollectedMapData.currentPoint(position, maxOf(now, SystemClock.elapsedRealtime()))
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Header("캡슐 지도", back) {
@@ -85,8 +85,8 @@ fun CollectedMapScreen(drive: DriveController, back: () -> Unit) {
                 }, modifier = Modifier.fillMaxSize())
                 Surface(Modifier.align(Alignment.TopStart).padding(16.dp), shape = RoundedCornerShape(16.dp), color = Tc.Surface) {
                     Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                        MapLegend(Icons.Rounded.Lock, "잠김 ${states.values.count { it != CapsuleMapData.State.OPEN }}", Color(0xFF44464E))
-                        MapLegend(Icons.Rounded.PlayArrow, "수집 ${states.values.count { it == CapsuleMapData.State.OPEN }}", Color(0xFF176B53))
+                        MapLegend(Icons.Rounded.Lock, "잠김 ${states.values.count { it == CapsuleMapData.State.LOCKED || it == CapsuleMapData.State.WAITING }}", Color(0xFF44464E))
+                        MapLegend(Icons.Rounded.PlayArrow, "듣기 가능 ${states.values.count { it == CapsuleMapData.State.OPEN || it == CapsuleMapData.State.READY }}", Color(0xFF176B53))
                     }
                 }
                 Column(Modifier.align(Alignment.TopEnd).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -123,8 +123,8 @@ fun CollectedMapScreen(drive: DriveController, back: () -> Unit) {
                                 Text(selected.placeName ?: "캡슐 지점", style = Type.TitleS, color = Tc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text("${CapsuleMapData.owner(selected)} · ${CapsuleMapData.label(state)} · ${selected.durationSec}초", style = Type.LabelM, color = Tc.TextSub)
                             }
-                            Btn(if (state == CapsuleMapData.State.OPEN) "재생" else "길 안내",
-                                icon = if (state == CapsuleMapData.State.OPEN) Icons.Rounded.PlayArrow else Icons.Rounded.Lock,
+                            Btn(if (state == CapsuleMapData.State.READY) "수집하고 듣기" else if (state == CapsuleMapData.State.OPEN) "재생" else "길 안내",
+                                icon = if (state == CapsuleMapData.State.OPEN || state == CapsuleMapData.State.READY) Icons.Rounded.PlayArrow else Icons.Rounded.Lock,
                                 style = BtnStyle.Filled) { if (drive.canEdit()) pendingId = selected.id }
                             IconBtn(Icons.Rounded.Close, "선택 해제") { selectedId = null }
                         }
@@ -166,14 +166,15 @@ fun CollectedMapScreen(drive: DriveController, back: () -> Unit) {
         val target = mapped.firstOrNull { it.id == id }
         if (target != null) {
             val state = states.getValue(id)
-            val open = state == CapsuleMapData.State.OPEN
+            val ready = state == CapsuleMapData.State.READY
+            val open = state == CapsuleMapData.State.OPEN || ready
             val dateNote = if (state == CapsuleMapData.State.WAITING) "${LocalDate.ofEpochDay(locks.getValue(id).openAfter).format(dayFmt)}에 열려요. " else ""
             ConfirmPopup(
-                title = if (open) "이 캡슐을 재생할까요?" else "이 장소로 안내할까요?",
-                body = if (open) "${target.placeName ?: "캡슐"} · ${CapsuleMapData.owner(target)} · ${target.durationSec}초\n수집한 음성을 지금 재생해요."
+                title = if (ready) "이 캡슐을 수집하고 들을까요?" else if (open) "이 캡슐을 재생할까요?" else "이 장소로 안내할까요?",
+                body = if (open) "${target.placeName ?: "캡슐"} · ${CapsuleMapData.owner(target)} · ${target.durationSec}초\n${if (ready) "이 장소에서 수집하면 다음부터 어디서든 들을 수 있어요." else "수집한 음성을 지금 재생해요."}"
                     else "$dateNote${target.placeName ?: "캡슐 지점"}을 내비게이션 목적지로 설정해요. 기존 경로가 있다면 바뀝니다.",
-                confirm = if (open) "재생" else "길 안내 시작",
-                onConfirm = { pendingId = null; if (open) drive.playCollected(id) else drive.driveToCapsule(id) },
+                confirm = if (ready) "수집하고 듣기" else if (open) "재생" else "길 안내 시작",
+                onConfirm = { pendingId = null; if (open) drive.playCapsule(id) else drive.driveToCapsule(id) },
                 onDismiss = { pendingId = null })
         }
     }

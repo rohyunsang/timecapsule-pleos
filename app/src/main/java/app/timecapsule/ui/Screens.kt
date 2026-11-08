@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.MailOutline
@@ -128,6 +129,18 @@ fun HomeScreen(
     val capsules by drive.capsules.collectAsState()
     val locks by drive.locks.collectAsState()
     val today = LocalDate.now()
+    val position by drive.position.collectAsState()
+    var routeTarget by remember { mutableStateOf<Capsule?>(null) }
+    val openRecent: (Long) -> Unit = { id ->
+        capsules.firstOrNull { it.id == id }?.let { c ->
+            if (AlbumData.needsCollection(c) && drive.openingReason(c, position) != null && AlbumData.canNavigate(c)) routeTarget = c
+            else drive.playCapsule(id)
+        }
+    }
+    routeTarget?.let { c ->
+        ConfirmPopup("이 장소로 안내할까요?", "${c.placeName ?: "캡슐 지점"}을 내비게이션 목적지로 설정해요. 기존 경로가 있다면 바뀝니다.",
+            "길 안내 시작", onConfirm = { drive.driveToCapsule(c.id); routeTarget = null }, onDismiss = { routeTarget = null })
+    }
     val playable = capsules.filterNot { it.draft || locks[it.id].isLocked(today) }.sortedByDescending { it.createdAt }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Tc.Bg)) {
@@ -143,7 +156,7 @@ fun HomeScreen(
                     CapsuleList(
                         playable.take(fits), capsules.size, restricted, today, Modifier,
                         onMore = { if (restricted) onLocked() else go(Screen.ALBUM) },
-                    ) { drive.playCapsule(it) }
+                    ) { openRecent(it) }
                 }
                 MenuBar(restricted, go, onLocked)
             }
@@ -168,7 +181,7 @@ fun HomeScreen(
                             val fits = ((maxHeight - 100.dp) / (Tc.Row + 1.dp)).toInt().coerceIn(1, 6)
                             CapsuleList(playable.take(fits), capsules.size, restricted, today, Modifier,
                                 onMore = { if (restricted) onLocked() else go(Screen.ALBUM) },
-                            ) { drive.playCapsule(it) }
+                            ) { openRecent(it) }
                         }
                     }
                 }
@@ -292,6 +305,7 @@ private fun CapsuleList(
             when {
                 total == 0 -> ListRow("아직 묻은 캡슐이 없어요", "녹음 버튼을 누르고 첫 목소리를 남겨 보세요", leading = Icons.Rounded.Mic, leadingTint = Tc.TextMute)
                 driving -> ListRow("목록은 차를 세우면 보여요", "운전 중에는 캡슐이 알림으로 찾아와요", leading = Icons.Rounded.Lock, leadingTint = Tc.TextMute)
+                recent.isEmpty() -> ListRow("지금 표시할 최근 캡슐이 없어요", "전체 목록에서 개봉 대기 캡슐과 임시보관 녹음을 확인하세요", leading = Icons.Rounded.Inventory2, onClick = onMore)
                 else -> recent.forEachIndexed { i, c ->
                     if (i > 0) RowDivider()
                     ListRow(
@@ -360,10 +374,17 @@ fun LetterScreen(app: TimeCapsuleApp, back: () -> Unit) {
     val drive = app.drive
     val friends by app.social.friends.collectAsState()
     val me by app.social.me.collectAsState()
-    var to by remember { mutableStateOf<Friend?>(null) }
+    var recipientUid by rememberSaveable { mutableStateOf<String?>(null) }
+    val to = friends.firstOrNull { it.uid == recipientUid }
+    val prepared by drive.prepared.collectAsState()
+    var preparing by remember { mutableStateOf(false) }
+    if (preparing) ConfirmPopup("이번 주행을 준비할까요?",
+        "함께 탄 사람에게 녹음을 알리고 동의를 확인해 주세요. 준비만으로 녹음하지 않아요.",
+        "동의 확인 · 준비", onConfirm = { preparing = false; drive.prepareDrive() }, onDismiss = { preparing = false })
     val today = LocalDate.now()
-    var pick by remember { mutableStateOf(LetterPick.YEAR1) }
-    var custom by remember { mutableStateOf(today.plusMonths(6)) }
+    var pick by rememberSaveable { mutableStateOf(LetterPick.YEAR1) }
+    var customDay by rememberSaveable { mutableStateOf(today.plusMonths(6).toEpochDay()) }
+    val custom = LocalDate.ofEpochDay(customDay)
     val openOn = when (pick) {
         LetterPick.YEAR1 -> today.plusYears(1)
         LetterPick.YEAR10 -> today.plusYears(10)
@@ -387,10 +408,10 @@ fun LetterScreen(app: TimeCapsuleApp, back: () -> Unit) {
                         onClick = click,
                     )
                 }
-                radio(to == null, "나", "이 차에서 내가 열어요") { to = null }
+                radio(recipientUid == null, "나", "이 차에서 내가 열어요") { recipientUid = null }
                 friends.forEach { f ->
                     RowDivider()
-                    radio(to?.uid == f.uid, "${f.name}님", "${f.name}님 차가 이 길을 지나면 열려요") { to = f }
+                    radio(to?.uid == f.uid, "${f.name}님", "${f.name}님 차가 이 길을 지나면 열려요") { recipientUid = f.uid }
                 }
                 if (friends.isEmpty()) {
                     RowDivider()
@@ -427,9 +448,9 @@ fun LetterScreen(app: TimeCapsuleApp, back: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        IconBtn(Icons.Rounded.Remove, "한 달 앞으로", style = BtnStyle.Basic) { if (custom.minusMonths(1).isAfter(today)) custom = custom.minusMonths(1) }
+                        IconBtn(Icons.Rounded.Remove, "한 달 앞으로", style = BtnStyle.Basic) { if (custom.minusMonths(1).isAfter(today)) customDay = custom.minusMonths(1).toEpochDay() }
                         Text(custom.format(dayFmt), style = Type.BodyStrong, color = Tc.Text, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-                        IconBtn(Icons.Rounded.Add, "한 달 뒤로", style = BtnStyle.Basic) { custom = custom.plusMonths(1) }
+                        IconBtn(Icons.Rounded.Add, "한 달 뒤로", style = BtnStyle.Basic) { customDay = custom.plusMonths(1).toEpochDay() }
                     }
                 }
             }
@@ -439,10 +460,12 @@ fun LetterScreen(app: TimeCapsuleApp, back: () -> Unit) {
                 Icon(Icons.Rounded.Lock, null, tint = Tc.TextMute, modifier = Modifier.size(28.dp))
                 Text("  ${to?.let { "${it.name}님에게   " } ?: ""}${openOn.format(dayFmt)}에 열려요", style = Type.BodyS, color = Tc.TextSub)
             }
-            Btn("녹음하고 묻기", Modifier.fillMaxWidth(), icon = Icons.Rounded.Mic, style = BtnStyle.Filled, height = Tc.TouchLarge) {
+            if (recipientUid != null && to == null) Text("선택한 친구를 확인할 수 없어요. 받는 사람을 다시 선택해 주세요.", style = Type.BodyS, color = Tc.TextSub)
+            Btn(if (prepared) "녹음하고 묻기" else "녹음 준비하기", Modifier.fillMaxWidth(), icon = Icons.Rounded.Mic, style = BtnStyle.Filled,
+                enabled = (recipientUid == null || to != null) && !openOn.isBefore(today), height = Tc.TouchLarge) {
+                if (!prepared) { preparing = true; return@Btn }
                 val f = to
                 if (f == null) drive.bury(openOn, audience = "SELF") else drive.bury(openOn, audience = "SOME", recipients = listOf(f.uid))
-                back()
             }
         }
     }
@@ -457,6 +480,12 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
     val locks by drive.locks.collectAsState()
     val trips by drive.trips.collectAsState()
     val today = LocalDate.now()
+    val previewId by drive.previewDraftId.collectAsState()
+    val previewProgress by androidx.compose.runtime.produceState<Pair<Int, Int>?>(null, previewId) {
+        value = null
+        while (previewId != null) { value = drive.progress(); kotlinx.coroutines.delay(250) }
+    }
+    androidx.compose.runtime.DisposableEffect(drive) { onDispose { drive.stopDraftPreview() } }
     val tripById = trips.associateBy { it.id }
     var deleting by remember { mutableStateOf<Capsule?>(null) }
     var sharing by remember { mutableStateOf<Capsule?>(null) }
@@ -480,7 +509,7 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
             Header("여행 앨범", back) { IconBtn(Icons.Rounded.Map, "수집 지도", onClick = onMap) }
             Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                 AlbumTab("내가 남긴 캡슐", mine.size, ownTab, Modifier.weight(1f)) { ownTab = true }
-                AlbumTab("수집한 캡슐", collected.size, !ownTab, Modifier.weight(1f)) { ownTab = false }
+                AlbumTab("수집한 캡슐", collected.size, !ownTab, Modifier.weight(1f)) { drive.stopDraftPreview(); ownTab = false }
             }
         }
         if (visible.isEmpty()) {
@@ -501,13 +530,13 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
             val drafts = visible.filter { it.draft }
             if (drafts.isNotEmpty()) {
                 item(key = "draft-summary") {
-                    AlbumDraftHeader(drafts.size, draftsExpanded) { draftsExpanded = !draftsExpanded }
+                    AlbumDraftHeader(drafts.size, draftsExpanded) { if (draftsExpanded) drive.stopDraftPreview(); draftsExpanded = !draftsExpanded }
                 }
                 if (draftsExpanded) drafts.forEach { c ->
                     item(key = "draft:${c.id}") {
                         AlbumDraftRow(c, onPreview = { drive.previewDraft(c) },
                             onSave = { drive.confirmDraft(c) }.takeUnless { c.locationUncertain },
-                            onDelete = { deleting = c })
+                            onDelete = { deleting = c }, previewing = previewId == c.id, progress = previewProgress.takeIf { previewId == c.id })
                     }
                 }
             }
