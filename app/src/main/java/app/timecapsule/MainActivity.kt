@@ -135,7 +135,18 @@ private fun Root(app: TimeCapsuleApp) {
     val userPaused by drive.userPaused.collectAsState()
     val recordingSince by drive.recordingSince.collectAsState()
     val uxRestricted by app.ux.restricted.collectAsState()
-    var screen by remember { mutableStateOf(Screen.HOME) }
+    var screen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(Screen.HOME) }
+    val formState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    var permissionReturnScreen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<Screen?>(null) }
+    var settingsReturned by remember { mutableStateOf(false) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME && permissionReturnScreen != null) settingsReturned = true
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var dev by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -146,6 +157,13 @@ private fun Root(app: TimeCapsuleApp) {
 
     // Spec 07: only screens 04-06 (and home) while driving.
     LaunchedEffect(restricted) { if (restricted) screen = Screen.HOME }
+    LaunchedEffect(restricted, settingsReturned) {
+        if (!restricted && settingsReturned) {
+            permissionReturnScreen?.let { screen = it }
+            permissionReturnScreen = null
+            settingsReturned = false
+        }
+    }
     LaunchedEffect(Unit) {
         drive.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
     }
@@ -191,7 +209,7 @@ private fun Root(app: TimeCapsuleApp) {
                     onDev = { dev = !dev },
                     friendCount = friends.size,
                 )
-                Screen.LETTER -> LetterScreen(app) { screen = Screen.HOME }
+                Screen.LETTER -> formState.SaveableStateProvider("letter") { LetterScreen(app) { screen = Screen.HOME } }
                 Screen.ALBUM -> AlbumScreen(app, onMap = { screen = Screen.MAP }) { screen = Screen.HOME }
                 Screen.MAP -> CollectedMapScreen(drive) { screen = Screen.ALBUM }
                 Screen.SETTINGS -> SettingsScreen(app) { screen = Screen.HOME }
@@ -211,7 +229,10 @@ private fun Root(app: TimeCapsuleApp) {
                 if (drive.canEdit()) {
                     val settingsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         Uri.fromParts("package", context.packageName, null))
+                    permissionReturnScreen = screen
+                    settingsReturned = false
                     runCatching { context.startActivity(settingsIntent) }.onFailure {
+                        permissionReturnScreen = null
                         Toast.makeText(context, "설정을 열지 못했어요. 차량 설정 → 앱 → 타임캡슐 → 권한에서 마이크를 허용해 주세요", Toast.LENGTH_LONG).show()
                     }
                 }

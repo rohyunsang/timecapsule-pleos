@@ -121,8 +121,8 @@ class NativeCollectedMap(
         val s = style ?: return
         val features = groups.map { group ->
             val c = group.firstOrNull { it.id == selectedId } ?: group.first()
-            val open = group.all { states[it.id] == CapsuleMapData.State.OPEN }
-            val mixed = !open && group.any { states[it.id] == CapsuleMapData.State.OPEN }
+            val open = group.all { states[it.id] in setOf(CapsuleMapData.State.OPEN, CapsuleMapData.State.READY) }
+            val mixed = !open && group.any { states[it.id] in setOf(CapsuleMapData.State.OPEN, CapsuleMapData.State.READY) }
             val label = if (group.map { it.ownerUid }.distinct().size > 1) "모음" else CapsuleMapData.avatar(c)
             val badge = "$label:$open:$mixed:${group.size}"
             if (badges.add(badge)) s.addImage(badge, CapsuleMapArtwork.bitmap(density, label, open, mixed, group.size))

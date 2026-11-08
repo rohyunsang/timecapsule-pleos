@@ -42,4 +42,20 @@ class CapsuleMapDataTest {
         assertEquals("친", CapsuleMapData.avatar(c.copy(ownerUid = "friend", ownerName = " ")))
         assertEquals("😀", CapsuleMapData.avatar(c.copy(ownerUid = "friend", ownerName = "😀친구")))
     }
+    @Test fun arrivalEnablesCollectionOnlyWithFreshNearbyPosition() {
+        val here = app.timecapsule.geo.GeoPoint(c.lat, c.lng)
+        assertEquals(CapsuleMapData.State.READY, CapsuleMapData.state(c, null, today, here, 1000, 2000))
+        assertEquals(CapsuleMapData.State.LOCKED, CapsuleMapData.state(c, null, today, here, 1000, 11001))
+        assertEquals(CapsuleMapData.State.LOCKED, CapsuleMapData.state(c, null, today, app.timecapsule.geo.GeoPoint(38.0, 127.0), 1000, 2000))
+        assertEquals(CapsuleMapData.State.LOCKED, CapsuleMapData.state(c, null, today, null, 1000, 2000))
+    }
+    @Test fun arrivalCannotBypassDateLockOrUncertainLocation() {
+        val here = app.timecapsule.geo.GeoPoint(c.lat, c.lng)
+        assertEquals(CapsuleMapData.State.WAITING, CapsuleMapData.state(c, LetterLock(1, today.plusDays(1).toEpochDay()), today, here, 1000, 2000))
+        assertEquals(CapsuleMapData.State.LOCKED, CapsuleMapData.state(c.copy(locationUncertain = true), null, today, here, 1000, 2000))
+        assertEquals(CapsuleMapData.State.LOCKED, CapsuleMapData.state(c.copy(draft = true), null, today, here, 1000, 2000))
+    }
+    @Test fun collectedCapsuleRemainsPlayableAfterLeavingLocation() {
+        assertEquals(CapsuleMapData.State.OPEN, CapsuleMapData.state(c.copy(collectedAt = 1000), null, today))
+    }
 }
