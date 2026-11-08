@@ -143,7 +143,7 @@ class DriveController(
         operationEpoch++
         if (_state.value == DriveState.Recording) dispatch(DriveEvent.SafetySignalOn)
         resumeJob?.cancel(); alertTimeout?.cancel(); arrivalTimeout?.cancel()
-        player.stop(); _state.value = DriveState.Idle; _playing.value = null; _alert.value = null
+        stopAudio(); _state.value = DriveState.Idle; _playing.value = null; _alert.value = null
         _answerWindow.value = null; _reprompt.value = null; _arrivalPrompt.value = false
         _userPaused.value = false; session.end(); _prepared.value = false
         releasePreparation()
@@ -166,12 +166,19 @@ class DriveController(
     fun confirmDraft(c: Capsule) {
         if (!canEdit() || !c.isMine) return
         if (c.locationUncertain) return say("녹음 장소를 확인하지 못해 캡슐로 저장할 수 없어요. 음성은 임시보관해요")
-        scope.launch { repo.confirmDraft(c.id); say("나만 듣는 캡슐로 저장했어요") }
+        scope.launch { stopDraftPreview(); repo.confirmDraft(c.id); say("나만 듣는 캡슐로 저장했어요") }
     }
+    private val _previewDraftId = MutableStateFlow<Long?>(null)
+    val previewDraftId: StateFlow<Long?> = _previewDraftId.asStateFlow()
+    private fun stopAudio() { _previewDraftId.value = null; player.stop() }
+    fun stopDraftPreview() { if (_previewDraftId.value != null) stopAudio() }
     fun previewDraft(c: Capsule) {
         if (!canEdit() || !c.isMine || !c.draft || _state.value != DriveState.Idle) return
         // Private recovery preview is parked-only; it never grants a location opening.
-        player.play("임시보관한 녹음이에요", c.audioPath) {}
+        if (_previewDraftId.value == c.id) { stopDraftPreview(); return }
+        stopAudio()
+        _previewDraftId.value = c.id
+        player.play("임시보관한 녹음이에요", c.audioPath) { _previewDraftId.value = null }
     }
 
     /** Car state plus the place fields that come from the navigation app (spec F-02). */
@@ -264,7 +271,7 @@ class DriveController(
             while (true) {
                 delay(APPROACH_CHECK_MS)
                 maintainSession()
-                if (!canEdit() && _state.value == DriveState.Idle) player.stop()
+                if (!canEdit() && _state.value == DriveState.Idle) stopAudio()
                 checkApproach()
             }
         }
@@ -283,7 +290,7 @@ class DriveController(
         if (!microphoneAllowed()) return requireMicrophonePermission()
         if (!_prepared.value || !session.active(now())) return say("출발 전에 이번 주행을 준비해 주세요")
         if (!vehicleKnown() || signals.value.isNotEmpty()) return say("지금은 녹음을 시작할 수 없어요")
-        player.stop()
+        stopAudio()
         pendingOpenOn = openOn
         pendingAudience = audience ?: settings.defaultAudience.value
         pendingRecipients = if (pendingAudience == "FRIENDS") currentRecipients() else recipients
@@ -343,6 +350,7 @@ class DriveController(
 
     fun playCapsule(id: Long) {
         if (saving) return
+        stopDraftPreview()
         if (_state.value == DriveState.Idle) dispatch(DriveEvent.PlayCapsule(id))
         else say("지금은 재생할 수 없어요")
     }
@@ -360,7 +368,7 @@ class DriveController(
     fun restart() {
         val c = _playing.value?.capsule ?: return
         if (signals.value.isNotEmpty()) return
-        player.stop()
+        stopAudio()
         startPlayback(c.id)
     }
 
@@ -375,7 +383,7 @@ class DriveController(
     fun delete(capsule: Capsule) = scope.launch {
         if (!canEdit()) return@launch
         if (_playing.value?.capsule?.id == capsule.id) stopPlayback()
-        player.stop()
+        stopAudio()
         repo.delete(capsule)
         sharing?.onDeleted(capsule)
     }
@@ -452,7 +460,7 @@ class DriveController(
             Effect.PausePlayback -> player.pause()
             Effect.StopPlayback -> {
                 lastPlaybackEndAt = SystemClock.elapsedRealtime()
-                player.stop()
+                stopAudio()
                 _playing.value = null
                 _userPaused.value = false
             }

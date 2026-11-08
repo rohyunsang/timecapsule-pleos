@@ -63,12 +63,12 @@ internal fun AlbumDraftHeader(count: Int, expanded: Boolean, toggle: () -> Unit)
 }
 
 @Composable
-internal fun AlbumDraftRow(c: Capsule, onPreview: () -> Unit, onSave: (() -> Unit)?, onDelete: () -> Unit) {
-    AlbumTile(c, title = "임시보관 녹음", status = if (c.locationUncertain) "위치 미확정" else "저장 대기",
-        metadata = "${c.durationSec}초 · ${c.date().format(dayFmt)}",
+internal fun AlbumDraftRow(c: Capsule, onPreview: () -> Unit, onSave: (() -> Unit)?, onDelete: () -> Unit, previewing: Boolean = false, progress: Pair<Int, Int>? = null) {
+    AlbumTile(c, title = "임시보관 녹음", status = if (previewing) "미리 듣는 중" else if (c.locationUncertain) "위치 미확정" else "저장 대기",
+        metadata = if (previewing) progress?.let { "${it.first / 1000}초 / ${it.second / 1000}초" } ?: "음성 재생 준비 중" else "${c.durationSec}초 · ${c.date().format(dayFmt)}",
         detail = if (c.locationUncertain) "위치 없이 보관한 비공개 음성" else "중단된 녹음 · 저장 후 현장에서 수집",
         onNavigate = null, secondaryLabel = "저장", onSecondary = onSave,
-        mainIcon = Icons.Rounded.PlayArrow, mainDescription = "임시보관 미리 듣기", mainEnabled = true,
+        mainIcon = if (previewing) Icons.Rounded.Stop else Icons.Rounded.PlayArrow, mainDescription = if (previewing) "미리 듣기 정지" else "임시보관 미리 듣기", mainEnabled = true,
         onMain = onPreview, onDelete = onDelete)
 }
 
