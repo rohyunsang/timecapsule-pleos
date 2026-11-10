@@ -45,6 +45,7 @@ class FirebaseBackend(
     projectId: String,
 ) : SocialBackend {
     override val label = "Firebase"
+    val companion: app.timecapsule.companion.CompanionStore = app.timecapsule.companion.FirebaseCompanionStore({ db }, { auth })
 
     private val options = FirebaseOptions.Builder().setApiKey(apiKey).setApplicationId(appId).setProjectId(projectId).build()
     private val accounts = Accounts(context, "social_firebase")
