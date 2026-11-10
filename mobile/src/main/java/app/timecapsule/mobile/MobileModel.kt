@@ -145,17 +145,32 @@ class MobileModel(app: Application) : AndroidViewModel(app) {
         CollectionPolicy.reason(temporary, me.value?.uid == author.uid, false, LocalDate.now().toEpochDay(), fix, SystemClock.elapsedRealtime())?.let { error(CollectionPolicy.message(it)) }
         check(replyForeground && me.value?.uid == author.uid) { "앱으로 돌아온 뒤 다시 녹음해 주세요." }
         stop()
-        _reply.value = recorder.start(parent, author, fix, mode) { finishReply() }
-        _recordingReply.value = true
+        val request = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+            .setOnAudioFocusChangeListener { change -> if (change < 0 && _recordingReply.value) { finishReply(); if (_reply.value?.savedLocally == true) _message.value = "다른 소리로 녹음을 마쳤어요. 임시 답장을 확인해 주세요." } }.build()
+        check(audioManager.requestAudioFocus(request) == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { "지금은 녹음할 수 없어요. 통화나 다른 재생을 마친 뒤 다시 시도해 주세요." }
+        focus = request
+        try {
+            _reply.value = recorder.start(parent, author, fix, mode) { finishReply() }
+            _recordingReply.value = true
+        } catch (e: Exception) { stop(); throw e }
     }
     fun finishReply() {
         if (!_recordingReply.value) return
         _recordingReply.value = false
         try { _reply.value = recorder.stop(); if (_reply.value == null) _message.value = "3초 이상 녹음해야 답장을 보관할 수 있어요." }
-        catch (_: Exception) { _message.value = "답장을 보관하지 못했어요. 저장 공간을 확인해 주세요." }
+        catch (_: Exception) { _reply.value = recorder.pendingDraft(); _message.value = "파일 보관을 완료하지 못했어요. 앱을 닫기 전에 답장을 보내거나 저장 공간을 확보해 주세요." }
+        finally { stop() }
     }
-    fun discardReply() { finishReply(); _reply.value?.let(recorder::discard); _reply.value = null }
-    fun sendReply() = action {
+    fun previewReply() = action {
+        val draft = _reply.value ?: error("먼저 답장을 녹음해 주세요.")
+        check(!_recordingReply.value && draft.durationSec >= 3 && draft.authorUid == me.value?.uid) { "현재 계정의 완료된 녹음만 들을 수 있어요." }
+        check(draft.file.isFile) { "녹음 파일을 찾을 수 없어요. 답장을 삭제하고 다시 녹음해 주세요." }
+        if (_playing.value == "reply-draft") stop() else { stop(); play("reply-draft", draft.file) }
+    }
+    fun discardReply() { finishReply(); stop(); _reply.value?.let(recorder::discard); _reply.value = null }
+    fun sendReply(onSent: () -> Unit = {}) = action {
+        stop()
         val draft = _reply.value ?: error("보낼 답장이 없어요.")
         check(!_recordingReply.value && draft.durationSec >= 3)
         val author = me.value ?: error("먼저 로그인해 주세요.")
@@ -171,6 +186,7 @@ class MobileModel(app: Application) : AndroidViewModel(app) {
         check(bytes.size < 1_000_000) { "답장 파일이 너무 커요. 짧게 다시 녹음해 주세요." }
         backend!!.upload(c, bytes).getOrThrow()
         recorder.discard(draft); _reply.value = null
+        onSent()
         _message.value = if (draft.mode == ReplyPolicy.AFTER_THREE_DAYS) "답장을 보냈어요. 전송 완료 후 3일이 지나면 어디서든 들을 수 있어요." else "답장을 보냈어요. 답장을 남긴 장소에서 수집하면 들을 수 있어요."
     }
     fun open(c: RemoteCapsule) = action {

@@ -10,7 +10,7 @@ import java.io.File
 import org.json.JSONObject
 
 data class ReplyDraft(val parentId: String, val authorUid: String, val recipientUid: String, val createdAt: Long,
-                      val lat: Double, val lng: Double, val mode: String, val file: File, val durationSec: Int = 0)
+                      val lat: Double, val lng: Double, val mode: String, val file: File, val durationSec: Int = 0, val savedLocally: Boolean = true)
 
 /** Foreground-only recording. Finished drafts survive leaving the screen and process recreation. */
 class ReplyRecorder(private val context: Context) {
@@ -18,7 +18,7 @@ class ReplyRecorder(private val context: Context) {
     private var since = 0L
     private var current: ReplyDraft? = null
     private val directory = File(context.filesDir, "reply-drafts").apply { mkdirs() }
-    private fun metadata(uid: String) = File(directory, "${java.util.UUID.nameUUIDFromBytes(uid.toByteArray())}.json")
+    private val storage = ReplyDraftStorage(directory)
     @Suppress("DEPRECATION")
     fun start(parent: RemoteCapsule, author: Profile, fix: CollectionPolicy.Fix, mode: String, onLimit: () -> Unit): ReplyDraft {
         check(recorder == null)
@@ -47,24 +47,42 @@ class ReplyRecorder(private val context: Context) {
         media.release()
         if (!success || duration < 3 || draft == null) { draft?.file?.delete(); current = null; return null }
         val finished = draft.copy(durationSec = duration)
-        val json = JSONObject().put("parentId", finished.parentId).put("authorUid", finished.authorUid)
-            .put("recipientUid", finished.recipientUid).put("createdAt", finished.createdAt).put("lat", finished.lat)
-            .put("lng", finished.lng).put("mode", finished.mode).put("file", finished.file.name).put("durationSec", duration)
+        current = finished.copy(savedLocally = false)
+        storage.save(finished)
         current = finished
-        android.util.AtomicFile(metadata(finished.authorUid)).let { storage ->
-            val output = storage.startWrite()
-            try { output.write(json.toString().toByteArray()); storage.finishWrite(output) }
-            catch (e: Exception) { storage.failWrite(output); throw e }
-        }
         return finished
     }
+    fun pendingDraft(): ReplyDraft? = current
+    fun restore(uid: String) = storage.restore(uid)
+    fun discard(draft: ReplyDraft) { storage.discard(draft); if (current == draft) current = null }
+}
+
+/** Account-scoped completed drafts; partial writes recover through AtomicFile. */
+internal class ReplyDraftStorage(private val directory: File) {
+    private fun metadata(uid: String) = android.util.AtomicFile(File(directory, "${java.util.UUID.nameUUIDFromBytes(uid.toByteArray())}.json"))
+    fun save(draft: ReplyDraft) {
+        require(draft.file.parentFile?.canonicalFile == directory.canonicalFile && draft.file.isFile)
+        require(draft.durationSec in 3..60 && draft.mode in setOf(ReplyPolicy.LOCATION, ReplyPolicy.AFTER_THREE_DAYS))
+        val json = JSONObject().put("parentId", draft.parentId).put("authorUid", draft.authorUid)
+            .put("recipientUid", draft.recipientUid).put("createdAt", draft.createdAt).put("lat", draft.lat)
+            .put("lng", draft.lng).put("mode", draft.mode).put("file", draft.file.name).put("durationSec", draft.durationSec)
+        val storage = metadata(draft.authorUid)
+        val output = storage.startWrite()
+        try { output.write(json.toString().toByteArray()); storage.finishWrite(output) }
+        catch (e: Exception) { storage.failWrite(output); throw e }
+    }
     fun restore(uid: String): ReplyDraft? = runCatching {
-        val json = JSONObject(metadata(uid).readText())
+        val json = JSONObject(metadata(uid).openRead().bufferedReader().use { it.readText() })
         check(json.getString("authorUid") == uid)
         val name = json.getString("file"); check('/' !in name && '\\' !in name)
-        val file = File(directory, name); check(file.isFile)
-        ReplyDraft(json.getString("parentId"), uid, json.getString("recipientUid"), json.getLong("createdAt"),
-            json.getDouble("lat"), json.getDouble("lng"), json.getString("mode"), file, json.getInt("durationSec"))
+        val file = File(directory, name); check(file.isFile && file.length() > 0)
+        val mode = json.getString("mode"); check(mode in setOf(ReplyPolicy.LOCATION, ReplyPolicy.AFTER_THREE_DAYS))
+        val duration = json.getInt("durationSec"); check(duration in 3..60)
+        val lat = json.getDouble("lat"); val lng = json.getDouble("lng"); check(CollectionPolicy.valid(lat, lng))
+        ReplyDraft(json.getString("parentId"), uid, json.getString("recipientUid"), json.getLong("createdAt"), lat, lng, mode, file, duration)
     }.getOrNull()
-    fun discard(draft: ReplyDraft) { draft.file.delete(); metadata(draft.authorUid).delete(); if (current == draft) current = null }
+    fun discard(draft: ReplyDraft) {
+        if (draft.file.parentFile?.canonicalFile == directory.canonicalFile) draft.file.delete()
+        metadata(draft.authorUid).delete()
+    }
 }
