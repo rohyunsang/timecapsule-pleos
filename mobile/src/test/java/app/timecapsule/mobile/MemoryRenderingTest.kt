@@ -106,4 +106,24 @@ class MemoryRenderingTest {
             }
         }
     }
+    @Test fun forwardingWithoutFriends() = renderSharing(emptyList(), emptySet(), true)
+    @Test fun sharingWithSelectedFriends() = renderSharing(listOf(Friend("friend", "민수", "ABC123"), Friend("second", "함께 여행하는 오랜 친구 지민", "DEF456")), setOf("friend"), false)
+    private fun renderSharing(friends: List<Friend>, selected: Set<String>, forwarding: Boolean) {
+        paparazzi.snapshot {
+            TimeCapsuleMobileTheme {
+                CapsuleSharingContent(friends, selected, forwarding, false, {}, {}, {}, {})
+            }
+        }
+    }
+
+    @Test fun replyOpeningOptions() = renderReply(null)
+    @Test fun savedReplyBeforeSending() = renderReply(ReplyDraft("parent", "me", "friend", 1, 37.5, 127.0, ReplyPolicy.AFTER_THREE_DAYS, java.io.File("preview-only.m4a"), 24))
+    private fun renderReply(draft: ReplyDraft?) {
+        paparazzi.snapshot {
+            TimeCapsuleMobileTheme {
+                ReplyComposerContent(draft, false, false, false, true, ReplyPolicy.AFTER_THREE_DAYS, {}, {}, {}, {}, {}, {})
+            }
+        }
+    }
+
 }
