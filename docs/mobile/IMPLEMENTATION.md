@@ -28,3 +28,13 @@
 - PR: `feature/mobile-linked-app`, `/Users/block-s-dev/ym/timecapsule-pleos-worktrees/mobile-linked-app/hub`
 - 공통 기반: `feature/mobile-linked-app--shared`, `/Users/block-s-dev/ym/timecapsule-pleos-worktrees/mobile-linked-app/shared`
 - 앱 서버는 실행하지 않는다. 브라우저 시안 검증이 필요할 때 사용 중이지 않은 포트를 확인해 기록한다.
+
+## 2026-11-10 구현 중간 기록
+- 공통 모듈 분리와 수집 정책 테스트를 완료했다. 기존 차량 85개, 공통 수집 정책 6개 테스트가 통과했다.
+- `mobile` 앱에 계정 생성/로그인/이메일 연결, 목록 검색, 지도와 목록 대체 화면, 잠금 상세, GPS 기반 수집, 음성 재생 및 정지, 제목/메모/사진/방문할 장소 저장, 앨범 생성·삭제, 친구 추가 및 계정 안내를 구현했다.
+- `:mobile:assembleDebug :mobile:lintDebug :shared:testDebugUnitTest :app:testDebugUnitTest`가 통과했다. 실제 기기·Firebase 계정 간 동작 검증은 아직 하지 않았다.
+- 현재 모바일 하위 작업은 진행 중이다. 앨범 편집·가족 공유·음성 답장·친구 전달과 차량 목적지 수신/동기화 UI를 계속 구현해야 한다. 모바일 화면의 실제 렌더링 검증도 남아 있다.
+- 사용자 답변: 별도로 알고 있는 Firebase 프로젝트는 없다.
+- 저장소 `.firebaserc`에는 이전 프로젝트 `timecapsule-pleos-11020143`이 지정되어 있다. `gcloud projects describe`는 저장된 로그인 재인증 필요로 실패했다. 프로젝트 존재/권한을 확인하지 않았으며 서버 리소스 생성, 규칙 배포 또는 원격 데이터 변경은 하지 않았다.
+- 실제 연결에는 `local.properties`의 `firebase.apiKey`, `firebase.projectId`, 차량용 `firebase.appId`, 모바일용 `firebase.mobile.appId`가 필요하다. 모바일 Android 앱 등록 패키지는 `app.timecapsule.mobile`이다.
+- 최신 하위 작업: `feature/mobile-linked-app--mobile`, `/Users/block-s-dev/ym/timecapsule-pleos-worktrees/mobile-linked-app/mobile`.
