@@ -42,8 +42,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme(colorScheme = lightColorScheme(primary = Color(0xFFD92D3A), secondary = Color(0xFF515151),
-                background = Color(0xFFF5F5F6), surface = Color.White, onSurface = Color(0xFF222222))) {
+            TimeCapsuleMobileTheme {
                 MobileApp()
             }
         }
@@ -120,46 +119,13 @@ private fun SetupScreen() {
 
 @Composable
 private fun LoginScreen(model: MobileModel, busy: Boolean) {
-    var registering by rememberSaveable { mutableStateOf(false) }
-    var name by rememberSaveable { mutableStateOf("") }
-    var email by rememberSaveable { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { Text("그 길의 목소리,\n이제 손안에서도", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold) }
-        item { Text("차량과 같은 계정으로 연결하세요. 장소에서 수집한 캡슐은 어디서든 다시 들을 수 있어요.", color = Color(0xFF666666)) }
-        if (registering) item { OutlinedTextField(name, { name = it.take(12) }, label = { Text("이름") }, modifier = Modifier.fillMaxWidth(), singleLine = true) }
-        item { OutlinedTextField(email, { email = it }, label = { Text("이메일") }, modifier = Modifier.fillMaxWidth(), singleLine = true) }
-        item { OutlinedTextField(password, { password = it }, label = { Text("비밀번호") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), singleLine = true) }
-        item { Button(onClick = { if (registering) model.register(name, email, password) else model.login(email, password) }, enabled = !busy && email.contains('@') && password.length >= 6, modifier = Modifier.fillMaxWidth()) { Text(if (registering) "계정 만들기" else "차량 계정으로 로그인") } }
-        item { TextButton(onClick = { registering = !registering }, enabled = !busy) { Text(if (registering) "이미 계정이 있어요" else "처음이에요 · 계정 만들기") } }
-        item { TextButton(onClick = { model.resetPassword(email) }, enabled = !busy && email.contains('@')) { Text("비밀번호를 잊었어요") } }
-    }
+    LoginContent(busy, model::login, model::register, model::resetPassword)
 }
 
 @Composable
 private fun LibraryScreen(model: MobileModel, records: CompanionSnapshot, capsules: List<RemoteCapsule>, open: (String) -> Unit) {
-    var query by rememberSaveable { mutableStateOf("") }
-    var filter by rememberSaveable { mutableIntStateOf(0) }
-    val uid by model.me.collectAsState()
-    val filtered = capsules.filter { c ->
-        val memory = records.memories.firstOrNull { it.capsuleId == c.id }
-        val matches = listOf(c.placeName, c.ownerName, memory?.title, memory?.note).any { it?.contains(query, true) == true }
-        matches && when (filter) { 1 -> c.ownerUid == uid?.uid; 2 -> model.isCollected(c); 3 -> memory?.visitLater == true; else -> true }
-    }.sortedByDescending { it.createdAt }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("차곡차곡 쌓인 목소리", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
-        item { Text("수집한 추억 ${records.collections.size}개 · 캡슐 ${capsules.size}개", color = Color.Gray) }
-        item { OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("장소, 사람, 메모 검색") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true) }
-        item { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf("전체", "내 캡슐", "수집", "갈 곳").forEachIndexed { i, text -> FilterChip(filter == i, onClick = { filter = i }, label = { Text(text) }) } } }
-        if (records.loading && capsules.isEmpty()) item { Text("계정의 기록을 불러오고 있어요. 연결 상태에 따라 잠시 걸릴 수 있어요.") }
-        if (filtered.isEmpty()) item { EmptyPanel(if (query.isNotBlank()) "검색 결과가 없어요" else "아직 모인 캡슐이 없어요", "차량에서 계정을 연결하고 캡슐 동기화를 켜 주세요. 친구가 공유한 캡슐도 이곳에 모입니다.") }
-        items(filtered, key = { it.id }) { CapsuleCard(model, it) { open(it.id) } }
-    }
-}
-
-@Composable
-private fun CapsuleCard(model: MobileModel, c: RemoteCapsule, open: () -> Unit) {
-    MemoryCapsuleCard(c, model.memory(c.id), model.isCollected(c), LocalCapsuleTime.current, open)
+    val profile by model.me.collectAsState()
+    MemoryLibraryContent(records, capsules, profile?.uid, LocalCapsuleTime.current, open)
 }
 
 @Composable

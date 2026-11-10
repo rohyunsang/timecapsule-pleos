@@ -20,7 +20,7 @@ class MemoryRenderingTest {
     private val capsule = RemoteCapsule("preview", "friend", "민수", 1, 37.5, 127.0, 300, "한강에서 함께 본 노을", 24, "", "{}", null, Audience.SOME, emptyList(), emptyList())
     @Test fun collectionAndReplyStates() {
         paparazzi.snapshot {
-            MaterialTheme(colorScheme = lightColorScheme(primary = Color(0xFFD92D3A))) {
+            TimeCapsuleMobileTheme {
                 Column(Modifier.fillMaxSize().background(Color(0xFFF5F5F6)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("차곡차곡 쌓인 목소리", style = MaterialTheme.typography.headlineSmall)
                     MemoryCapsuleCard(capsule, CapsuleMemory("preview", favorite = true), true, 1000) {}
@@ -33,7 +33,7 @@ class MemoryRenderingTest {
     }
     @Test fun mapMarkerStates() {
         paparazzi.snapshot {
-            MaterialTheme {
+            TimeCapsuleMobileTheme {
                 Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                     Text("지도의 캡슐 상태", style = MaterialTheme.typography.titleLarge)
                     CapsuleAvailability.State.entries.forEach { state ->
@@ -42,6 +42,30 @@ class MemoryRenderingTest {
                             Text(CapsuleAvailability.label(state))
                         }
                     }
+                }
+            }
+        }
+    }
+    @Test fun loginScreen() {
+        paparazzi.snapshot {
+            TimeCapsuleMobileTheme {
+                Surface { LoginContent(false, { _, _ -> }, { _, _, _ -> }, {}) }
+            }
+        }
+    }
+    @Test fun emptyLibrary() {
+        paparazzi.snapshot {
+            TimeCapsuleMobileTheme {
+                Surface { MemoryLibraryContent(CompanionSnapshot(loading = false), emptyList(), "me", 1000) {} }
+            }
+        }
+    }
+    @Test fun libraryWithCollectedAndLockedCapsules() {
+        paparazzi.snapshot {
+            TimeCapsuleMobileTheme {
+                Surface(color = Color(0xFFF5F5F6)) {
+                    MemoryLibraryContent(CompanionSnapshot(collections = listOf(CollectionReceipt("preview", 1, "mobile")), loading = false),
+                        listOf(capsule, capsule.copy(id = "locked", placeName = "다음 여행에서 만날 목소리")), "me", 1000) {}
                 }
             }
         }
