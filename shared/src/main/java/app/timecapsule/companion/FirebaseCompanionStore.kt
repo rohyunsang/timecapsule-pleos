@@ -95,7 +95,14 @@ class FirebaseCompanionStore(
     }
     override suspend fun acknowledgeDestination(id: String, status: String) = request {
         require(status in setOf("accepted", "dismissed", "failed"))
-        user().collection("destinations").document(id(id)).update(mapOf("status" to status, "handledAt" to FieldValue.serverTimestamp())).await(); Unit
+        val db = database()
+        val ref = user().collection("destinations").document(id(id))
+        db.runTransaction { tx ->
+            val current = tx.get(ref)
+            if (current.exists() && current.getString("status") == "pending") {
+                tx.update(ref, mapOf("status" to status, "handledAt" to FieldValue.serverTimestamp()))
+            }
+        }.await(); Unit
     }
     override suspend fun savePhoto(capsuleId: String, jpeg: ByteArray) = request {
         require(jpeg.size in 1..800_000) { "사진 크기를 줄인 뒤 다시 시도해 주세요." }

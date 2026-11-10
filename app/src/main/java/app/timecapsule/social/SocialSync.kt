@@ -51,6 +51,10 @@ class SocialSync(
 ) : CapsuleSharing {
     private val dir = File(context.filesDir, "capsules").apply { mkdirs() }
     private val lock = Mutex()
+    private val destinationReplies = context.getSharedPreferences("destination_replies", Context.MODE_PRIVATE)
+    private val _pendingDestinationReplies = MutableStateFlow(destinationReplies.all.keys.toSet())
+    val pendingDestinationReplies = _pendingDestinationReplies.asStateFlow()
+
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages = _messages.asSharedFlow()
@@ -88,6 +92,7 @@ class SocialSync(
                 if (backend.me.value != null) lock.withLock {
                     pushPending()
                     syncCollections()
+                    flushDestinationReplies()
                     pull(backend.remote.value, backend.friends.value, backend.synced.value)
                 }
             }
@@ -282,10 +287,26 @@ class SocialSync(
     }
 
     fun acknowledgeDestination(destination: CarDestination, accepted: Boolean) {
-        scope.launch {
-            try { companion?.acknowledgeDestination(destination.id, if (accepted) "accepted" else "dismissed") }
-            catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _messages.tryEmit("목적지 확인 상태를 저장하지 못했어요. 연결 후 다시 확인해 주세요.") }
+        val uid = backend.me.value?.uid ?: return
+        val key = "$uid/${destination.id}"
+        destinationReplies.edit().putString(key, if (accepted) "accepted" else "dismissed").apply()
+        _pendingDestinationReplies.value = destinationReplies.all.keys.toSet()
+        scope.launch { lock.withLock { flushDestinationReplies() } }
+    }
+
+    private suspend fun flushDestinationReplies() {
+        val store = companion ?: return
+        val uid = backend.me.value?.uid ?: return
+        for ((key, value) in destinationReplies.all) {
+            if (!key.startsWith("$uid/") || value !is String) continue
+            if (backend.me.value?.uid != uid) return
+            try {
+                store.acknowledgeDestination(key.removePrefix("$uid/"), value)
+                destinationReplies.edit().remove(key).apply()
+                _pendingDestinationReplies.value = destinationReplies.all.keys.toSet()
+            } catch (_: TimeoutCancellationException) { return }
+              catch (e: CancellationException) { throw e }
+              catch (_: Exception) { return } // Persisted replies retry on the next sync tick.
         }
     }
 

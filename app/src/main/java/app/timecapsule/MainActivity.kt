@@ -217,8 +217,10 @@ private fun Root(app: TimeCapsuleApp) {
             }
         }
         val companion by app.sync.companionState.collectAsState()
+        val pendingDestinationReplies by app.sync.pendingDestinationReplies.collectAsState()
+        val destinationOwner by app.social.me.collectAsState()
         var handledDestinations by remember { mutableStateOf(setOf<String>()) }
-        val destination = companion.destinations.firstOrNull { it.status == "pending" && it.createdAt > 0 && it.id !in handledDestinations }
+        val destination = companion.destinations.firstOrNull { it.status == "pending" && it.createdAt > 0 && it.id !in handledDestinations && "${destinationOwner?.uid}/${it.id}" !in pendingDestinationReplies }
         if (!restricted && s == DriveState.Idle && destination != null) ConfirmPopup(
             "모바일에서 보낸 장소로 안내할까요?",
             "${destination.title}을 목적지로 설정해요. 기존 경로가 있다면 바뀝니다.",

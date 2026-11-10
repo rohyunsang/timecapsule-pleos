@@ -182,6 +182,7 @@ private fun CapsuleDetail(model: MobileModel, c: RemoteCapsule, busy: Boolean, f
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
         if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) model.open(c) else permissionDenied = true
     }
+    val destination = records.destinations.firstOrNull { it.capsuleId == c.id }
     val now = LocalCapsuleTime.current
     val lockedDate = c.openAfter?.let { it > LocalDate.now().toEpochDay() } == true || ReplyPolicy.waiting(c.replyMode, c.replyAvailableAt, now)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -198,7 +199,15 @@ private fun CapsuleDetail(model: MobileModel, c: RemoteCapsule, busy: Boolean, f
         } }
         item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=${c.lat},${c.lng}(${Uri.encode(c.placeName ?: "캡슐")})"))) }.onFailure { model.notify("지도 앱을 열지 못했어요. 지도 앱을 설치한 뒤 다시 시도해 주세요.") } }, Modifier.weight(1f)) { Text("길 찾기") }
-            OutlinedButton(onClick = { model.sendToCar(c) }, Modifier.weight(1f), enabled = !busy) { Text("차량으로 보내기") }
+            OutlinedButton(onClick = { model.sendToCar(c) }, Modifier.weight(1f), enabled = !busy && destination?.status != "pending") { Text(if (destination?.status == "pending") "차량 확인 대기" else "차량으로 보내기") }
+        } }
+        destination?.let { request -> item {
+            Text(when (request.status) {
+                "pending" -> "차량이 연결되면 주차 중에 안내 요청을 확인할 수 있어요."
+                "accepted" -> "차량에서 길 안내 요청을 확인했어요. 실제 경로는 차량 내비게이션에서 확인해 주세요."
+                "dismissed" -> "차량에서 안내 요청을 닫았어요. 필요하면 다시 보낼 수 있어요."
+                else -> "차량에서 안내를 시작하지 못했어요. 다시 보내 주세요."
+            }, style = MaterialTheme.typography.bodySmall)
         } }
         item { OutlinedButton(onClick = { model.saveMemory(stored.copy(visitLater = !stored.visitLater)) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (stored.visitLater) "방문할 장소에서 빼기" else "방문할 장소에 저장") } }
         if (c.ownerUid == me?.uid && c.sourceRemoteId == null && c.replyToId == null) item {

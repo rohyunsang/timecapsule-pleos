@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import app.timecapsule.companion.*
 import app.timecapsule.social.*
@@ -26,6 +27,21 @@ class MemoryRenderingTest {
                     MemoryCapsuleCard(capsule.copy(placeName = "다음 여행에서 열어 볼 캡슐"), CapsuleMemory("preview"), false, 1000) {}
                     MemoryCapsuleCard(capsule.copy(replyToId = "parent", replyMode = ReplyPolicy.AFTER_THREE_DAYS, replyAvailableAt = 259201000), CapsuleMemory("preview", title = "민수가 남긴 음성 답장"), false, 1000) {}
                     MemoryCapsuleCard(capsule.copy(replyToId = "parent", replyMode = ReplyPolicy.AFTER_THREE_DAYS, replyAvailableAt = 1000), CapsuleMemory("preview", title = "3일이 지나 열린 답장"), false, 1000) {}
+                }
+            }
+        }
+    }
+    @Test fun mapMarkerStates() {
+        paparazzi.snapshot {
+            MaterialTheme {
+                Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                    Text("지도의 캡슐 상태", style = MaterialTheme.typography.titleLarge)
+                    CapsuleAvailability.State.entries.forEach { state ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            androidx.compose.foundation.Image(capsuleMarker(state, 2f).asImageBitmap(), null, Modifier.size(44.dp))
+                            Text(CapsuleAvailability.label(state))
+                        }
+                    }
                 }
             }
         }

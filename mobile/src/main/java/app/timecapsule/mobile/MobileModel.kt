@@ -100,7 +100,9 @@ class MobileModel(app: Application) : AndroidViewModel(app) {
         backend!!.updateSharing(c.id, recipients).getOrThrow(); onSaved(); _message.value = "공개 범위를 바꿨어요."
     }
     fun deleteAlbum(id: String) = action { store.deleteAlbum(id); _message.value = "앨범을 삭제했어요. 원본 캡슐은 그대로 남아 있어요." }
-    fun sendToCar(c: RemoteCapsule) = action { store.sendDestination(c.id, c.placeName ?: "캡슐 장소", c.lat, c.lng); _message.value = "차량으로 보냈어요. 주차 중 차량에서 길 안내를 확인해 주세요." }
+    fun sendToCar(c: RemoteCapsule) = action {
+        check(records.value.destinations.none { it.capsuleId == c.id && it.status == "pending" }) { "이미 차량 확인을 기다리는 요청이 있어요." }
+        store.sendDestination(c.id, c.placeName ?: "캡슐 장소", c.lat, c.lng); _message.value = "차량으로 보냈어요. 주차 중 차량에서 길 안내를 확인해 주세요." }
     fun loadPhoto(id: String) {
         photoJob?.cancel(); photoTarget = id; _photo.value = null
         val uid = me.value?.uid ?: return

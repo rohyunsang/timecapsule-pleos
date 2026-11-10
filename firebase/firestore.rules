@@ -62,6 +62,7 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time && request.resource.data.status == 'pending';
         allow update: if signedIn() && me() == uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handledAt'])
+          && resource.data.status == 'pending'
           && request.resource.data.status in ['accepted', 'dismissed', 'failed']
           && request.resource.data.handledAt == request.time;
       }
