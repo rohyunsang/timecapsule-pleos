@@ -16,6 +16,11 @@ service cloud.firestore {
       return c.get('openAfter', null) == null || c.openAfter <= (request.time.toMillis() + 32400000) / 86400000;
     }
 
+    function replyDateOpen(c) {
+      return c.get('replyMode', null) != 'AFTER_THREE_DAYS'
+        || (c.get('replySentAt', null) is timestamp && request.time >= c.replySentAt + duration.value(72, 'h'));
+    }
+
     // Profile: anyone signed in may read a name; only the owner writes.
     match /users/{uid} {
       allow read: if signedIn();
@@ -34,6 +39,7 @@ service cloud.firestore {
         allow read: if signedIn() && me() == uid;
         // GPS is checked by the app; this receipt is not cryptographic location attestation.
         allow create: if signedIn() && me() == uid && capsuleAccessible(id) && capsuleDateOpen(id)
+          && replyDateOpen(get(/databases/$(database)/documents/capsules/$(id)).data)
           && request.resource.data.keys().hasOnly(['collectedAt', 'device'])
           && request.resource.data.collectedAt == request.time
           && request.resource.data.device in ['vehicle', 'mobile'];
@@ -56,6 +62,7 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time && request.resource.data.status == 'pending';
         allow update: if signedIn() && me() == uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handledAt'])
+          && resource.data.status == 'pending'
           && request.resource.data.status in ['accepted', 'dismissed', 'failed']
           && request.resource.data.handledAt == request.time;
       }
@@ -94,17 +101,41 @@ service cloud.firestore {
     match /capsules/{id} {
       allow read: if signedIn() && (resource.data.ownerUid == me() || me() in resource.data.visibleTo
         || resource.data.audience == 'DEMO');
-      allow create: if signedIn() && request.resource.data.ownerUid == me();
-      allow update, delete: if signedIn() && resource.data.ownerUid == me();
+      // A missing deterministic ID can be read only by its creator for retry transactions.
+      allow get: if signedIn() && !exists(/databases/$(database)/documents/capsules/$(id))
+        && id.matches(me() + '_[0-9]+');
+      allow create: if signedIn() && request.resource.data.ownerUid == me() && validReply();
+      allow update: if signedIn() && resource.data.ownerUid == me()
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['replyToId', 'replyMode', 'replySentAt'])
+        && (resource.data.get('replyToId', null) == null || request.resource.data == resource.data);
+      allow delete: if signedIn() && resource.data.ownerUid == me();
+      function validReply() {
+        let d = request.resource.data;
+        return (d.get('replyToId', null) == null && d.get('replyMode', null) == null && d.get('replySentAt', null) == null)
+          || (d.replyToId is string && d.replyMode in ['LOCATION', 'AFTER_THREE_DAYS']
+            && d.replySentAt == request.time && capsuleAccessible(d.replyToId) && capsuleDateOpen(d.replyToId)
+            && replyDateOpen(get(/databases/$(database)/documents/capsules/$(d.replyToId)).data)
+            && d.sourceRemoteId == null
+            && (exists(/databases/$(database)/documents/users/$(me())/collections/$(d.replyToId))
+              || get(/databases/$(database)/documents/capsules/$(d.replyToId)).data.get('sourceRemoteId', null) != null
+              || get(/databases/$(database)/documents/capsules/$(d.replyToId)).data.get('replyMode', null) == 'AFTER_THREE_DAYS')
+            && d.visibleTo == d.recipients
+            && (d.recipients == [get(/databases/$(database)/documents/capsules/$(d.replyToId)).data.ownerUid]
+              || (d.recipients == [] && get(/databases/$(database)/documents/capsules/$(d.replyToId)).data.ownerUid == me())));
+      }
     }
 
     // Voice, one document per capsule; same audience as the capsule.
     match /audio/{id} {
-      allow read: if signedIn() && (resource.data.ownerUid == me() ||
-        me() in get(/databases/$(database)/documents/capsules/$(id)).data.visibleTo ||
-        get(/databases/$(database)/documents/capsules/$(id)).data.audience == 'DEMO');
-      allow create, update: if signedIn() && request.resource.data.ownerUid == me()
-        && request.resource.data.data.size() < 1000000;
+      allow read: if capsuleAccessible(id)
+        && replyDateOpen(get(/databases/$(database)/documents/capsules/$(id)).data);
+      allow create: if signedIn() && request.resource.data.ownerUid == me()
+        && request.resource.data.data is bytes && request.resource.data.data.size() < 1000000;
+      allow update: if signedIn() && resource.data.ownerUid == me() && request.resource.data.ownerUid == me()
+        && request.resource.data.data is bytes && request.resource.data.data.size() < 1000000
+        && (!exists(/databases/$(database)/documents/capsules/$(id))
+          || get(/databases/$(database)/documents/capsules/$(id)).data.get('replyToId', null) == null);
       allow delete: if signedIn() && resource.data.ownerUid == me();
     }
   }

@@ -10,11 +10,12 @@ object CollectionPolicy {
     data class Fix(val lat: Double, val lng: Double, val accuracyM: Double, val elapsedMs: Long, val mocked: Boolean = false)
     enum class Block { NO_ACCESS, WAITING_DATE, INVALID_PLACE, LOCATION_REQUIRED, STALE_LOCATION, INACCURATE_LOCATION, MOCK_LOCATION, OUT_OF_RANGE }
     fun valid(lat: Double, lng: Double) = lat.isFinite() && lng.isFinite() && lat in -90.0..90.0 && lng in -180.0..180.0
-    fun reason(c: RemoteCapsule, authorized: Boolean, collected: Boolean, today: Long, fix: Fix?, nowElapsedMs: Long): Block? {
+    fun reason(c: RemoteCapsule, authorized: Boolean, collected: Boolean, today: Long, fix: Fix?, nowElapsedMs: Long, nowWallMs: Long = System.currentTimeMillis()): Block? {
         if (!authorized) return Block.NO_ACCESS
         if (c.openAfter?.let { today < it } == true) return Block.WAITING_DATE
+        if (ReplyPolicy.waiting(c.replyMode, c.replyAvailableAt, nowWallMs)) return Block.WAITING_DATE
         if (!valid(c.lat, c.lng) || c.radiusM <= 0) return Block.INVALID_PLACE
-        if (collected || c.sourceRemoteId != null) return null
+        if (collected || c.sourceRemoteId != null || ReplyPolicy.remoteOpen(c.replyMode, c.replyAvailableAt, nowWallMs)) return null
         if (fix == null || !valid(fix.lat, fix.lng)) return Block.LOCATION_REQUIRED
         if (fix.mocked) return Block.MOCK_LOCATION
         if (fix.elapsedMs <= 0 || nowElapsedMs < fix.elapsedMs || nowElapsedMs - fix.elapsedMs > MAX_LOCATION_AGE_MS) return Block.STALE_LOCATION

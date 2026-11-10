@@ -80,22 +80,37 @@ class FirebaseCompanionStore(
         require(album.title.isNotBlank() && album.title.length <= 100 && album.capsuleIds.size <= 200 && album.members.size <= 30)
         val me = uid()
         val albums = database().collection("memoryAlbums")
-        val ref = if (album.id.isBlank()) albums.document() else albums.document(id(album.id))
+        val ref = albums.document(id(album.id))
         ref.set(mapOf("title" to album.title.trim(), "capsuleIds" to album.capsuleIds.distinct().map(::id),
             "ownerUid" to me, "members" to (album.members + me).distinct(), "updatedAt" to FieldValue.serverTimestamp())).await()
         ref.id
     }
     override suspend fun deleteAlbum(id: String) = request { database().collection("memoryAlbums").document(id(id)).delete().await(); Unit }
-    override suspend fun sendDestination(capsuleId: String, title: String, lat: Double, lng: Double): String = request {
+    override suspend fun sendDestination(requestId: String, capsuleId: String, title: String, lat: Double, lng: Double): String = request {
         require(CollectionPolicy.valid(lat, lng) && title.length <= 120)
-        val ref = user().collection("destinations").document()
-        ref.set(mapOf("capsuleId" to id(capsuleId), "title" to title, "lat" to lat, "lng" to lng,
-            "createdAt" to FieldValue.serverTimestamp(), "status" to "pending")).await()
+        val db = database()
+        val ref = user().collection("destinations").document(id(requestId))
+        db.runTransaction { tx ->
+            val existing = tx.get(ref)
+            if (existing.exists()) {
+                check(existing.getString("capsuleId") == capsuleId) { "목적지 요청을 다시 확인해 주세요." }
+            } else {
+                tx.set(ref, mapOf("capsuleId" to id(capsuleId), "title" to title, "lat" to lat, "lng" to lng,
+                    "createdAt" to FieldValue.serverTimestamp(), "status" to "pending"))
+            }
+        }.await()
         ref.id
     }
     override suspend fun acknowledgeDestination(id: String, status: String) = request {
         require(status in setOf("accepted", "dismissed", "failed"))
-        user().collection("destinations").document(id(id)).update(mapOf("status" to status, "handledAt" to FieldValue.serverTimestamp())).await(); Unit
+        val db = database()
+        val ref = user().collection("destinations").document(id(id))
+        db.runTransaction { tx ->
+            val current = tx.get(ref)
+            if (current.exists() && current.getString("status") == "pending") {
+                tx.update(ref, mapOf("status" to status, "handledAt" to FieldValue.serverTimestamp()))
+            }
+        }.await(); Unit
     }
     override suspend fun savePhoto(capsuleId: String, jpeg: ByteArray) = request {
         require(jpeg.size in 1..800_000) { "사진 크기를 줄인 뒤 다시 시도해 주세요." }

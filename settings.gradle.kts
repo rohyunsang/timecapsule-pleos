@@ -17,4 +17,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "TimeCapsule"
-include(":app", ":shared")
+include(":app", ":shared", ":mobile")

@@ -1,5 +1,7 @@
 package app.timecapsule.ui
 
+import app.timecapsule.drive.AlertCadence
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
@@ -149,7 +151,7 @@ fun HomeScreen(
             Column(Modifier.fillMaxSize().padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
                 AppBar(onPleos, restricted, onDev)
                 VoiceBar(drive, friendCount)
-                NowNotice(drive, restricted, today)
+                NowNotice(drive, restricted, today) { go(Screen.ALBUM) }
                 // The list takes what is left (only whole rows); the menu stays pinned to the bottom.
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                     val fits = ((maxHeight - 72.dp) / (Tc.Row + 1.dp)).toInt().coerceIn(1, 4)
@@ -173,7 +175,7 @@ fun HomeScreen(
                                 VoiceBar(drive, friendCount)
                             }
                         }
-                        NowNotice(drive, restricted, today)
+                        NowNotice(drive, restricted, today) { go(Screen.ALBUM) }
                         MenuBar(restricted, go, onLocked)
                     }
                     Surface(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(24.dp), color = Tc.Surface) {
@@ -241,7 +243,9 @@ private fun VoiceBar(drive: DriveController, friendCount: Int) {
 
 /** The single most relevant "now" message, as a plain row (or a question with two buttons). */
 @Composable
-private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalDate) {
+private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalDate, openAlbum: () -> Unit) {
+    val saved by drive.saveResult.collectAsState()
+    val review by drive.tripReview.collectAsState()
     val forecast by drive.forecast.collectAsState()
     val reprompt by drive.reprompt.collectAsState()
     val arrival by drive.arrivalPrompt.collectAsState()
@@ -254,6 +258,25 @@ private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalD
     val again = reprompt
     val f = forecast
     when {
+        review != null && !restricted -> InlinePrompt(
+            "이번 주행의 기록",
+            "남긴 캡슐 ${review!!.saved}개 · 수집 ${review!!.collected}개 · 임시 녹음 ${review!!.drafts}개",
+            cta = (if (review!!.drafts > 0) "임시 녹음 확인" else "앨범 보기") to { drive.dismissTripReview(); openAlbum() },
+            ctaIcon = Icons.Rounded.PhotoLibrary, sub = "닫기" to drive::dismissTripReview,
+        )
+        saved != null && !restricted -> InlinePrompt(
+            if (saved!!.capsule.draft) "녹음을 임시 보관했어요" else "캡슐을 남겼어요",
+            saved!!.let { result ->
+                val place = result.capsule.placeName ?: "장소 미확정"
+                when {
+                    result.capsule.draft -> "$place · ${result.capsule.durationSec}초 · 앨범에서 확인해 주세요"
+                    result.openAfter != null -> "$place · ${LocalDate.ofEpochDay(result.openAfter)} 개봉 후 현장에서 수집"
+                    else -> "$place · 잠김 · 이 장소에서 수집하면 들을 수 있어요"
+                }
+            },
+            cta = "앨범에서 확인" to { drive.dismissSaveResult(); openAlbum() }, ctaIcon = Icons.Rounded.PhotoLibrary,
+            sub = "닫기" to drive::dismissSaveResult,
+        )
         !prepared -> InlinePrompt("이번 주행 준비", "주차 중 권한과 동승자 동의를 확인해 주세요",
             cta = "준비하기" to { if (!restricted) preparing = true }, ctaIcon = Icons.Rounded.Mic,
             sub = null)
@@ -491,14 +514,18 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
     var sharing by remember { mutableStateOf<Capsule?>(null) }
     var forwarding by remember { mutableStateOf<Capsule?>(null) }
     var routeTarget by remember { mutableStateOf<Capsule?>(null) }
-    var ownTab by rememberSaveable { mutableStateOf(true) }
+    var albumTab by rememberSaveable { mutableStateOf(0) }
+    val ownTab = albumTab == 0
+    val laterIds by app.settings.listenLater.collectAsState()
     var draftsExpanded by rememberSaveable { mutableStateOf(false) }
     val ownListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val collectedListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val laterListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val position by drive.position.collectAsState()
     val mine = capsules.filter(AlbumData::mine)
     val collected = capsules.filter(AlbumData::collected)
-    val visible = if (ownTab) mine else collected
+    val later = capsules.filter { it.id in laterIds && !it.draft }
+    val visible = when (albumTab) { 0 -> mine; 1 -> collected; else -> later }
     // F-08: group by trip; capsules outside a trip are grouped by day.
     val groups = visible.filterNot { it.draft }.groupBy { c -> c.tripId?.let { "trip:$it" } ?: "day:${c.date()}" }
         .entries.sortedByDescending { e -> e.value.maxOf { it.createdAt } }
@@ -508,22 +535,23 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
         Column(Modifier.widthIn(max = 1320.dp).fillMaxWidth()) {
             Header("여행 앨범", back) { IconBtn(Icons.Rounded.Map, "수집 지도", onClick = onMap) }
             Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                AlbumTab("내가 남긴 캡슐", mine.size, ownTab, Modifier.weight(1f)) { ownTab = true }
-                AlbumTab("수집한 캡슐", collected.size, !ownTab, Modifier.weight(1f)) { drive.stopDraftPreview(); ownTab = false }
+                AlbumTab("내가 남긴 캡슐", mine.size, ownTab, Modifier.weight(1f)) { albumTab = 0 }
+                AlbumTab("수집한 캡슐", collected.size, albumTab == 1, Modifier.weight(1f)) { drive.stopDraftPreview(); albumTab = 1 }
+                AlbumTab("나중에 듣기", later.size, albumTab == 2, Modifier.weight(1f)) { drive.stopDraftPreview(); albumTab = 2 }
             }
         }
         if (visible.isEmpty()) {
             Column(Modifier.fillMaxWidth().weight(1f), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
                 Icon(Icons.Rounded.PhotoLibrary, null, Modifier.size(64.dp), tint = Tc.TextMute)
-                Text(if (ownTab) "아직 남긴 캡슐이 없어요" else "아직 수집한 캡슐이 없어요", style = Type.TitleS, color = Tc.Text)
+                Text(when (albumTab) { 0 -> "아직 남긴 캡슐이 없어요"; 1 -> "아직 수집한 캡슐이 없어요"; else -> "미뤄 둔 캡슐이 없어요" }, style = Type.TitleS, color = Tc.Text)
                 Text(if (ownTab) "길에 남긴 캡슐을 여기에서 확인하세요."
-                    else "수집하거나 친구에게 받은 캡슐이 여기에 모여요.",
+                    else if (albumTab == 1) "수집하거나 친구에게 받은 캡슐이 여기에 모여요." else "알림에서 나중에 듣기를 누른 캡슐을 모아 두어요. 수집 전에는 현장 방문이 필요해요.",
                     style = Type.BodyS, color = Tc.TextSub, textAlign = TextAlign.Center)
             }
         } else LazyColumn(
             Modifier.widthIn(max = 1320.dp).fillMaxWidth().weight(1f),
-            state = if (ownTab) ownListState else collectedListState,
+            state = when (albumTab) { 0 -> ownListState; 1 -> collectedListState; else -> laterListState },
             contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 24.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -555,7 +583,7 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
                         val openingReason = drive.openingReason(c, position)
                         CapsuleRow(c, locks[c.id]?.openAfter?.takeIf { locks[c.id].isLocked(today) },
                             onPlay = { drive.playCapsule(c.id) },
-                            onShare = { sharing = c }.takeIf { c.isMine && !c.locationUncertain && c.audience in setOf("SELF", "FRIENDS") },
+                            onShare = { sharing = c }.takeIf { c.isMine && c.replyToId == null && !c.locationUncertain && c.audience in setOf("SELF", "FRIENDS", "SOME") },
                             onForward = { forwarding = c }.takeIf { Forwarding.eligible(c) },
                             onNavigate = { routeTarget = c }.takeIf { AlbumData.canNavigate(c) },
                             locationBlocked = AlbumData.needsCollection(c) && openingReason != null,
@@ -614,6 +642,15 @@ private fun ValueText(text: String) = Text(text, style = Type.BodyS, color = Tc.
 @Composable
 fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
     val arrival by app.settings.arrivalPrompt.collectAsState()
+    val backupUid by app.settings.backupUid.collectAsState()
+    val profile by app.social.me.collectAsState()
+    val email by app.social.email.collectAsState()
+    val syncProblem by app.sync.syncProblem.collectAsState()
+    var confirmBackup by remember { mutableStateOf(false) }
+    val backup = profile?.uid?.let { it == backupUid } == true
+    if (confirmBackup) ConfirmPopup("모바일과 비공개 캡슐을 동기화할까요?",
+        "이 차에 남긴 비공개 음성과 장소를 내 계정에 업로드해요. 같은 계정의 모바일에서도 볼 수 있으며, 수집 전 잠금은 유지됩니다. 친구에게 공개되지는 않아요.",
+        "동기화 켜기", onConfirm = { profile?.let { app.settings.setMobileBackup(it.uid, true) }; confirmBackup = false }, onDismiss = { confirmBackup = false })
     val audience by app.settings.defaultAudience.collectAsState()
     var confirm by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
@@ -650,6 +687,18 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                 ChoiceRow(Rules.SILENCE_CHOICES, silence, { if (it == 0) "끄기" else "${it}초" }, app.settings::setSilenceSec)
             }
             Spacer(Modifier.height(8.dp))
+            Section("모바일 연결")
+            Panel {
+                ListRow("비공개 캡슐 동기화", if (email == null) "친구 화면에서 이메일을 연결하면 모바일에서도 같은 계정으로 로그인할 수 있어요"
+                    else if (backup) "새 비공개 캡슐도 내 계정에 저장해요. 끄더라도 이미 동기화한 기록은 남아요"
+                    else "내 계정의 모바일로 비공개 음성과 장소를 가져와요", onClick = {
+                        if (profile == null || email == null || app.social !is app.timecapsule.social.FirebaseBackend) app.openScreen.value = Screen.FRIENDS
+                        else if (backup) app.settings.setMobileBackup(profile!!.uid, false) else confirmBackup = true
+                    }) { ValueText(if (backup) "켜짐" else "꺼짐") }
+                syncProblem?.let { ListRow("동기화 확인 필요", it) }
+                ListRow("수집 기록", "차량과 모바일에서 수집한 기록은 같은 계정에 연결돼요. 모바일에서 보낸 목적지는 주차 중 확인 후 안내해요")
+            }
+            Spacer(Modifier.height(8.dp))
             Section("개인정보")
             Panel {
                 ListRow("녹음은 직접 누를 때만", "마이크는 버튼을 눌렀을 때와, 캡슐 알림에 말로 답할 때(몇 초)만 켜져요") { ValueText("항상") }
@@ -658,11 +707,20 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                 RowDivider()
                 ListRow("날씨", "묻을 때 그날 날씨를 함께 남겨요. 날씨 서버에는 대략 위치(약 10km)만 보내요") { ValueText("자동") }
                 RowDivider()
-                ListRow("저장 위치", "친구에게 공개한 캡슐만 서버에 올라가요. 앨범에서 하나씩 바꿀 수 있어요") { ValueText("이 차 + 서버") }
+                ListRow("저장 위치", "친구에게 공개한 캡슐과 동기화를 켠 비공개 캡슐이 서버에 저장돼요. 공개 범위는 앨범에서 바꿀 수 있어요") { ValueText("이 차 + 서버") }
             }
             Spacer(Modifier.height(8.dp))
             Section("알림")
             Panel {
+                val quiet by app.drive.quietTrip.collectAsState()
+                val interval by app.settings.alertIntervalMinutes.collectAsState()
+                if (prepared) {
+                    ListRow("이번 주행은 조용히", "캡슐 접근·도착·경로 음성 제안을 쉬어요. 직접 녹음과 재생은 그대로 사용할 수 있어요") { TcSwitch(quiet, app.drive::setQuietTrip) }
+                    RowDivider()
+                }
+                ListRow("자동 알림 간격", "서로 다른 캡슐과 도착 제안 사이에 쉬는 시간이에요")
+                ChoiceRow(AlertCadence.choicesMinutes, interval, { "${it}분" }, app.settings::setAlertIntervalMinutes)
+                RowDivider()
                 ListRow("도착 제안", "처음 온 곳에 도착하면 물어봐요. 하루 2번까지") { TcSwitch(arrival, app.settings::setArrivalPrompt) }
                 RowDivider()
                 val ctx = androidx.compose.ui.platform.LocalContext.current

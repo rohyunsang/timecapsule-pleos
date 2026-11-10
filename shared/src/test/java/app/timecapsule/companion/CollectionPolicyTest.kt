@@ -36,4 +36,17 @@ class CollectionPolicyTest {
     @Test fun opensOnExactDateAndLocationAgeBoundary() {
         assertNull(reason(capsule.copy(openAfter = 20000), now = 11000))
     }
+    @Test fun timedReplyOpensWithoutLocationOnlyAtDeadline() {
+        val reply = capsule.copy(replyToId = "parent", replyMode = ReplyPolicy.AFTER_THREE_DAYS, replyAvailableAt = 10000)
+        assertEquals(CollectionPolicy.Block.WAITING_DATE, CollectionPolicy.reason(reply, true, true, 20000, here, 2000, 9999))
+        assertNull(CollectionPolicy.reason(reply, true, false, 20000, null, 2000, 10000))
+        assertEquals(CollectionPolicy.Block.NO_ACCESS, CollectionPolicy.reason(reply, false, false, 20000, null, 2000, 10000))
+        assertEquals(CollectionPolicy.Block.WAITING_DATE, CollectionPolicy.reason(reply.copy(replyAvailableAt = null), true, false, 20000, null, 2000, 10000))
+    }
+    @Test fun locationReplyStillRequiresVisit() {
+        val reply = capsule.copy(replyToId = "parent", replyMode = ReplyPolicy.LOCATION)
+        assertEquals(CollectionPolicy.Block.LOCATION_REQUIRED, reason(reply, fix = null))
+        assertNull(reason(reply))
+        assertNull(reason(reply, fix = null, collected = true))
+    }
 }

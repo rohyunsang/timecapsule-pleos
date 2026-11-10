@@ -89,6 +89,7 @@ class FirebaseBackend(
     private val _email = MutableStateFlow<String?>(null)
     override val email: StateFlow<String?> = _email.asStateFlow()
 
+    private var listenerGeneration = 0L
     private var listeners = emptyList<ListenerRegistration>()
     private var mine = emptyList<RemoteCapsule>()
     private var forMe = emptyList<RemoteCapsule>()
@@ -115,6 +116,7 @@ class FirebaseBackend(
     }
 
     private fun listen(p: Profile?) {
+        val generation = ++listenerGeneration
         listeners.forEach { it.remove() }
         listeners = emptyList()
         _friends.value = emptyList()
@@ -129,6 +131,7 @@ class FirebaseBackend(
         val onError = { e: Exception -> _problem.value = "서버에 연결하지 못했어요"; Log.w(TAG, "listen", e); Unit }
         listeners = listOf(
             db.collection("users").document(p.uid).collection("friends").addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { s, e ->
+                if (generation != listenerGeneration || me.value?.uid != p.uid || auth.currentUser?.uid != p.uid) return@addSnapshotListener
                 if (e != null) return@addSnapshotListener onError(e)
                 _problem.value = null
                 _friends.value = s!!.documents.map { Friend(it.id, it.getString("name") ?: "친구", it.getString("code") ?: "") }
@@ -136,14 +139,17 @@ class FirebaseBackend(
                 loaded(0, s)
             },
             db.collection("capsules").whereEqualTo("ownerUid", p.uid).addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { s, e ->
+                if (generation != listenerGeneration || me.value?.uid != p.uid || auth.currentUser?.uid != p.uid) return@addSnapshotListener
                 if (e != null) return@addSnapshotListener onError(e)
                 mine = s!!.documents.mapNotNull(::toCapsule); publish(); loaded(1, s)
             },
             db.collection("capsules").whereArrayContains("visibleTo", p.uid).addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { s, e ->
+                if (generation != listenerGeneration || me.value?.uid != p.uid || auth.currentUser?.uid != p.uid) return@addSnapshotListener
                 if (e != null) return@addSnapshotListener onError(e)
                 forMe = s!!.documents.mapNotNull(::toCapsule); publish(); loaded(2, s)
             },
             db.collection("capsules").whereEqualTo("audience", Audience.DEMO.name).addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { s, e ->
+                if (generation != listenerGeneration || me.value?.uid != p.uid || auth.currentUser?.uid != p.uid) return@addSnapshotListener
                 if (e != null) return@addSnapshotListener onError(e)
                 demo = s!!.documents.mapNotNull(::toCapsule); publish(); loaded(3, s)
             },
@@ -190,13 +196,18 @@ class FirebaseBackend(
     }.onFailure { Log.w(TAG, "addFriend", it) }
 
     override suspend fun removeFriend(friend: Friend) {
-        val me = me.value ?: return
-        runCatching {
+        removeFriendChecked(friend).onFailure { Log.w(TAG, "removeFriend", it) }
+    }
+    suspend fun removeFriendChecked(friend: Friend): Result<Unit> = runCatching {
+        val uid = auth.currentUser?.uid ?: error("먼저 로그인해 주세요.")
+        check(me.value?.uid == uid) { "계정이 바뀌었어요. 다시 시도해 주세요." }
+        withTimeout(WRITE_TIMEOUT_MS) {
             val batch = db.batch()
-            batch.delete(db.collection("users").document(me.uid).collection("friends").document(friend.uid))
-            batch.delete(db.collection("users").document(friend.uid).collection("friends").document(me.uid))
+            batch.delete(db.collection("users").document(uid).collection("friends").document(friend.uid))
+            batch.delete(db.collection("users").document(friend.uid).collection("friends").document(uid))
             batch.commit().await()
-        }.onFailure { Log.w(TAG, "removeFriend", it) }
+        }
+        Unit
     }
 
     override suspend fun upload(capsule: RemoteCapsule, audio: ByteArray): Result<String> = runCatching {
@@ -205,11 +216,22 @@ class FirebaseBackend(
         check(me.value?.uid == capsule.ownerUid && auth.currentUser?.uid == capsule.ownerUid) { "계정이 바뀌었어요. 다시 시도해 주세요" }
         val ref = db.collection("capsules").document(capsule.id.takeIf { capsule.sourceRemoteId != null && it.isNotBlank() }
             ?: "${capsule.ownerUid}_${capsule.createdAt}")
-        // Audio first: a capsule doc never points at missing audio.
         withTimeout(WRITE_TIMEOUT_MS) {
-            db.collection("audio").document(ref.id)
-                .set(mapOf("ownerUid" to capsule.ownerUid, "data" to Blob.fromBytes(audio))).await()
-            ref.set(toMap(capsule)).await()
+            val audioRef = db.collection("audio").document(ref.id)
+            val payload = mapOf("ownerUid" to capsule.ownerUid, "data" to Blob.fromBytes(audio))
+            if (capsule.replyToId != null) {
+                // Atomic, immutable retry: neither the voice nor the server deadline changes.
+                db.runTransaction { tx ->
+                    val existing = tx.get(ref)
+                    if (!existing.exists()) {
+                        tx.set(audioRef, payload)
+                        tx.set(ref, toMap(capsule) + ("replySentAt" to FieldValue.serverTimestamp()))
+                    }
+                }.await()
+            } else {
+                audioRef.set(payload).await()
+                ref.set(toMap(capsule)).await()
+            }
         }
         ref.id
     }.onFailure { Log.w(TAG, "upload", it) }
@@ -217,6 +239,23 @@ class FirebaseBackend(
     override suspend fun setVisibleTo(id: String, uids: List<String>) {
         runCatching { db.collection("capsules").document(id).update("visibleTo", uids).await() }
             .onFailure { Log.w(TAG, "setVisibleTo", it) }
+    }
+
+    override suspend fun updateSharing(id: String, recipients: List<String>): Result<Unit> = runCatching {
+        val uid = auth.currentUser?.uid ?: error("먼저 로그인해 주세요.")
+        val selected = recipients.distinct()
+        check(selected.all { id -> friends.value.any { it.uid == id } }) { "연결된 친구만 선택해 주세요." }
+        val ref = db.collection("capsules").document(id)
+        withTimeout(WRITE_TIMEOUT_MS) {
+            db.runTransaction { transaction ->
+                val capsule = transaction.get(ref)
+                check(capsule.getString("replyToId") == null) { "음성 답장은 원본 작성자에게만 보낼 수 있어요." }
+                check(capsule.getString("ownerUid") == uid) { "내가 남긴 캡슐만 공개 범위를 바꿀 수 있어요." }
+                transaction.update(ref, mapOf("visibleTo" to selected, "recipients" to selected,
+                    "audience" to if (selected.isEmpty()) Audience.SELF.name else Audience.SOME.name))
+            }.await()
+        }
+        Unit
     }
 
     override suspend fun delete(id: String) {
@@ -232,6 +271,13 @@ class FirebaseBackend(
         val owner = capsule.getString("ownerUid") ?: return false
         val openAfter = capsule.getLong("openAfter")
         if (openAfter != null && java.time.LocalDate.now().toEpochDay() < openAfter) return false
+        val replyMode = capsule.getString("replyMode")
+        val availableAt = capsule.getTimestamp("replySentAt")?.toDate()?.time?.plus(app.timecapsule.companion.ReplyPolicy.WAIT_MS)
+        if (app.timecapsule.companion.ReplyPolicy.waiting(replyMode, availableAt, System.currentTimeMillis())) return false
+        if (replyMode == app.timecapsule.companion.ReplyPolicy.AFTER_THREE_DAYS) {
+            // The server rule checks request.time, even if the device clock was advanced.
+            withTimeout(5_000) { db.collection("audio").document(id).get(com.google.firebase.firestore.Source.SERVER).await() }
+        }
         if (owner == uid) return true
         val friend = withTimeout(5_000) { db.collection("users").document(uid).collection("friends").document(owner).get(com.google.firebase.firestore.Source.SERVER).await() }
         friend.exists() && (capsule.getString("audience") == Audience.DEMO.name ||
@@ -239,7 +285,7 @@ class FirebaseBackend(
     }.getOrDefault(false)
 
     override suspend fun audio(id: String): ByteArray? = runCatching {
-        withTimeout(WRITE_TIMEOUT_MS) { db.collection("audio").document(id).get().await() }.getBlob("data")?.toBytes()
+        withTimeout(WRITE_TIMEOUT_MS) { db.collection("audio").document(id).get(com.google.firebase.firestore.Source.SERVER).await() }.getBlob("data")?.toBytes()
     }.onFailure { Log.w(TAG, "audio", it) }.getOrNull()
 
     override suspend fun switchAccount(profile: Profile?) {
@@ -257,18 +303,29 @@ class FirebaseBackend(
         Unit
     }.recoverCatching { throw IllegalStateException(authMessage(it)) }
 
-    override suspend fun signInEmail(email: String, password: String): Result<Profile> = runCatching {
-        // Keep the person already on this car in their own slot; load this one into a fresh slot.
-        if (me.value != null) useSlot((slots.all.values.filterIsInstance<Int>().maxOrNull() ?: 0) + 1)
-        withTimeout(WRITE_TIMEOUT_MS) { auth.signInWithEmailAndPassword(email.trim(), password).await() }
-        val uid = auth.currentUser!!.uid
-        val d = withTimeout(WRITE_TIMEOUT_MS) { db.collection("users").document(uid).get().await() }
-        val p = Profile(uid, d.getString("name") ?: error("이 계정에는 이름이 없어요"), d.getString("code") ?: "")
-        slots.edit().putInt("uid:$uid", slot).apply()
-        _email.value = email.trim()
-        accounts.set(p)
-        p
-    }.recoverCatching { throw IllegalStateException(authMessage(it)) }
+    override suspend fun signInEmail(email: String, password: String): Result<Profile> {
+        val previousSlot = slot
+        val previousProfile = me.value
+        return runCatching {
+            // Keep an existing account intact until both authentication and profile loading succeed.
+            useSlot((slots.all.values.filterIsInstance<Int>().maxOrNull() ?: 0) + 1)
+            withTimeout(WRITE_TIMEOUT_MS) { auth.signInWithEmailAndPassword(email.trim(), password).await() }
+            val uid = auth.currentUser!!.uid
+            val d = withTimeout(WRITE_TIMEOUT_MS) { db.collection("users").document(uid).get(com.google.firebase.firestore.Source.SERVER).await() }
+            val p = Profile(uid, d.getString("name") ?: error("이 계정에는 이름이 없어요"), d.getString("code") ?: "")
+            slots.edit().putInt("uid:$uid", slot).apply()
+            _email.value = email.trim()
+            accounts.set(p)
+            p
+        }.recoverCatching { error ->
+            auth.signOut()
+            useSlot(previousSlot)
+            _email.value = auth.currentUser?.email
+            listen(previousProfile)
+            if (error is kotlinx.coroutines.CancellationException && error !is kotlinx.coroutines.TimeoutCancellationException) throw error
+            throw IllegalStateException(authMessage(error))
+        }
+    }
 
     override suspend fun resetPassword(email: String): Result<Unit> = runCatching {
         withTimeout(WRITE_TIMEOUT_MS) { auth.sendPasswordResetEmail(email.trim()).await() }
@@ -285,6 +342,7 @@ class FirebaseBackend(
     }.also { Log.w(TAG, "auth", e) }
 
     override suspend fun signOut() {
+        listen(null)
         auth.signOut()
         accounts.set(null)
         ensureAuth()
@@ -298,6 +356,7 @@ class FirebaseBackend(
         "visibleTo" to c.visibleTo,
         "sourceRemoteId" to c.sourceRemoteId, "originalOwnerUid" to c.originalOwnerUid,
         "originalOwnerName" to c.originalOwnerName,
+        "replyToId" to c.replyToId, "replyMode" to c.replyMode,
     )
 
     @Suppress("UNCHECKED_CAST")
@@ -320,6 +379,8 @@ class FirebaseBackend(
             visibleTo = (d.get("visibleTo") as? List<String>).orEmpty(),
             sourceRemoteId = d.getString("sourceRemoteId"), originalOwnerUid = d.getString("originalOwnerUid"),
             originalOwnerName = d.getString("originalOwnerName"),
+            replyToId = d.getString("replyToId"), replyMode = d.getString("replyMode"),
+            replyAvailableAt = d.getTimestamp("replySentAt")?.toDate()?.time?.plus(app.timecapsule.companion.ReplyPolicy.WAIT_MS),
         )
     }.getOrNull()
 
