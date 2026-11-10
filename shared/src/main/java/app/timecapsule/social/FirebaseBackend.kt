@@ -89,6 +89,7 @@ class FirebaseBackend(
     private val _email = MutableStateFlow<String?>(null)
     override val email: StateFlow<String?> = _email.asStateFlow()
 
+    private var listenerGeneration = 0L
     private var listeners = emptyList<ListenerRegistration>()
     private var mine = emptyList<RemoteCapsule>()
     private var forMe = emptyList<RemoteCapsule>()
@@ -115,6 +116,7 @@ class FirebaseBackend(
     }
 
     private fun listen(p: Profile?) {
+        val generation = ++listenerGeneration
         listeners.forEach { it.remove() }
         listeners = emptyList()
         _friends.value = emptyList()
@@ -129,6 +131,7 @@ class FirebaseBackend(
         val onError = { e: Exception -> _problem.value = "서버에 연결하지 못했어요"; Log.w(TAG, "listen", e); Unit }
         listeners = listOf(
             db.collection("users").document(p.uid).collection("friends").addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { s, e ->
+                if (generation != listenerGeneration || me.value?.uid != p.uid || auth.currentUser?.uid != p.uid) return@addSnapshotListener
                 if (e != null) return@addSnapshotListener onError(e)
                 _problem.value = null
                 _friends.value = s!!.documents.map { Friend(it.id, it.getString("name") ?: "친구", it.getString("code") ?: "") }
@@ -136,14 +139,17 @@ class FirebaseBackend(
                 loaded(0, s)
             },
             db.collection("capsules").whereEqualTo("ownerUid", p.uid).addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { s, e ->
+                if (generation != listenerGeneration || me.value?.uid != p.uid || auth.currentUser?.uid != p.uid) return@addSnapshotListener
                 if (e != null) return@addSnapshotListener onError(e)
                 mine = s!!.documents.mapNotNull(::toCapsule); publish(); loaded(1, s)
             },
             db.collection("capsules").whereArrayContains("visibleTo", p.uid).addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { s, e ->
+                if (generation != listenerGeneration || me.value?.uid != p.uid || auth.currentUser?.uid != p.uid) return@addSnapshotListener
                 if (e != null) return@addSnapshotListener onError(e)
                 forMe = s!!.documents.mapNotNull(::toCapsule); publish(); loaded(2, s)
             },
             db.collection("capsules").whereEqualTo("audience", Audience.DEMO.name).addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { s, e ->
+                if (generation != listenerGeneration || me.value?.uid != p.uid || auth.currentUser?.uid != p.uid) return@addSnapshotListener
                 if (e != null) return@addSnapshotListener onError(e)
                 demo = s!!.documents.mapNotNull(::toCapsule); publish(); loaded(3, s)
             },
@@ -292,18 +298,29 @@ class FirebaseBackend(
         Unit
     }.recoverCatching { throw IllegalStateException(authMessage(it)) }
 
-    override suspend fun signInEmail(email: String, password: String): Result<Profile> = runCatching {
-        // Keep the person already on this car in their own slot; load this one into a fresh slot.
-        if (me.value != null) useSlot((slots.all.values.filterIsInstance<Int>().maxOrNull() ?: 0) + 1)
-        withTimeout(WRITE_TIMEOUT_MS) { auth.signInWithEmailAndPassword(email.trim(), password).await() }
-        val uid = auth.currentUser!!.uid
-        val d = withTimeout(WRITE_TIMEOUT_MS) { db.collection("users").document(uid).get().await() }
-        val p = Profile(uid, d.getString("name") ?: error("이 계정에는 이름이 없어요"), d.getString("code") ?: "")
-        slots.edit().putInt("uid:$uid", slot).apply()
-        _email.value = email.trim()
-        accounts.set(p)
-        p
-    }.recoverCatching { throw IllegalStateException(authMessage(it)) }
+    override suspend fun signInEmail(email: String, password: String): Result<Profile> {
+        val previousSlot = slot
+        val previousProfile = me.value
+        return runCatching {
+            // Keep an existing account intact until both authentication and profile loading succeed.
+            useSlot((slots.all.values.filterIsInstance<Int>().maxOrNull() ?: 0) + 1)
+            withTimeout(WRITE_TIMEOUT_MS) { auth.signInWithEmailAndPassword(email.trim(), password).await() }
+            val uid = auth.currentUser!!.uid
+            val d = withTimeout(WRITE_TIMEOUT_MS) { db.collection("users").document(uid).get(com.google.firebase.firestore.Source.SERVER).await() }
+            val p = Profile(uid, d.getString("name") ?: error("이 계정에는 이름이 없어요"), d.getString("code") ?: "")
+            slots.edit().putInt("uid:$uid", slot).apply()
+            _email.value = email.trim()
+            accounts.set(p)
+            p
+        }.recoverCatching { error ->
+            auth.signOut()
+            useSlot(previousSlot)
+            _email.value = auth.currentUser?.email
+            listen(previousProfile)
+            if (error is kotlinx.coroutines.CancellationException && error !is kotlinx.coroutines.TimeoutCancellationException) throw error
+            throw IllegalStateException(authMessage(error))
+        }
+    }
 
     override suspend fun resetPassword(email: String): Result<Unit> = runCatching {
         withTimeout(WRITE_TIMEOUT_MS) { auth.sendPasswordResetEmail(email.trim()).await() }
@@ -320,6 +337,7 @@ class FirebaseBackend(
     }.also { Log.w(TAG, "auth", e) }
 
     override suspend fun signOut() {
+        listen(null)
         auth.signOut()
         accounts.set(null)
         ensureAuth()

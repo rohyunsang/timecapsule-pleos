@@ -49,3 +49,13 @@
 - `:mobile:assembleDebug :mobile:lintDebug :app:assembleDebug :app:testDebugUnitTest :shared:testDebugUnitTest` 통과. 단위 테스트는 98개이며 실패·오류는 0개다. SQLite 메모리 DB에서 5→6 열 추가 후 생성된 Room 스키마와 열·타입·nullable 속성을 비교했다.
 - Firebase 규칙에 서버 시각 기반 답장 잠금 및 답장 필드 불변 조건을 추가했다. 규칙은 아직 배포하거나 실제 Firebase에서 검증하지 않았다. Android/Firebase 에뮬레이터는 실행하지 않았다.
 - 남은 검증: 실제 Firebase 프로젝트 연결 및 규칙 검증, 모바일 화면 렌더링, 실제 마이크/GPS/계정 간 동작, 차량 부가 UX 점검, PR 병합 및 정리. 위 체크리스트는 이 검증까지 끝나야 완료로 표시한다.
+
+
+## 2026-11-10 에뮬레이터 없는 실제 컴포넌트 렌더링
+- Paparazzi 1.3.5의 JVM/Layoutlib 렌더링을 추가했다. Android OS 또는 에뮬레이터를 실행하지 않는다.
+- `MemoryRenderingTest`에서 앱이 실제로 사용하는 `MemoryCapsuleCard`를 렌더링했다. 수집 완료·현장 수집 전·72시간 대기·72시간 경과 상태를 확인했다. 스냅샷은 테스트용 예시 데이터이며 실제 계정 데이터가 아니다.
+- 이미지: `mobile/src/test/snapshots/images/app.timecapsule.mobile_MemoryRenderingTest_collectionAndReplyStates.png`. 육안으로 한글, 줄바꿈, 아이콘, 상태 문구와 버튼 여백을 확인했다. 이 결과는 해당 목록 컴포넌트에 대한 증거이며 전체 화면, MapLibre 지도, 실제 녹음/GPS/서버 동작을 증명하지 않는다.
+- 화면이 켜져 있을 때 개봉 시각 갱신이 반영되도록 생명주기에 맞춰 시간을 갱신한다. 화면을 다시 열어야 잠금 표시가 바뀌던 문제를 해결했다.
+- 로그인 실패 시 이전 Firebase 슬롯과 계정을 복구하고, 이전 리스너의 지연 응답은 세대 번호·현재 사용자 확인으로 무시한다. 로그아웃 시 리스너와 목록을 즉시 초기화한다. 계정 간 실제 서버 전환 검증은 연결 후 수행해야 한다.
+- `:mobile:verifyPaparazziDebug :mobile:assembleDebug :mobile:lintDebug :app:testDebugUnitTest :shared:testDebugUnitTest` 통과. 기존 단위 테스트 98개와 Compose 렌더링 테스트 1개가 포함된다.
+- Firebase 접속용 Google 로그인 재인증이 필요하다는 안내를 사용자에게 전달했다. 답변을 기다리는 동안 로컬 구현 및 검증을 계속할 수 있다.

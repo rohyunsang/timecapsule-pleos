@@ -57,6 +57,8 @@ fun CapsuleMapScreen(capsules: List<RemoteCapsule>, collected: (RemoteCapsule) -
             else -> Unit
         } }
         lifecycle.addObserver(observer)
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) view.onStart()
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) view.onResume()
         onDispose { lifecycle.removeObserver(observer); view.onPause(); view.onStop(); view.onDestroy() }
     }
     LaunchedEffect(map, points) {

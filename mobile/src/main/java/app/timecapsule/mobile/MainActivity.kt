@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.repeatOnLifecycle
 import app.timecapsule.companion.*
 import app.timecapsule.social.*
 import java.time.LocalDate
@@ -52,6 +53,13 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MobileApp(model: MobileModel = viewModel()) {
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val now by produceState(System.currentTimeMillis(), lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            while (true) { value = System.currentTimeMillis(); kotlinx.coroutines.delay(1000) }
+        }
+    }
+    CompositionLocalProvider(LocalCapsuleTime provides now) {
     val me by model.me.collectAsState()
     val capsules by model.capsules.collectAsState()
     val records by model.records.collectAsState()
@@ -72,6 +80,7 @@ fun MobileApp(model: MobileModel = viewModel()) {
     }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(me?.uid) { selectedId = null; composingReply = false }
     val selected = capsules.firstOrNull { it.id == selectedId }
     val tabs = listOf("추억", "지도", "앨범", "친구·설정")
     val icons = listOf(Icons.Rounded.Home, Icons.Rounded.Map, Icons.Rounded.PhotoLibrary, Icons.Rounded.People)
@@ -101,6 +110,7 @@ fun MobileApp(model: MobileModel = viewModel()) {
     }
     if (composingReply && me != null) ReplyComposer(model, capsules.firstOrNull { it.id == replyParent }) { composingReply = false }
     message?.let { AlertDialog(onDismissRequest = model::dismissMessage, title = { Text("알림") }, text = { Text(it) }, confirmButton = { TextButton(onClick = model::dismissMessage) { Text("확인") } }) }
+    }
 }
 
 @Composable
@@ -149,19 +159,7 @@ private fun LibraryScreen(model: MobileModel, records: CompanionSnapshot, capsul
 
 @Composable
 private fun CapsuleCard(model: MobileModel, c: RemoteCapsule, open: () -> Unit) {
-    val collected = model.readyWithoutVisit(c)
-    val dateLocked = c.openAfter?.let { it > LocalDate.now().toEpochDay() } == true || ReplyPolicy.waiting(c.replyMode, c.replyAvailableAt, System.currentTimeMillis())
-    Card(onClick = open, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Icon(if (dateLocked || !collected) Icons.Rounded.Lock else Icons.Rounded.PlayCircle, null, Modifier.size(36.dp), tint = if (collected && !dateLocked) MaterialTheme.colorScheme.primary else Color.Gray)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(model.memory(c.id).title.ifBlank { c.placeName ?: "이름 없는 장소" }, fontWeight = FontWeight.Bold)
-                Text("${c.originalOwnerName ?: c.ownerName} · ${c.durationSec}초", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                Text(if (dateLocked) replyWaitingLabel(c) else if (collected) "어디서든 듣기" else "장소에서 수집하기", style = MaterialTheme.typography.labelMedium)
-            }
-            Icon(Icons.Rounded.ChevronRight, "상세 보기")
-        }
-    }
+    MemoryCapsuleCard(c, model.memory(c.id), model.isCollected(c), LocalCapsuleTime.current, open)
 }
 
 @Composable
@@ -184,7 +182,8 @@ private fun CapsuleDetail(model: MobileModel, c: RemoteCapsule, busy: Boolean, f
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
         if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) model.open(c) else permissionDenied = true
     }
-    val lockedDate = c.openAfter?.let { it > LocalDate.now().toEpochDay() } == true || ReplyPolicy.waiting(c.replyMode, c.replyAvailableAt, System.currentTimeMillis())
+    val now = LocalCapsuleTime.current
+    val lockedDate = c.openAfter?.let { it > LocalDate.now().toEpochDay() } == true || ReplyPolicy.waiting(c.replyMode, c.replyAvailableAt, now)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { Text(c.placeName ?: "캡슐을 남긴 장소", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) }
         item { Text("${c.originalOwnerName ?: c.ownerName}의 목소리 · ${c.durationSec}초") }
