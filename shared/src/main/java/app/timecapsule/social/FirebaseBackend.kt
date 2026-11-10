@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
-import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
@@ -23,6 +22,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * Firebase, free (Spark) plan: anonymous Auth + Firestore only. Both work without Google Play
@@ -297,8 +301,50 @@ class FirebaseBackend(
     }
 
     override suspend fun linkEmail(email: String, password: String): Result<Unit> = runCatching {
-        val user = auth.currentUser ?: error("인터넷에 연결되면 다시 해 주세요")
-        withTimeout(WRITE_TIMEOUT_MS) { user.linkWithCredential(EmailAuthProvider.getCredential(email.trim(), password)).await() }
+        val session = auth
+        val user = session.currentUser ?: error("인터넷에 연결되면 다시 해 주세요")
+        require(user.isAnonymous) { "이미 이메일에 연결된 계정이에요" }
+        require(password.length >= 6) { "비밀번호는 6자 이상이어야 해요" }
+        withTimeout(WRITE_TIMEOUT_MS) {
+            val token = user.getIdToken(false).await().token ?: error("다시 로그인해 주세요")
+            // accounts:update is rejected when email enumeration protection is enabled.
+            // signUp + idToken links credentials without replacing the anonymous UID.
+            withContext(Dispatchers.IO) {
+                val connection = URL("https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${options.apiKey}")
+                    .openConnection() as HttpURLConnection
+                try {
+                    connection.requestMethod = "POST"
+                    connection.connectTimeout = 8_000
+                    connection.readTimeout = 8_000
+                    connection.doOutput = true
+                    connection.setRequestProperty("Content-Type", "application/json")
+                    val payload = JSONObject().put("idToken", token).put("email", email.trim())
+                        .put("password", password).put("returnSecureToken", true)
+                    connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+                    val status = connection.responseCode
+                    val response = (if (status in 200..299) connection.inputStream else connection.errorStream)
+                        ?.bufferedReader()?.use { JSONObject(it.readText()) }
+                    if (status !in 200..299) {
+                        val code = response?.optJSONObject("error")?.optString("message").orEmpty().substringBefore(" :")
+                        error(when (code) {
+                            "EMAIL_EXISTS" -> "이미 다른 계정에 연결된 이메일이에요"
+                            "INVALID_EMAIL" -> "이메일 주소를 확인해 주세요"
+                            "WEAK_PASSWORD" -> "더 안전한 비밀번호를 입력해 주세요"
+                            "TOO_MANY_ATTEMPTS_TRY_LATER" -> "잠시 후 다시 시도해 주세요"
+                            else -> "이메일 연결을 완료하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요"
+                        })
+                    }
+                    check(response?.optString("localId") == user.uid) { "계정 연결을 확인하지 못했어요" }
+                } catch (_: java.io.IOException) {
+                    // Do not surface transport errors that may include the API key URL.
+                    error("인터넷 연결을 확인하고 다시 시도해 주세요")
+                } finally { connection.disconnect() }
+            }
+            check(auth === session && session.currentUser?.uid == user.uid) { "계정이 바뀌었어요. 다시 확인해 주세요" }
+            user.reload().await()
+            user.getIdToken(true).await()
+        }
+        check(auth === session && session.currentUser?.uid == user.uid) { "계정이 바뀌었어요. 다시 확인해 주세요" }
         _email.value = email.trim()
         Unit
     }.recoverCatching { throw IllegalStateException(authMessage(it)) }
