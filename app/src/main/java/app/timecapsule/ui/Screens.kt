@@ -1,5 +1,7 @@
 package app.timecapsule.ui
 
+import app.timecapsule.drive.AlertCadence
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
@@ -491,14 +493,18 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
     var sharing by remember { mutableStateOf<Capsule?>(null) }
     var forwarding by remember { mutableStateOf<Capsule?>(null) }
     var routeTarget by remember { mutableStateOf<Capsule?>(null) }
-    var ownTab by rememberSaveable { mutableStateOf(true) }
+    var albumTab by rememberSaveable { mutableStateOf(0) }
+    val ownTab = albumTab == 0
+    val laterIds by app.settings.listenLater.collectAsState()
     var draftsExpanded by rememberSaveable { mutableStateOf(false) }
     val ownListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val collectedListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val laterListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val position by drive.position.collectAsState()
     val mine = capsules.filter(AlbumData::mine)
     val collected = capsules.filter(AlbumData::collected)
-    val visible = if (ownTab) mine else collected
+    val later = capsules.filter { it.id in laterIds && !it.draft }
+    val visible = when (albumTab) { 0 -> mine; 1 -> collected; else -> later }
     // F-08: group by trip; capsules outside a trip are grouped by day.
     val groups = visible.filterNot { it.draft }.groupBy { c -> c.tripId?.let { "trip:$it" } ?: "day:${c.date()}" }
         .entries.sortedByDescending { e -> e.value.maxOf { it.createdAt } }
@@ -508,22 +514,23 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
         Column(Modifier.widthIn(max = 1320.dp).fillMaxWidth()) {
             Header("여행 앨범", back) { IconBtn(Icons.Rounded.Map, "수집 지도", onClick = onMap) }
             Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                AlbumTab("내가 남긴 캡슐", mine.size, ownTab, Modifier.weight(1f)) { ownTab = true }
-                AlbumTab("수집한 캡슐", collected.size, !ownTab, Modifier.weight(1f)) { drive.stopDraftPreview(); ownTab = false }
+                AlbumTab("내가 남긴 캡슐", mine.size, ownTab, Modifier.weight(1f)) { albumTab = 0 }
+                AlbumTab("수집한 캡슐", collected.size, albumTab == 1, Modifier.weight(1f)) { drive.stopDraftPreview(); albumTab = 1 }
+                AlbumTab("나중에 듣기", later.size, albumTab == 2, Modifier.weight(1f)) { drive.stopDraftPreview(); albumTab = 2 }
             }
         }
         if (visible.isEmpty()) {
             Column(Modifier.fillMaxWidth().weight(1f), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
                 Icon(Icons.Rounded.PhotoLibrary, null, Modifier.size(64.dp), tint = Tc.TextMute)
-                Text(if (ownTab) "아직 남긴 캡슐이 없어요" else "아직 수집한 캡슐이 없어요", style = Type.TitleS, color = Tc.Text)
+                Text(when (albumTab) { 0 -> "아직 남긴 캡슐이 없어요"; 1 -> "아직 수집한 캡슐이 없어요"; else -> "미뤄 둔 캡슐이 없어요" }, style = Type.TitleS, color = Tc.Text)
                 Text(if (ownTab) "길에 남긴 캡슐을 여기에서 확인하세요."
-                    else "수집하거나 친구에게 받은 캡슐이 여기에 모여요.",
+                    else if (albumTab == 1) "수집하거나 친구에게 받은 캡슐이 여기에 모여요." else "알림에서 나중에 듣기를 누른 캡슐을 모아 두어요. 수집 전에는 현장 방문이 필요해요.",
                     style = Type.BodyS, color = Tc.TextSub, textAlign = TextAlign.Center)
             }
         } else LazyColumn(
             Modifier.widthIn(max = 1320.dp).fillMaxWidth().weight(1f),
-            state = if (ownTab) ownListState else collectedListState,
+            state = when (albumTab) { 0 -> ownListState; 1 -> collectedListState; else -> laterListState },
             contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 24.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -684,6 +691,15 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             Section("알림")
             Panel {
+                val quiet by app.drive.quietTrip.collectAsState()
+                val interval by app.settings.alertIntervalMinutes.collectAsState()
+                if (prepared) {
+                    ListRow("이번 주행은 조용히", "캡슐 접근·도착·경로 음성 제안을 쉬어요. 직접 녹음과 재생은 그대로 사용할 수 있어요") { TcSwitch(quiet, app.drive::setQuietTrip) }
+                    RowDivider()
+                }
+                ListRow("자동 알림 간격", "서로 다른 캡슐과 도착 제안 사이에 쉬는 시간이에요")
+                ChoiceRow(AlertCadence.choicesMinutes, interval, { "${it}분" }, app.settings::setAlertIntervalMinutes)
+                RowDivider()
                 ListRow("도착 제안", "처음 온 곳에 도착하면 물어봐요. 하루 2번까지") { TcSwitch(arrival, app.settings::setArrivalPrompt) }
                 RowDivider()
                 val ctx = androidx.compose.ui.platform.LocalContext.current
