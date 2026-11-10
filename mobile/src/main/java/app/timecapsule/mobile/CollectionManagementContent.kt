@@ -1,7 +1,9 @@
 package app.timecapsule.mobile
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -35,22 +37,9 @@ internal fun AlbumsContent(albums: List<MemoryAlbum>, capsules: List<RemoteCapsu
         item { Button(onClick = { if (editing != null) editingId = null else { val id = java.util.UUID.randomUUID().toString(); newAlbumId = id; edit(MemoryAlbum(id, "", emptyList())) } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (editing != null) "편집 닫기" else "새 앨범 만들기") } }
         if (editingId != null && editing == null) item { Text("편집하던 앨범을 확인하고 있어요. 연결과 공유 상태를 확인해 주세요.") }
         editing?.let { album ->
-            item { OutlinedTextField(title, { title = it.take(100) }, label = { Text("앨범 이름") }, enabled = !busy, modifier = Modifier.fillMaxWidth()) }
-            item { Text("담을 캡슐", style = MaterialTheme.typography.titleMedium) }
-            items(capsules, key = { "select-${it.id}" }) { c -> Row(Modifier.fillMaxWidth().clickable(enabled = !busy) { selected = if (c.id in selected) selected - c.id else selected + c.id }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(c.id in selected, onCheckedChange = null); Text(c.placeName ?: "캡슐") } }
-            selected.filter { id -> capsules.none { it.id == id } }.forEach { missing ->
-                item(key = "unavailable-$missing") {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("공유가 끝났거나 확인할 수 없는 캡슐", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                        TextButton(onClick = { selected = selected - missing }, enabled = !busy) { Text("앨범에서 빼기") }
-                    }
-                }
-            }
-            item { Text("가족·친구와 함께 보기", style = MaterialTheme.typography.titleMedium) }
-            item { Text("앨범 이름과 목록을 공유합니다. 음성은 각 캡슐의 공개 범위와 수집 상태를 따라요. 내 사진과 메모는 공유되지 않아요.", style = MaterialTheme.typography.bodySmall) }
-            items(friends, key = { "member-${it.uid}" }) { friend -> Row(Modifier.fillMaxWidth().clickable(enabled = !busy) { members = if (friend.uid in members) members - friend.uid else members + friend.uid }, verticalAlignment = Alignment.CenterVertically) { Checkbox(friend.uid in members, null); Text(friend.name) } }
-            if (members.any { id -> friends.none { it.uid == id } }) item { TextButton(onClick = { members = members.filter { id -> friends.any { it.uid == id } }.toSet() }, enabled = !busy) { Text("연결이 끊긴 친구를 공유 대상에서 빼기") } }
-            item { Button(onClick = { save(album.copy(title = title, capsuleIds = selected.toList(), members = members.toList())) { editingId = null } }, enabled = !busy && title.isNotBlank()) { Text("앨범 저장") } }
+            albumEditorItems(title, selected, members, capsules, friends, busy,
+                changeTitle = { title = it.take(100) }, changeSelected = { selected = it }, changeMembers = { members = it },
+                save = { save(album.copy(title = title, capsuleIds = selected.toList(), members = members.toList())) { editingId = null } })
         }
         if (albums.isEmpty() && editing == null) item { EmptyPanel("아직 앨범이 없어요", "여행에서 모은 캡슐을 골라 나만의 앨범을 만들어 보세요.") }
         items(albums, key = { it.id }) { album ->
@@ -101,3 +90,25 @@ internal fun AccountContent(me: Profile?, friends: List<Friend>, email: String?,
     if (loggingOut) AlertDialog(onDismissRequest = { loggingOut = false }, title = { Text("로그아웃할까요?") }, text = { Text("서버의 기록은 그대로 보관됩니다.") }, confirmButton = { TextButton(onClick = { loggingOut = false; logout() }) { Text("로그아웃") } }, dismissButton = { TextButton(onClick = { loggingOut = false }) { Text("취소") } })
 }
 
+
+internal fun LazyListScope.albumEditorItems(
+    title: String, selected: Set<String>, members: Set<String>, capsules: List<RemoteCapsule>, friends: List<Friend>, busy: Boolean,
+    changeTitle: (String) -> Unit, changeSelected: (Set<String>) -> Unit, changeMembers: (Set<String>) -> Unit, save: () -> Unit,
+) {
+            item { OutlinedTextField(title, changeTitle, label = { Text("앨범 이름") }, enabled = !busy, modifier = Modifier.fillMaxWidth()) }
+            item { Text("담을 캡슐", style = MaterialTheme.typography.titleMedium) }
+            items(capsules, key = { "select-${it.id}" }) { c -> Row(Modifier.fillMaxWidth().toggleable(c.id in selected, enabled = !busy, role = Role.Checkbox) { changeSelected(if (c.id in selected) selected - c.id else selected + c.id) }.heightIn(min = 56.dp).padding(8.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(c.id in selected, onCheckedChange = null, enabled = !busy); Text(c.placeName ?: "캡슐") } }
+            selected.filter { id -> capsules.none { it.id == id } }.forEach { missing ->
+                item(key = "unavailable-$missing") {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("공유가 끝났거나 확인할 수 없는 캡슐", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { changeSelected(selected - missing) }, enabled = !busy) { Text("앨범에서 빼기") }
+                    }
+                }
+            }
+            item { Text("가족·친구와 함께 보기", style = MaterialTheme.typography.titleMedium) }
+            item { Text("앨범 이름과 목록을 공유합니다. 음성은 각 캡슐의 공개 범위와 수집 상태를 따라요. 내 사진과 메모는 공유되지 않아요.", style = MaterialTheme.typography.bodySmall) }
+            items(friends, key = { "member-${it.uid}" }) { friend -> Row(Modifier.fillMaxWidth().toggleable(friend.uid in members, enabled = !busy, role = Role.Checkbox) { changeMembers(if (friend.uid in members) members - friend.uid else members + friend.uid) }.heightIn(min = 56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(friend.uid in members, null, enabled = !busy); Text(friend.name) } }
+            if (members.any { id -> friends.none { it.uid == id } }) item { TextButton(onClick = { changeMembers(members.filter { id -> friends.any { it.uid == id } }.toSet()) }, enabled = !busy) { Text("연결이 끊긴 친구를 공유 대상에서 빼기") } }
+            item { Button(onClick = save, enabled = !busy && title.isNotBlank()) { Text("앨범 저장") } }
+}

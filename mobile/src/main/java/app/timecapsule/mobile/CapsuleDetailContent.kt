@@ -2,6 +2,7 @@ package app.timecapsule.mobile
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -74,17 +75,8 @@ internal fun CapsuleDetailContent(c: RemoteCapsule, stored: CapsuleMemory, uid: 
         if (ready && !lockedDate) item {
             OutlinedButton(onClick = actions.reply, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("음성 답장 남기기") }
         }
-        item { HorizontalDivider() }
-        item { Text("나의 기록", style = MaterialTheme.typography.titleLarge) }
-        item { OutlinedButton(onClick = { actions.saveMemory(stored.copy(favorite = !stored.favorite)) }, enabled = !busy) { Text(if (stored.favorite) "즐겨찾기 해제" else "즐겨찾기") } }
-        bitmap?.let { image -> item { Image(image, "이 캡슐에 추가한 내 사진", Modifier.fillMaxWidth().height(220.dp)) } }
-        item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = actions.pickPhoto, enabled = !busy) { Text(if (bitmap == null) "사진 추가" else "사진 바꾸기") }
-            if (bitmap != null) TextButton(onClick = actions.deletePhoto, enabled = !busy) { Text("사진 삭제") }
-        } }
-        item { OutlinedTextField(title, { title = it.take(120); edited = true }, label = { Text("추억의 제목") }, modifier = Modifier.fillMaxWidth()) }
-        item { OutlinedTextField(note, { note = it.take(4000); edited = true }, label = { Text("직접 남기는 메모") }, modifier = Modifier.fillMaxWidth(), minLines = 3) }
-        item { Button(onClick = { actions.saveMemory(stored.copy(title = title, note = note)) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("기록 저장") } }
+        memoryEditorItems(stored, bitmap, title, note, busy, actions,
+            changeTitle = { title = it; edited = true }, changeNote = { note = it; edited = true })
     }
 }
 
@@ -95,4 +87,21 @@ private fun replyWaitingLabel(c: RemoteCapsule, now: Long): String {
         return "${date.format(DateTimeFormatter.ofPattern("M월 d일 HH:mm"))}부터 방문 없이 듣기"
     }
     return c.openAfter?.let { "${LocalDate.ofEpochDay(it)} 개봉" } ?: "개봉 대기"
+}
+
+internal fun LazyListScope.memoryEditorItems(
+    stored: CapsuleMemory, bitmap: ImageBitmap?, title: String, note: String, busy: Boolean, actions: CapsuleDetailActions,
+    changeTitle: (String) -> Unit, changeNote: (String) -> Unit,
+) {
+        item { HorizontalDivider() }
+        item { Text("나의 기록", style = MaterialTheme.typography.titleLarge) }
+        item { OutlinedButton(onClick = { actions.saveMemory(stored.copy(favorite = !stored.favorite)) }, enabled = !busy) { Text(if (stored.favorite) "즐겨찾기 해제" else "즐겨찾기") } }
+        bitmap?.let { image -> item { Image(image, "이 캡슐에 추가한 내 사진", Modifier.fillMaxWidth().height(220.dp)) } }
+        item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = actions.pickPhoto, enabled = !busy) { Text(if (bitmap == null) "사진 추가" else "사진 바꾸기") }
+            if (bitmap != null) TextButton(onClick = actions.deletePhoto, enabled = !busy) { Text("사진 삭제") }
+        } }
+        item { OutlinedTextField(title, { changeTitle(it.take(120)) }, label = { Text("추억의 제목") }, modifier = Modifier.fillMaxWidth()) }
+        item { OutlinedTextField(note, { changeNote(it.take(4000)) }, label = { Text("직접 남기는 메모") }, modifier = Modifier.fillMaxWidth(), minLines = 3) }
+        item { Button(onClick = { actions.saveMemory(stored.copy(title = title, note = note)) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("기록 저장") } }
 }

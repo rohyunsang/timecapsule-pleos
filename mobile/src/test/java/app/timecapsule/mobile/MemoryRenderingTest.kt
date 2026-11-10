@@ -135,4 +135,27 @@ class MemoryRenderingTest {
         }
     }
 
+    @Test fun albumEditorWithUnavailableCapsule() {
+        paparazzi.snapshot { TimeCapsuleMobileTheme { Surface(color = MaterialTheme.colorScheme.background) {
+            androidx.compose.foundation.lazy.LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                albumEditorItems("친구들과 함께한 여행", setOf("preview", "missing"), setOf("friend"), listOf(capsule),
+                    listOf(Friend("friend", "민수", "ABC123")), false, {}, {}, {}, {})
+            }
+        } } }
+    }
+    @Test fun memoryEditorWithPhoto() {
+        val bitmap = android.graphics.Bitmap.createBitmap(400, 220, android.graphics.Bitmap.Config.ARGB_8888)
+        android.graphics.Canvas(bitmap).apply {
+            drawColor(android.graphics.Color.rgb(213, 229, 236))
+            drawRect(0f, 140f, 400f, 220f, android.graphics.Paint().apply { color = android.graphics.Color.rgb(114, 156, 133) })
+            drawCircle(320f, 55f, 25f, android.graphics.Paint().apply { color = android.graphics.Color.rgb(245, 205, 118) })
+        }
+        paparazzi.snapshot { TimeCapsuleMobileTheme { Surface(color = MaterialTheme.colorScheme.background) {
+            androidx.compose.foundation.lazy.LazyColumn(contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                memoryEditorItems(CapsuleMemory("preview", favorite = true), bitmap.asImageBitmap(), "함께 걷던 오후", "친구들과 다시 만나기로 한 장소", false,
+                    CapsuleDetailActions({}, {}, {}, {}, {}, {}, {}, {}, {}), {}, {})
+            }
+        } } }
+    }
+
 }
