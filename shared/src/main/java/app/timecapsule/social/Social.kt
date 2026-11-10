@@ -43,6 +43,10 @@ data class RemoteCapsule(
     val sourceRemoteId: String? = null,
     val originalOwnerUid: String? = null,
     val originalOwnerName: String? = null,
+    val replyToId: String? = null,
+    /** LOCATION or AFTER_THREE_DAYS. The latter starts at the server's acceptance time. */
+    val replyMode: String? = null,
+    val replyAvailableAt: Long? = null,
 )
 
 interface SocialBackend {
@@ -80,6 +84,8 @@ interface SocialBackend {
     /** Uploads a capsule and its audio; returns the server id. */
     suspend fun upload(capsule: RemoteCapsule, audio: ByteArray): Result<String>
     suspend fun setVisibleTo(id: String, uids: List<String>)
+    suspend fun updateSharing(id: String, recipients: List<String>): Result<Unit> =
+        Result.failure(UnsupportedOperationException("이 연결에서는 공개 범위를 변경할 수 없어요."))
     suspend fun delete(id: String)
     suspend fun audio(id: String): ByteArray?
     suspend fun canOpen(id: String): Boolean = false

@@ -326,6 +326,14 @@ class DriveController(
     }
 
     /** Explicit parked-only action; re-read the collection before changing navigation. */
+    fun driveToMobileDestination(destination: app.timecapsule.companion.CarDestination): Boolean {
+        val point = GeoPoint(destination.lat, destination.lng)
+        if (!canEdit() || !OpenPolicy.valid(point)) return false
+        val accepted = navi.drive(NamedPoint(destination.title, point), emptyList())
+        say(if (accepted) "모바일에서 보낸 장소로 길 안내를 요청했어요" else "내비게이션에 연결하지 못했어요. 다시 시도해 주세요")
+        return accepted
+    }
+
     fun driveToCollected(id: Long) = driveToCapsule(id, collectedOnly = true)
 
     fun driveToCapsule(id: Long, collectedOnly: Boolean = false) {

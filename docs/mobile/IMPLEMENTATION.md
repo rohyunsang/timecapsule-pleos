@@ -6,7 +6,7 @@
 ## 구성
 - `app`: 기존 Pleos 차량 앱
 - `shared`: 양쪽에서 사용하는 Firebase 계정, 친구, 캡슐 모델과 동기화 계약
-- `mobile`: 별도 설치 가능한 Android Compose 모바일 앱 (구현 예정)
+- `mobile`: 별도 설치 가능한 Android Compose 모바일 앱
 
 ## 필수 완료 항목
 - [ ] 모바일 계정 연결 및 차량과 같은 계정의 데이터 동기화
@@ -38,3 +38,14 @@
 - 저장소 `.firebaserc`에는 이전 프로젝트 `timecapsule-pleos-11020143`이 지정되어 있다. `gcloud projects describe`는 저장된 로그인 재인증 필요로 실패했다. 프로젝트 존재/권한을 확인하지 않았으며 서버 리소스 생성, 규칙 배포 또는 원격 데이터 변경은 하지 않았다.
 - 실제 연결에는 `local.properties`의 `firebase.apiKey`, `firebase.projectId`, 차량용 `firebase.appId`, 모바일용 `firebase.mobile.appId`가 필요하다. 모바일 Android 앱 등록 패키지는 `app.timecapsule.mobile`이다.
 - 최신 하위 작업: `feature/mobile-linked-app--mobile`, `/Users/block-s-dev/ym/timecapsule-pleos-worktrees/mobile-linked-app/mobile`.
+
+
+## 2026-11-10 음성 답장 및 차량 연결 구현 기록
+- 사용자 확정 정책: 기본은 녹음 장소에서 수집 후 듣기다. 작성자가 ‘3일 후 어디서든 듣기’를 선택하면 서버가 전송을 수락한 시점부터 72시간 후 방문 없이 재생한다. 이 경우 물리적 수집 기록을 만들지 않는다.
+- 모바일에 답장 방식 선택, 마이크·정확한 위치 권한 안내 및 설정 이동, 최대 1분 녹음, 3초 미만 녹음 제외, 화면 이탈 시 녹음 종료, 완료한 녹음의 로컬 임시 보관, 재전송과 삭제 확인을 추가했다.
+- 답장은 원본 작성자에게만 보낸다. 재전송은 같은 문서 ID를 사용하고, 음성과 서버 전송 시각을 하나의 트랜잭션으로 최초 한 번만 저장한다. 시간 미확정 상태는 잠금으로 처리한다.
+- 차량은 잠긴 답장의 메타데이터를 먼저 받아 개봉 시각을 표시하고, 개봉 후 음성을 내려받는다. 답장은 서버 권한 확인 후 재생하며 다른 친구에게 전달하거나 공개 범위를 바꾸지 않는다.
+- 공유 대상 선택, 수집한 친구 캡슐의 전달, 앨범 편집·공유, 차량의 비공개 백업 선택, 수집 기록 양방향 동기화와 목적지 수신 확인을 연결했다. 실제 서버 간 동작은 아직 검증하지 않았다.
+- `:mobile:assembleDebug :mobile:lintDebug :app:assembleDebug :app:testDebugUnitTest :shared:testDebugUnitTest` 통과. 단위 테스트는 98개이며 실패·오류는 0개다. SQLite 메모리 DB에서 5→6 열 추가 후 생성된 Room 스키마와 열·타입·nullable 속성을 비교했다.
+- Firebase 규칙에 서버 시각 기반 답장 잠금 및 답장 필드 불변 조건을 추가했다. 규칙은 아직 배포하거나 실제 Firebase에서 검증하지 않았다. Android/Firebase 에뮬레이터는 실행하지 않았다.
+- 남은 검증: 실제 Firebase 프로젝트 연결 및 규칙 검증, 모바일 화면 렌더링, 실제 마이크/GPS/계정 간 동작, 차량 부가 UX 점검, PR 병합 및 정리. 위 체크리스트는 이 검증까지 끝나야 완료로 표시한다.

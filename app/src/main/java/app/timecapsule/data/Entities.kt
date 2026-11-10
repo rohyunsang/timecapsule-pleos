@@ -51,11 +51,14 @@ data class Capsule(
     val sourceRemoteId: String? = null,
     val originalOwnerUid: String? = null,
     val originalOwnerName: String? = null,
+    val replyToId: String? = null,
+    val replyMode: String? = null,
+    val replyAvailableAt: Long? = null,
 
 ) {
     val isMine get() = ownerUid == null
     val isForwarded get() = sourceRemoteId != null
-    val canReplayAnywhere get() = collectedAt != null || isForwarded
+    val canReplayAnywhere get() = collectedAt != null || isForwarded || app.timecapsule.companion.ReplyPolicy.remoteOpen(replyMode, replyAvailableAt, System.currentTimeMillis())
 }
 
 @Entity(tableName = "letter_lock")
@@ -88,6 +91,9 @@ data class NotifyLog(
 
 @Dao
 interface CapsuleDao {
+    @Query("UPDATE capsule SET replyAvailableAt = :at WHERE id = :id")
+    suspend fun updateReplyDeadline(id: Long, at: Long?)
+
     @Insert
     suspend fun insert(capsule: Capsule): Long
 
@@ -117,6 +123,9 @@ interface CapsuleDao {
 
     @Query("UPDATE capsule SET audience = :audience, recipients = :recipients, remoteId = NULL WHERE id = :id")
     suspend fun setSharing(id: Long, audience: String, recipients: String)
+
+    @Query("UPDATE capsule SET audience = :audience, recipients = :recipients WHERE id = :id")
+    suspend fun updateRemoteSharing(id: Long, audience: String, recipients: String)
 
     /** Demo only: move a capsule back in time so the narration has years to count. */
     @Query("UPDATE capsule SET createdAt = :createdAt WHERE id = :id")
@@ -171,7 +180,7 @@ interface CapsuleDao {
     suspend fun deleteAllTrips()
 }
 
-@Database(entities = [Capsule::class, LetterLock::class, Trip::class, NotifyLog::class], version = 5)
+@Database(entities = [Capsule::class, LetterLock::class, Trip::class, NotifyLog::class], version = 6)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun capsuleDao(): CapsuleDao
 }

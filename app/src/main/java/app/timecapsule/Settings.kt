@@ -14,6 +14,14 @@ import java.time.LocalDate
 class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
+    private val _backupUid = MutableStateFlow(prefs.getString("mobile_backup_uid", "").orEmpty())
+    val backupUid: StateFlow<String> = _backupUid.asStateFlow()
+    fun setMobileBackup(uid: String, on: Boolean) {
+        val value = if (on) uid else ""
+        prefs.edit().putString("mobile_backup_uid", value).apply(); _backupUid.value = value
+    }
+    fun mobileBackup(uid: String?) = !uid.isNullOrBlank() && _backupUid.value == uid
+
     private val _arrivalPrompt = MutableStateFlow(prefs.getBoolean(KEY_ARRIVAL, true))
     val arrivalPrompt: StateFlow<Boolean> = _arrivalPrompt.asStateFlow()
 

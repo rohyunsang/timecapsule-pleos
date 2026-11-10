@@ -555,7 +555,7 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
                         val openingReason = drive.openingReason(c, position)
                         CapsuleRow(c, locks[c.id]?.openAfter?.takeIf { locks[c.id].isLocked(today) },
                             onPlay = { drive.playCapsule(c.id) },
-                            onShare = { sharing = c }.takeIf { c.isMine && !c.locationUncertain && c.audience in setOf("SELF", "FRIENDS") },
+                            onShare = { sharing = c }.takeIf { c.isMine && c.replyToId == null && !c.locationUncertain && c.audience in setOf("SELF", "FRIENDS", "SOME") },
                             onForward = { forwarding = c }.takeIf { Forwarding.eligible(c) },
                             onNavigate = { routeTarget = c }.takeIf { AlbumData.canNavigate(c) },
                             locationBlocked = AlbumData.needsCollection(c) && openingReason != null,
@@ -614,6 +614,15 @@ private fun ValueText(text: String) = Text(text, style = Type.BodyS, color = Tc.
 @Composable
 fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
     val arrival by app.settings.arrivalPrompt.collectAsState()
+    val backupUid by app.settings.backupUid.collectAsState()
+    val profile by app.social.me.collectAsState()
+    val email by app.social.email.collectAsState()
+    val syncProblem by app.sync.syncProblem.collectAsState()
+    var confirmBackup by remember { mutableStateOf(false) }
+    val backup = profile?.uid?.let { it == backupUid } == true
+    if (confirmBackup) ConfirmPopup("모바일과 비공개 캡슐을 동기화할까요?",
+        "이 차에 남긴 비공개 음성과 장소를 내 계정에 업로드해요. 같은 계정의 모바일에서도 볼 수 있으며, 수집 전 잠금은 유지됩니다. 친구에게 공개되지는 않아요.",
+        "동기화 켜기", onConfirm = { profile?.let { app.settings.setMobileBackup(it.uid, true) }; confirmBackup = false }, onDismiss = { confirmBackup = false })
     val audience by app.settings.defaultAudience.collectAsState()
     var confirm by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
@@ -650,6 +659,18 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                 ChoiceRow(Rules.SILENCE_CHOICES, silence, { if (it == 0) "끄기" else "${it}초" }, app.settings::setSilenceSec)
             }
             Spacer(Modifier.height(8.dp))
+            Section("모바일 연결")
+            Panel {
+                ListRow("비공개 캡슐 동기화", if (email == null) "친구 화면에서 이메일을 연결하면 모바일에서도 같은 계정으로 로그인할 수 있어요"
+                    else if (backup) "새 비공개 캡슐도 내 계정에 저장해요. 끄더라도 이미 동기화한 기록은 남아요"
+                    else "내 계정의 모바일로 비공개 음성과 장소를 가져와요", onClick = {
+                        if (profile == null || email == null || app.social !is app.timecapsule.social.FirebaseBackend) app.openScreen.value = Screen.FRIENDS
+                        else if (backup) app.settings.setMobileBackup(profile!!.uid, false) else confirmBackup = true
+                    }) { ValueText(if (backup) "켜짐" else "꺼짐") }
+                syncProblem?.let { ListRow("동기화 확인 필요", it) }
+                ListRow("수집 기록", "차량과 모바일에서 수집한 기록은 같은 계정에 연결돼요. 모바일에서 보낸 목적지는 주차 중 확인 후 안내해요")
+            }
+            Spacer(Modifier.height(8.dp))
             Section("개인정보")
             Panel {
                 ListRow("녹음은 직접 누를 때만", "마이크는 버튼을 눌렀을 때와, 캡슐 알림에 말로 답할 때(몇 초)만 켜져요") { ValueText("항상") }
@@ -658,7 +679,7 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                 RowDivider()
                 ListRow("날씨", "묻을 때 그날 날씨를 함께 남겨요. 날씨 서버에는 대략 위치(약 10km)만 보내요") { ValueText("자동") }
                 RowDivider()
-                ListRow("저장 위치", "친구에게 공개한 캡슐만 서버에 올라가요. 앨범에서 하나씩 바꿀 수 있어요") { ValueText("이 차 + 서버") }
+                ListRow("저장 위치", "친구에게 공개한 캡슐과 동기화를 켠 비공개 캡슐이 서버에 저장돼요. 공개 범위는 앨범에서 바꿀 수 있어요") { ValueText("이 차 + 서버") }
             }
             Spacer(Modifier.height(8.dp))
             Section("알림")

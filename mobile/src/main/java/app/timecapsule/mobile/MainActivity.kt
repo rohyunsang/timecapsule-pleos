@@ -58,6 +58,18 @@ fun MobileApp(model: MobileModel = viewModel()) {
     val busy by model.busy.collectAsState()
     val message by model.message.collectAsState()
     val problem by model.serverProblem.collectAsState()
+    val reply by model.reply.collectAsState()
+    var replyParent by rememberSaveable { mutableStateOf<String?>(null) }
+    var composingReply by rememberSaveable { mutableStateOf(false) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) { model.setReplyForeground(false); model.stop() }
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_START) model.setReplyForeground(true)
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     val selected = capsules.firstOrNull { it.id == selectedId }
@@ -74,11 +86,12 @@ fun MobileApp(model: MobileModel = viewModel()) {
         Column(Modifier.fillMaxSize().padding(padding)) {
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (problem != null || records.error != null) Text(problem ?: records.error.orEmpty(), Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.errorContainer).padding(16.dp))
+            if (me != null && reply != null) TextButton(onClick = { replyParent = reply?.parentId; composingReply = true }, enabled = !busy) { Text("임시 보관한 음성 답장 이어서 보내기") }
             when {
                 !model.configured || model.backend == null -> SetupScreen()
                 me == null -> LoginScreen(model, busy)
                 selectedId != null && selected == null -> EmptyPanel("캡슐을 확인할 수 없어요", "동기화가 끝나지 않았거나 공유가 종료되었을 수 있어요.")
-                selected != null -> CapsuleDetail(model, selected, busy)
+                selected != null -> CapsuleDetail(model, selected, busy, { selectedId = null; tab = 3 }, { replyParent = selected.id; composingReply = true })
                 tab == 0 -> LibraryScreen(model, records, capsules) { selectedId = it }
                 tab == 1 -> CapsuleMapScreen(capsules, { model.isCollected(it) }) { selectedId = it }
                 tab == 2 -> AlbumsScreen(model, records.albums, capsules) { selectedId = it }
@@ -86,6 +99,7 @@ fun MobileApp(model: MobileModel = viewModel()) {
             }
         }
     }
+    if (composingReply && me != null) ReplyComposer(model, capsules.firstOrNull { it.id == replyParent }) { composingReply = false }
     message?.let { AlertDialog(onDismissRequest = model::dismissMessage, title = { Text("알림") }, text = { Text(it) }, confirmButton = { TextButton(onClick = model::dismissMessage) { Text("확인") } }) }
 }
 
@@ -135,15 +149,15 @@ private fun LibraryScreen(model: MobileModel, records: CompanionSnapshot, capsul
 
 @Composable
 private fun CapsuleCard(model: MobileModel, c: RemoteCapsule, open: () -> Unit) {
-    val collected = model.isCollected(c)
-    val dateLocked = c.openAfter?.let { it > LocalDate.now().toEpochDay() } == true
+    val collected = model.readyWithoutVisit(c)
+    val dateLocked = c.openAfter?.let { it > LocalDate.now().toEpochDay() } == true || ReplyPolicy.waiting(c.replyMode, c.replyAvailableAt, System.currentTimeMillis())
     Card(onClick = open, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
         Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Icon(if (dateLocked || !collected) Icons.Rounded.Lock else Icons.Rounded.PlayCircle, null, Modifier.size(36.dp), tint = if (collected && !dateLocked) MaterialTheme.colorScheme.primary else Color.Gray)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(model.memory(c.id).title.ifBlank { c.placeName ?: "이름 없는 장소" }, fontWeight = FontWeight.Bold)
                 Text("${c.originalOwnerName ?: c.ownerName} · ${c.durationSec}초", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                Text(if (dateLocked) "${LocalDate.ofEpochDay(c.openAfter!!)} 개봉" else if (collected) "어디서든 듣기" else "장소에서 수집하기", style = MaterialTheme.typography.labelMedium)
+                Text(if (dateLocked) replyWaitingLabel(c) else if (collected) "어디서든 듣기" else "장소에서 수집하기", style = MaterialTheme.typography.labelMedium)
             }
             Icon(Icons.Rounded.ChevronRight, "상세 보기")
         }
@@ -151,7 +165,10 @@ private fun CapsuleCard(model: MobileModel, c: RemoteCapsule, open: () -> Unit) 
 }
 
 @Composable
-private fun CapsuleDetail(model: MobileModel, c: RemoteCapsule, busy: Boolean) {
+private fun CapsuleDetail(model: MobileModel, c: RemoteCapsule, busy: Boolean, friendsScreen: () -> Unit, reply: () -> Unit) {
+    val me by model.me.collectAsState()
+    var sharing by remember { mutableStateOf(false) }
+    var forwarding by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val records by model.records.collectAsState()
     val playing by model.playing.collectAsState()
@@ -167,24 +184,33 @@ private fun CapsuleDetail(model: MobileModel, c: RemoteCapsule, busy: Boolean) {
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
         if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) model.open(c) else permissionDenied = true
     }
-    val lockedDate = c.openAfter?.let { it > LocalDate.now().toEpochDay() } == true
+    val lockedDate = c.openAfter?.let { it > LocalDate.now().toEpochDay() } == true || ReplyPolicy.waiting(c.replyMode, c.replyAvailableAt, System.currentTimeMillis())
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { Text(c.placeName ?: "캡슐을 남긴 장소", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) }
         item { Text("${c.originalOwnerName ?: c.ownerName}의 목소리 · ${c.durationSec}초") }
-        item { Text(if (lockedDate) "${LocalDate.ofEpochDay(c.openAfter!!).format(DateTimeFormatter.ofPattern("yyyy년 M월 d일"))}부터 열 수 있어요." else if (model.isCollected(c)) "수집한 목소리예요. 어디서든 다시 들을 수 있어요." else "이 장소에서 수집해 주세요. 수집하면 다음부터 어디서든 들을 수 있어요.") }
+        item { Text(if (lockedDate) replyWaitingLabel(c) else if (model.readyWithoutVisit(c)) "어디서든 들을 수 있는 목소리예요." else "이 장소에서 수집해 주세요. 수집하면 다음부터 어디서든 들을 수 있어요.") }
         item { Button(onClick = {
             if (playing == c.id) model.stop()
             else if (model.needsLocation(c) && !PhoneLocation(context).permitted()) locationPermission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
             else model.open(c)
         }, enabled = !busy && !lockedDate, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
             Icon(if (playing == c.id) Icons.Rounded.Stop else Icons.Rounded.PlayArrow, null)
-            Spacer(Modifier.width(8.dp)); Text(if (playing == c.id) "재생 정지" else if (model.isCollected(c)) "목소리 듣기" else "여기서 수집하고 듣기")
+            Spacer(Modifier.width(8.dp)); Text(if (playing == c.id) "재생 정지" else if (model.readyWithoutVisit(c)) "목소리 듣기" else "여기서 수집하고 듣기")
         } }
         item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=${c.lat},${c.lng}(${Uri.encode(c.placeName ?: "캡슐")})"))) }.onFailure { model.notify("지도 앱을 열지 못했어요. 지도 앱을 설치한 뒤 다시 시도해 주세요.") } }, Modifier.weight(1f)) { Text("길 찾기") }
             OutlinedButton(onClick = { model.sendToCar(c) }, Modifier.weight(1f), enabled = !busy) { Text("차량으로 보내기") }
         } }
         item { OutlinedButton(onClick = { model.saveMemory(stored.copy(visitLater = !stored.visitLater)) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (stored.visitLater) "방문할 장소에서 빼기" else "방문할 장소에 저장") } }
+        if (c.ownerUid == me?.uid && c.sourceRemoteId == null && c.replyToId == null) item {
+            OutlinedButton(onClick = { sharing = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("공개 범위 변경") }
+        }
+        if (me?.uid?.let { RemoteDelivery.eligible(c, it, model.isCollected(c)) } == true) item {
+            OutlinedButton(onClick = { forwarding = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("친구에게 보내기") }
+        }
+        if (model.readyWithoutVisit(c) && !lockedDate) item {
+            OutlinedButton(onClick = reply, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("음성 답장 남기기") }
+        }
         item { HorizontalDivider() }
         item { Text("나의 기록", style = MaterialTheme.typography.titleLarge) }
         item { OutlinedButton(onClick = { model.saveMemory(stored.copy(favorite = !stored.favorite)) }, enabled = !busy) { Text(if (stored.favorite) "즐겨찾기 해제" else "즐겨찾기") } }
@@ -197,6 +223,7 @@ private fun CapsuleDetail(model: MobileModel, c: RemoteCapsule, busy: Boolean) {
         item { OutlinedTextField(note, { note = it.take(4000) }, label = { Text("직접 남기는 메모") }, modifier = Modifier.fillMaxWidth(), minLines = 3) }
         item { Button(onClick = { model.saveMemory(stored.copy(title = title, note = note)) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("기록 저장") } }
     }
+    if (sharing || forwarding) CapsuleSharingDialog(model, c, forwarding, { sharing = false; forwarding = false }, friendsScreen)
     if (deletePhoto) AlertDialog(onDismissRequest = { deletePhoto = false }, title = { Text("사진을 삭제할까요?") }, text = { Text("원본 음성과 메모는 그대로 남아요.") }, confirmButton = { TextButton(onClick = { deletePhoto = false; model.deletePhoto(c.id) }) { Text("삭제") } }, dismissButton = { TextButton(onClick = { deletePhoto = false }) { Text("취소") } })
     DisposableEffect(c.id) { onDispose { model.stop() } }
     if (permissionDenied) AlertDialog(onDismissRequest = { permissionDenied = false }, title = { Text("정확한 위치가 필요해요") },
@@ -207,31 +234,46 @@ private fun CapsuleDetail(model: MobileModel, c: RemoteCapsule, busy: Boolean) {
 
 @Composable
 private fun AlbumsScreen(model: MobileModel, albums: List<MemoryAlbum>, capsules: List<RemoteCapsule>, open: (String) -> Unit) {
-    var creating by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<MemoryAlbum?>(null) }
     var title by rememberSaveable { mutableStateOf("") }
     var selected by remember { mutableStateOf(setOf<String>()) }
+    var members by remember { mutableStateOf(setOf<String>()) }
     var deleting by remember { mutableStateOf<MemoryAlbum?>(null) }
     val busy by model.busy.collectAsState()
     val me by model.me.collectAsState()
+    val friends by model.friends.collectAsState()
+    fun edit(album: MemoryAlbum) { editing = album; title = album.title; selected = album.capsuleIds.toSet(); members = album.members.filter { it != me?.uid }.toSet() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("한 여행을 하나의 앨범으로", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
-        item { Button(onClick = { creating = !creating }, modifier = Modifier.fillMaxWidth()) { Text(if (creating) "앨범 만들기 닫기" else "새 앨범 만들기") } }
-        if (creating) {
+        item { Button(onClick = { if (editing != null) editing = null else edit(MemoryAlbum("", "", emptyList())) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (editing != null) "편집 닫기" else "새 앨범 만들기") } }
+        editing?.let { album ->
             item { OutlinedTextField(title, { title = it.take(100) }, label = { Text("앨범 이름") }, modifier = Modifier.fillMaxWidth()) }
-            items(capsules, key = { "select-${it.id}" }) { c -> Row(Modifier.fillMaxWidth().clickable { selected = if (c.id in selected) selected - c.id else selected + c.id }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(c.id in selected, onCheckedChange = null); Text(c.placeName ?: "캡슐") } }
-            item { Button(onClick = { model.saveAlbum(MemoryAlbum("", title, selected.toList())); creating = false }, enabled = !busy && title.isNotBlank()) { Text("앨범 저장") } }
+            item { Text("담을 캡슐", style = MaterialTheme.typography.titleMedium) }
+            items(capsules, key = { "select-${it.id}" }) { c -> Row(Modifier.fillMaxWidth().clickable(enabled = !busy) { selected = if (c.id in selected) selected - c.id else selected + c.id }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(c.id in selected, onCheckedChange = null); Text(c.placeName ?: "캡슐") } }
+            item { Text("가족·친구와 함께 보기", style = MaterialTheme.typography.titleMedium) }
+            item { Text("앨범 이름과 목록을 공유합니다. 음성은 각 캡슐의 공개 범위와 수집 상태를 따라요. 내 사진과 메모는 공유되지 않아요.", style = MaterialTheme.typography.bodySmall) }
+            items(friends, key = { "member-${it.uid}" }) { friend -> Row(Modifier.fillMaxWidth().clickable(enabled = !busy) { members = if (friend.uid in members) members - friend.uid else members + friend.uid }, verticalAlignment = Alignment.CenterVertically) { Checkbox(friend.uid in members, null); Text(friend.name) } }
+            if (members.any { id -> friends.none { it.uid == id } }) item { TextButton(onClick = { members = members.filter { id -> friends.any { it.uid == id } }.toSet() }) { Text("연결이 끊긴 친구를 공유 대상에서 빼기") } }
+            item { Button(onClick = { model.saveAlbum(album.copy(title = title, capsuleIds = selected.toList(), members = members.toList())) { editing = null } }, enabled = !busy && title.isNotBlank()) { Text("앨범 저장") } }
         }
-        if (albums.isEmpty() && !creating) item { EmptyPanel("아직 앨범이 없어요", "여행에서 모은 캡슐을 골라 나만의 앨범을 만들어 보세요.") }
+        if (albums.isEmpty() && editing == null) item { EmptyPanel("아직 앨범이 없어요", "여행에서 모은 캡슐을 골라 나만의 앨범을 만들어 보세요.") }
         items(albums, key = { it.id }) { album ->
             Card(colors = CardDefaults.cardColors(containerColor = Color.White)) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(album.title, style = MaterialTheme.typography.titleLarge)
                 Text("캡슐 ${album.capsuleIds.size}개 · 함께 보는 사람 ${album.members.size}명")
-                album.capsuleIds.forEach { id -> capsules.firstOrNull { it.id == id }?.let { c -> TextButton(onClick = { open(id) }) { Text(c.placeName ?: "캡슐 열기") } } }
-                if (album.ownerUid == me?.uid) TextButton(onClick = { deleting = album }) { Text("앨범 삭제") }
+                album.capsuleIds.forEach { id ->
+                    val c = capsules.firstOrNull { it.id == id }
+                    if (c != null) TextButton(onClick = { open(id) }) { Text(c.placeName ?: "캡슐 열기") }
+                    else Text("비공개이거나 공유가 종료된 캡슐", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+                if (album.ownerUid == me?.uid) Row {
+                    TextButton(onClick = { edit(album) }, enabled = !busy) { Text("앨범 편집·공유") }
+                    TextButton(onClick = { deleting = album }, enabled = !busy) { Text("앨범 삭제") }
+                }
             } }
         }
     }
-    deleting?.let { album -> AlertDialog(onDismissRequest = { deleting = null }, title = { Text("앨범을 삭제할까요?") }, text = { Text("원본 캡슐과 음성은 지워지지 않아요.") }, confirmButton = { TextButton(onClick = { model.deleteAlbum(album.id); deleting = null }) { Text("삭제") } }, dismissButton = { TextButton(onClick = { deleting = null }) { Text("취소") } }) }
+    deleting?.let { album -> AlertDialog(onDismissRequest = { deleting = null }, title = { Text("앨범을 삭제할까요?") }, text = { Text("함께 보는 사람에게도 앨범이 사라져요. 원본 캡슐과 음성은 지워지지 않아요.") }, confirmButton = { TextButton(onClick = { model.deleteAlbum(album.id); deleting = null }) { Text("삭제") } }, dismissButton = { TextButton(onClick = { deleting = null }) { Text("취소") } }) }
 }
 
 @Composable
@@ -270,4 +312,13 @@ internal fun EmptyPanel(title: String, message: String) {
         Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text(message, color = Color(0xFF666666))
     }
+}
+
+private fun replyWaitingLabel(c: RemoteCapsule): String {
+    if (ReplyPolicy.waiting(c.replyMode, c.replyAvailableAt, System.currentTimeMillis())) {
+        val at = c.replyAvailableAt ?: return "전송 시각을 확인하고 있어요"
+        val date = java.time.Instant.ofEpochMilli(at).atZone(java.time.ZoneId.systemDefault())
+        return "${date.format(DateTimeFormatter.ofPattern("M월 d일 HH:mm"))}부터 방문 없이 듣기"
+    }
+    return c.openAfter?.let { "${LocalDate.ofEpochDay(it)} 개봉" } ?: "개봉 대기"
 }

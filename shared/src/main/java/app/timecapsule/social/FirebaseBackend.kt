@@ -205,11 +205,22 @@ class FirebaseBackend(
         check(me.value?.uid == capsule.ownerUid && auth.currentUser?.uid == capsule.ownerUid) { "계정이 바뀌었어요. 다시 시도해 주세요" }
         val ref = db.collection("capsules").document(capsule.id.takeIf { capsule.sourceRemoteId != null && it.isNotBlank() }
             ?: "${capsule.ownerUid}_${capsule.createdAt}")
-        // Audio first: a capsule doc never points at missing audio.
         withTimeout(WRITE_TIMEOUT_MS) {
-            db.collection("audio").document(ref.id)
-                .set(mapOf("ownerUid" to capsule.ownerUid, "data" to Blob.fromBytes(audio))).await()
-            ref.set(toMap(capsule)).await()
+            val audioRef = db.collection("audio").document(ref.id)
+            val payload = mapOf("ownerUid" to capsule.ownerUid, "data" to Blob.fromBytes(audio))
+            if (capsule.replyToId != null) {
+                // Atomic, immutable retry: neither the voice nor the server deadline changes.
+                db.runTransaction { tx ->
+                    val existing = tx.get(ref)
+                    if (!existing.exists()) {
+                        tx.set(audioRef, payload)
+                        tx.set(ref, toMap(capsule) + ("replySentAt" to FieldValue.serverTimestamp()))
+                    }
+                }.await()
+            } else {
+                audioRef.set(payload).await()
+                ref.set(toMap(capsule)).await()
+            }
         }
         ref.id
     }.onFailure { Log.w(TAG, "upload", it) }
@@ -217,6 +228,23 @@ class FirebaseBackend(
     override suspend fun setVisibleTo(id: String, uids: List<String>) {
         runCatching { db.collection("capsules").document(id).update("visibleTo", uids).await() }
             .onFailure { Log.w(TAG, "setVisibleTo", it) }
+    }
+
+    override suspend fun updateSharing(id: String, recipients: List<String>): Result<Unit> = runCatching {
+        val uid = auth.currentUser?.uid ?: error("먼저 로그인해 주세요.")
+        val selected = recipients.distinct()
+        check(selected.all { id -> friends.value.any { it.uid == id } }) { "연결된 친구만 선택해 주세요." }
+        val ref = db.collection("capsules").document(id)
+        withTimeout(WRITE_TIMEOUT_MS) {
+            db.runTransaction { transaction ->
+                val capsule = transaction.get(ref)
+                check(capsule.getString("replyToId") == null) { "음성 답장은 원본 작성자에게만 보낼 수 있어요." }
+                check(capsule.getString("ownerUid") == uid) { "내가 남긴 캡슐만 공개 범위를 바꿀 수 있어요." }
+                transaction.update(ref, mapOf("visibleTo" to selected, "recipients" to selected,
+                    "audience" to if (selected.isEmpty()) Audience.SELF.name else Audience.SOME.name))
+            }.await()
+        }
+        Unit
     }
 
     override suspend fun delete(id: String) {
@@ -232,6 +260,13 @@ class FirebaseBackend(
         val owner = capsule.getString("ownerUid") ?: return false
         val openAfter = capsule.getLong("openAfter")
         if (openAfter != null && java.time.LocalDate.now().toEpochDay() < openAfter) return false
+        val replyMode = capsule.getString("replyMode")
+        val availableAt = capsule.getTimestamp("replySentAt")?.toDate()?.time?.plus(app.timecapsule.companion.ReplyPolicy.WAIT_MS)
+        if (app.timecapsule.companion.ReplyPolicy.waiting(replyMode, availableAt, System.currentTimeMillis())) return false
+        if (replyMode == app.timecapsule.companion.ReplyPolicy.AFTER_THREE_DAYS) {
+            // The server rule checks request.time, even if the device clock was advanced.
+            withTimeout(5_000) { db.collection("audio").document(id).get(com.google.firebase.firestore.Source.SERVER).await() }
+        }
         if (owner == uid) return true
         val friend = withTimeout(5_000) { db.collection("users").document(uid).collection("friends").document(owner).get(com.google.firebase.firestore.Source.SERVER).await() }
         friend.exists() && (capsule.getString("audience") == Audience.DEMO.name ||
@@ -239,7 +274,7 @@ class FirebaseBackend(
     }.getOrDefault(false)
 
     override suspend fun audio(id: String): ByteArray? = runCatching {
-        withTimeout(WRITE_TIMEOUT_MS) { db.collection("audio").document(id).get().await() }.getBlob("data")?.toBytes()
+        withTimeout(WRITE_TIMEOUT_MS) { db.collection("audio").document(id).get(com.google.firebase.firestore.Source.SERVER).await() }.getBlob("data")?.toBytes()
     }.onFailure { Log.w(TAG, "audio", it) }.getOrNull()
 
     override suspend fun switchAccount(profile: Profile?) {
@@ -298,6 +333,7 @@ class FirebaseBackend(
         "visibleTo" to c.visibleTo,
         "sourceRemoteId" to c.sourceRemoteId, "originalOwnerUid" to c.originalOwnerUid,
         "originalOwnerName" to c.originalOwnerName,
+        "replyToId" to c.replyToId, "replyMode" to c.replyMode,
     )
 
     @Suppress("UNCHECKED_CAST")
@@ -320,6 +356,8 @@ class FirebaseBackend(
             visibleTo = (d.get("visibleTo") as? List<String>).orEmpty(),
             sourceRemoteId = d.getString("sourceRemoteId"), originalOwnerUid = d.getString("originalOwnerUid"),
             originalOwnerName = d.getString("originalOwnerName"),
+            replyToId = d.getString("replyToId"), replyMode = d.getString("replyMode"),
+            replyAvailableAt = d.getTimestamp("replySentAt")?.toDate()?.time?.plus(app.timecapsule.companion.ReplyPolicy.WAIT_MS),
         )
     }.getOrNull()
 

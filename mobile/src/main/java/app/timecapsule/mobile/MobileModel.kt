@@ -39,10 +39,19 @@ class MobileModel(app: Application) : AndroidViewModel(app) {
     private val audioManager = app.getSystemService(android.media.AudioManager::class.java)
     private var focus: android.media.AudioFocusRequest? = null
     private val location = PhoneLocation(app)
+    private val recorder = ReplyRecorder(app)
+    private var replyForeground = true
+    fun setReplyForeground(value: Boolean) { replyForeground = value; if (!value) finishReply() }
+    private val _reply = MutableStateFlow<ReplyDraft?>(null)
+    val reply = _reply.asStateFlow()
+    private val _recordingReply = MutableStateFlow(false)
+    val recordingReply = _recordingReply.asStateFlow()
     private val store get() = backend?.companion ?: error("연결 설정이 필요해요")
     init {
         viewModelScope.launch {
             me.collectLatest { profile ->
+                finishReply()
+                _reply.value = profile?.uid?.let(recorder::restore)
                 stop()
                 photoJob?.cancel(); photoTarget = null; _photo.value = null
                 _records.value = CompanionSnapshot()
@@ -77,7 +86,19 @@ class MobileModel(app: Application) : AndroidViewModel(app) {
     fun removeFriend(friend: Friend) = action { backend!!.removeFriend(friend) }
     fun memory(id: String) = records.value.memories.firstOrNull { it.capsuleId == id } ?: CapsuleMemory(id)
     fun saveMemory(memory: CapsuleMemory) = action { store.saveMemory(memory); _message.value = "추억을 저장했어요." }
-    fun saveAlbum(album: MemoryAlbum) = action { store.saveAlbum(album); _message.value = "앨범을 저장했어요." }
+    fun saveAlbum(album: MemoryAlbum, onSaved: () -> Unit = {}) = action {
+        check(album.members.all { uid -> uid == me.value?.uid || friends.value.any { it.uid == uid } }) { "앨범에 초대할 친구를 다시 확인해 주세요." }
+        store.saveAlbum(album); onSaved(); _message.value = "앨범을 저장했어요. 음성은 각 캡슐의 공개 범위를 따라요."
+    }
+    fun forward(c: RemoteCapsule, friendUid: String, onSent: () -> Unit) = action {
+        RemoteDelivery.send(backend!!, c.id, friendUid,
+            { id -> records.value.collections.any { it.capsuleId == id } },
+            { id -> capsules.value.firstOrNull { it.id == id } }).getOrThrow()
+        onSent(); _message.value = "캡슐 사본을 보냈어요. 받은 친구는 어디서든 들을 수 있어요."
+    }
+    fun share(c: RemoteCapsule, recipients: List<String>, onSaved: () -> Unit) = action {
+        backend!!.updateSharing(c.id, recipients).getOrThrow(); onSaved(); _message.value = "공개 범위를 바꿨어요."
+    }
     fun deleteAlbum(id: String) = action { store.deleteAlbum(id); _message.value = "앨범을 삭제했어요. 원본 캡슐은 그대로 남아 있어요." }
     fun sendToCar(c: RemoteCapsule) = action { store.sendDestination(c.id, c.placeName ?: "캡슐 장소", c.lat, c.lng); _message.value = "차량으로 보냈어요. 주차 중 차량에서 길 안내를 확인해 주세요." }
     fun loadPhoto(id: String) {
@@ -110,18 +131,57 @@ class MobileModel(app: Application) : AndroidViewModel(app) {
     }
     fun deletePhoto(id: String) = action { store.deletePhoto(id); if (photoTarget == id) _photo.value = null; _message.value = "사진을 삭제했어요." }
     fun isCollected(c: RemoteCapsule) = c.sourceRemoteId != null || records.value.collections.any { it.capsuleId == c.id }
-    fun needsLocation(c: RemoteCapsule) = !isCollected(c)
+    fun readyWithoutVisit(c: RemoteCapsule) = isCollected(c) || ReplyPolicy.remoteOpen(c.replyMode, c.replyAvailableAt, System.currentTimeMillis())
+    fun needsLocation(c: RemoteCapsule) = !readyWithoutVisit(c)
+    fun startReply(parent: RemoteCapsule, mode: String) = action {
+        check(_reply.value == null) { "임시보관한 답장을 먼저 보내거나 삭제해 주세요." }
+        val author = me.value ?: error("먼저 로그인해 주세요.")
+        check(readyWithoutVisit(parent) && backend!!.canOpen(parent.id)) { "먼저 원본 캡슐을 수집하고 공개 권한을 확인해 주세요." }
+        check(parent.ownerUid == author.uid || friends.value.any { it.uid == parent.ownerUid }) { "답장을 받을 친구와 연결되어 있지 않아요." }
+        val fix = location.current()
+        val temporary = parent.copy(lat = fix.lat, lng = fix.lng, sourceRemoteId = null, openAfter = null, replyMode = null, replyAvailableAt = null)
+        CollectionPolicy.reason(temporary, me.value?.uid == author.uid, false, LocalDate.now().toEpochDay(), fix, SystemClock.elapsedRealtime())?.let { error(CollectionPolicy.message(it)) }
+        check(replyForeground && me.value?.uid == author.uid) { "앱으로 돌아온 뒤 다시 녹음해 주세요." }
+        stop()
+        _reply.value = recorder.start(parent, author, fix, mode) { finishReply() }
+        _recordingReply.value = true
+    }
+    fun finishReply() {
+        if (!_recordingReply.value) return
+        _recordingReply.value = false
+        try { _reply.value = recorder.stop(); if (_reply.value == null) _message.value = "3초 이상 녹음해야 답장을 보관할 수 있어요." }
+        catch (_: Exception) { _message.value = "답장을 보관하지 못했어요. 저장 공간을 확인해 주세요." }
+    }
+    fun discardReply() { finishReply(); _reply.value?.let(recorder::discard); _reply.value = null }
+    fun sendReply() = action {
+        val draft = _reply.value ?: error("보낼 답장이 없어요.")
+        check(!_recordingReply.value && draft.durationSec >= 3)
+        val author = me.value ?: error("먼저 로그인해 주세요.")
+        check(author.uid == draft.authorUid && backend!!.canOpen(draft.parentId)) { "원본 공개 권한이나 계정이 바뀌었어요." }
+        check(draft.recipientUid == author.uid || friends.value.any { it.uid == draft.recipientUid }) { "답장을 받을 친구와 다시 연결해 주세요." }
+        val recipients = if (draft.recipientUid == author.uid) emptyList() else listOf(draft.recipientUid)
+        val c = RemoteCapsule(ownerUid = author.uid, ownerName = author.name, createdAt = draft.createdAt,
+            lat = draft.lat, lng = draft.lng, radiusM = 300, placeName = "음성 답장을 남긴 곳", durationSec = draft.durationSec,
+            tags = "음성 답장", rawVehicleState = "{}", openAfter = null,
+            audience = if (recipients.isEmpty()) Audience.SELF else Audience.SOME, recipients = recipients, visibleTo = recipients,
+            replyToId = draft.parentId, replyMode = draft.mode)
+        val bytes = withContext(Dispatchers.IO) { draft.file.readBytes() }
+        check(bytes.size < 1_000_000) { "답장 파일이 너무 커요. 짧게 다시 녹음해 주세요." }
+        backend!!.upload(c, bytes).getOrThrow()
+        recorder.discard(draft); _reply.value = null
+        _message.value = if (draft.mode == ReplyPolicy.AFTER_THREE_DAYS) "답장을 보냈어요. 전송 완료 후 3일이 지나면 어디서든 들을 수 있어요." else "답장을 보냈어요. 답장을 남긴 장소에서 수집하면 들을 수 있어요."
+    }
     fun open(c: RemoteCapsule) = action {
         stop()
         val uid = me.value?.uid ?: error("먼저 로그인해 주세요.")
         val collected = isCollected(c)
-        val fix = if (collected) null else location.current()
+        val fix = if (readyWithoutVisit(c)) null else location.current()
         check(backend!!.canOpen(c.id)) { "공유 권한을 확인하지 못했어요. 연결과 개봉일을 확인해 주세요." }
         val current = capsules.value.firstOrNull { it.id == c.id } ?: error("이 캡슐은 더 이상 공유되지 않아요.")
         CollectionPolicy.reason(current, me.value?.uid == uid, collected, LocalDate.now().toEpochDay(), fix, SystemClock.elapsedRealtime())?.let { error(CollectionPolicy.message(it)) }
         val bytes = backend.audio(c.id) ?: error("음성을 불러오지 못했어요. 다시 시도해 주세요.")
         check(me.value?.uid == uid) { "계정이 바뀌었어요." }
-        if (!collected) {
+        if (!collected && !ReplyPolicy.remoteOpen(current.replyMode, current.replyAvailableAt, System.currentTimeMillis())) {
             CollectionPolicy.reason(current, true, false, LocalDate.now().toEpochDay(), fix, SystemClock.elapsedRealtime())?.let { error(CollectionPolicy.message(it)) }
             store.collect(c.id, "mobile")
         }
@@ -156,5 +216,5 @@ class MobileModel(app: Application) : AndroidViewModel(app) {
         media?.release(); media = null; _playing.value = null
         focus?.let { audioManager.abandonAudioFocusRequest(it) }; focus = null
     }
-    override fun onCleared() { stop(); super.onCleared() }
+    override fun onCleared() { finishReply(); stop(); super.onCleared() }
 }
