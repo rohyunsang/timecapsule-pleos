@@ -6,15 +6,80 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function me() { return request.auth.uid; }
 
+    function capsuleAccessible(id) {
+      let c = get(/databases/$(database)/documents/capsules/$(id)).data;
+      return signedIn() && (c.ownerUid == me() || me() in c.visibleTo || c.audience == 'DEMO');
+    }
+    function capsuleDateOpen(id) {
+      let c = get(/databases/$(database)/documents/capsules/$(id)).data;
+      // Product dates follow Korea time on both vehicle and mobile.
+      return c.get('openAfter', null) == null || c.openAfter <= (request.time.toMillis() + 32400000) / 86400000;
+    }
+
     // Profile: anyone signed in may read a name; only the owner writes.
     match /users/{uid} {
       allow read: if signedIn();
       allow write: if signedIn() && me() == uid;
 
+      match /memories/{id} {
+        allow read, delete: if signedIn() && me() == uid;
+        allow create, update: if signedIn() && me() == uid && capsuleAccessible(id)
+          && request.resource.data.keys().hasOnly(['title', 'note', 'favorite', 'visitLater', 'updatedAt'])
+          && request.resource.data.title is string && request.resource.data.title.size() <= 120
+          && request.resource.data.note is string && request.resource.data.note.size() <= 4000
+          && request.resource.data.favorite is bool && request.resource.data.visitLater is bool
+          && request.resource.data.updatedAt == request.time;
+      }
+      match /collections/{id} {
+        allow read: if signedIn() && me() == uid;
+        // GPS is checked by the app; this receipt is not cryptographic location attestation.
+        allow create: if signedIn() && me() == uid && capsuleAccessible(id) && capsuleDateOpen(id)
+          && request.resource.data.keys().hasOnly(['collectedAt', 'device'])
+          && request.resource.data.collectedAt == request.time
+          && request.resource.data.device in ['vehicle', 'mobile'];
+        allow delete: if signedIn() && me() == uid;
+      }
+      match /photos/{id} {
+        allow read, delete: if signedIn() && me() == uid;
+        allow create, update: if signedIn() && me() == uid && capsuleAccessible(id)
+          && request.resource.data.keys().hasOnly(['image', 'updatedAt'])
+          && request.resource.data.image is bytes && request.resource.data.image.size() <= 800000
+          && request.resource.data.updatedAt == request.time;
+      }
+      match /destinations/{id} {
+        allow read, delete: if signedIn() && me() == uid;
+        allow create: if signedIn() && me() == uid && capsuleAccessible(request.resource.data.capsuleId)
+          && request.resource.data.keys().hasOnly(['capsuleId', 'title', 'lat', 'lng', 'createdAt', 'status'])
+          && request.resource.data.title is string && request.resource.data.title.size() <= 120
+          && request.resource.data.lat is number && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
+          && request.resource.data.lng is number && request.resource.data.lng >= -180 && request.resource.data.lng <= 180
+          && request.resource.data.createdAt == request.time && request.resource.data.status == 'pending';
+        allow update: if signedIn() && me() == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handledAt'])
+          && request.resource.data.status in ['accepted', 'dismissed', 'failed']
+          && request.resource.data.handledAt == request.time;
+      }
+
       // Friendship is written on both sides at once by whoever adds the code.
       match /friends/{fid} {
         allow read: if signedIn() && me() == uid;
         allow create, update, delete: if signedIn() && (me() == uid || me() == fid);
+      }
+    }
+
+    match /memoryAlbums/{id} {
+      allow read: if signedIn() && me() in resource.data.members;
+      allow create: if signedIn() && request.resource.data.ownerUid == me() && validAlbum();
+      allow update: if signedIn() && resource.data.ownerUid == me()
+        && request.resource.data.ownerUid == me() && validAlbum();
+      allow delete: if signedIn() && resource.data.ownerUid == me();
+      function validAlbum() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['title', 'capsuleIds', 'ownerUid', 'members', 'updatedAt'])
+          && d.title is string && d.title.size() > 0 && d.title.size() <= 100
+          && d.capsuleIds is list && d.capsuleIds.size() <= 200
+          && d.members is list && d.members.size() > 0 && d.members.size() <= 31
+          && me() in d.members && d.updatedAt == request.time;
       }
     }
 
