@@ -95,11 +95,19 @@ class PleosNaviSource(context: Context, private val scope: CoroutineScope) : Nav
                     }
                 }
             },
-            { e -> _position.value = null; Log.w(TAG, "NaviHelper unavailable: ${e.message}") },
+            { e ->
+                _position.value = null
+                Log.w(TAG, "NaviHelper unavailable: ${e.message}")
+                // The navigation service may start after this process (boot): try again later.
+                if (!stopped && retries++ < MAX_RETRIES) scope.launch { delay(RETRY_MS); if (!stopped && !connected) runCatching { start() } }
+            },
         )
     }
+    private var stopped = false
+    private var retries = 0
 
     fun stop() {
+        stopped = true
         _position.value = null
         poll?.cancel()
         if (connected) runCatching { helper.removeListener(listener) }
@@ -126,6 +134,8 @@ class PleosNaviSource(context: Context, private val scope: CoroutineScope) : Nav
     companion object {
         private const val TAG = "PleosNavi"
         private const val POLL_MS = 2_000L
+        private const val RETRY_MS = 10_000L
+        private const val MAX_RETRIES = 30
         private const val ROUTE_SETTLE_MS = 1_500L
         /** WaypointIndex has FIRST and SECOND only, so NaviHelper takes at most two waypoints. */
         const val MAX_WAYPOINTS = 2

@@ -20,11 +20,21 @@ class UxRestrictions(private val context: Context) {
     private var car: Car? = null
     private var manager: CarUxRestrictionsManager? = null
 
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private var attempts = 0
+    private var stopped = false
+
+    /** The car service can come up after this process (boot); keep trying for a while. */
+    private fun retry() {
+        if (!stopped && manager == null && attempts++ < MAX_ATTEMPTS) main.postDelayed({ if (manager == null) start() }, RETRY_MS)
+    }
+
     fun start() {
         try {
-            val c = Car.createCar(context) ?: return
+            val c = Car.createCar(context) ?: return retry()
+            car?.let { old -> if (old !== c) runCatching { old.disconnect() } }
             car = c
-            val m = c.getCarManager(Car.CAR_UX_RESTRICTION_SERVICE) as? CarUxRestrictionsManager ?: return
+            val m = c.getCarManager(Car.CAR_UX_RESTRICTION_SERVICE) as? CarUxRestrictionsManager ?: return retry()
             manager = m
             _restricted.value = m.currentCarUxRestrictions?.isRequiresDistractionOptimization != false
             m.registerListener { r -> _restricted.value = r.isRequiresDistractionOptimization }
@@ -32,12 +42,20 @@ class UxRestrictions(private val context: Context) {
             // NoClassDefFoundError off AAOS, or the car service is not ready.
             _restricted.value = true
             Log.w("UxRestrictions", "car ux restrictions unavailable", t)
+            if (t !is NoClassDefFoundError) retry()
         }
     }
 
     fun stop() {
+        stopped = true
+        main.removeCallbacksAndMessages(null)
         _restricted.value = true
         runCatching { manager?.unregisterListener() }
         runCatching { car?.disconnect() }
+    }
+
+    private companion object {
+        const val RETRY_MS = 5_000L
+        const val MAX_ATTEMPTS = 24
     }
 }

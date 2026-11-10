@@ -194,7 +194,8 @@ class FirebaseBackend(
             val batch = db.batch()
             batch.delete(db.collection("users").document(me.uid).collection("friends").document(friend.uid))
             batch.delete(db.collection("users").document(friend.uid).collection("friends").document(me.uid))
-            batch.commit().await()
+            // Offline the batch stays queued and is sent later; don't hold the caller meanwhile.
+            withTimeoutOrNull(WRITE_TIMEOUT_MS) { batch.commit().await() }
         }.onFailure { Log.w(TAG, "removeFriend", it) }
     }
 
@@ -214,14 +215,17 @@ class FirebaseBackend(
     }.onFailure { Log.w(TAG, "upload", it) }
 
     override suspend fun setVisibleTo(id: String, uids: List<String>) {
-        runCatching { db.collection("capsules").document(id).update("visibleTo", uids).await() }
+        runCatching { withTimeoutOrNull(WRITE_TIMEOUT_MS) { db.collection("capsules").document(id).update("visibleTo", uids).await() } }
             .onFailure { Log.w(TAG, "setVisibleTo", it) }
     }
 
     override suspend fun delete(id: String) {
         runCatching {
-            db.collection("capsules").document(id).delete().await()
-            db.collection("audio").document(id).delete().await()
+            // One batch: both deletes are queued together even if the app dies while offline.
+            val batch = db.batch()
+            batch.delete(db.collection("capsules").document(id))
+            batch.delete(db.collection("audio").document(id))
+            withTimeoutOrNull(WRITE_TIMEOUT_MS) { batch.commit().await() }
         }.onFailure { Log.w(TAG, "delete", it) }
     }
 
@@ -256,18 +260,28 @@ class FirebaseBackend(
         Unit
     }.recoverCatching { throw IllegalStateException(authMessage(it)) }
 
-    override suspend fun signInEmail(email: String, password: String): Result<Profile> = runCatching {
+    override suspend fun signInEmail(email: String, password: String): Result<Profile> {
         // Keep the person already on this car in their own slot; load this one into a fresh slot.
-        if (me.value != null) useSlot((slots.all.values.filterIsInstance<Int>().maxOrNull() ?: 0) + 1)
-        withTimeout(WRITE_TIMEOUT_MS) { auth.signInWithEmailAndPassword(email.trim(), password).await() }
-        val uid = auth.currentUser!!.uid
-        val d = withTimeout(WRITE_TIMEOUT_MS) { db.collection("users").document(uid).get().await() }
-        val p = Profile(uid, d.getString("name") ?: error("이 계정에는 이름이 없어요"), d.getString("code") ?: "")
-        slots.edit().putInt("uid:$uid", slot).apply()
-        _email.value = email.trim()
-        accounts.set(p)
-        p
-    }.recoverCatching { throw IllegalStateException(authMessage(it)) }
+        val previous = slot
+        val moved = me.value != null
+        if (moved) useSlot((slots.all.values.filterIsInstance<Int>().maxOrNull() ?: 0) + 1)
+        return runCatching {
+            withTimeout(WRITE_TIMEOUT_MS) { auth.signInWithEmailAndPassword(email.trim(), password).await() }
+            val uid = auth.currentUser!!.uid
+            val d = withTimeout(WRITE_TIMEOUT_MS) { db.collection("users").document(uid).get().await() }
+            val p = Profile(uid, d.getString("name") ?: error("이 계정에는 이름이 없어요"), d.getString("code") ?: "")
+            slots.edit().putInt("uid:$uid", slot).apply()
+            _email.value = email.trim()
+            accounts.set(p)
+            p
+        }.onFailure {
+            // Wrong password or no network: go back to the account that was signed in before.
+            if (moved) {
+                runCatching { auth.signOut() }
+                useSlot(previous)
+            }
+        }.recoverCatching { throw IllegalStateException(authMessage(it)) }
+    }
 
     override suspend fun resetPassword(email: String): Result<Unit> = runCatching {
         withTimeout(WRITE_TIMEOUT_MS) { auth.sendPasswordResetEmail(email.trim()).await() }

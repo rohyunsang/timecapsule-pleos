@@ -77,6 +77,7 @@ fun FriendsScreen(app: TimeCapsuleApp, back: () -> Unit) {
     var removing by remember { mutableStateOf<Friend?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
 
+    var busy by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(Tc.Bg).padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
         Header("친구", back)
         Column(
@@ -86,9 +87,17 @@ fun FriendsScreen(app: TimeCapsuleApp, back: () -> Unit) {
         ) {
             val p = me
             if (p == null) {
+                // One request at a time: a double tap must not sign up or sign in twice.
+                fun once(block: suspend () -> Unit) {
+                    if (busy) return
+                    busy = true
+                    message = "잠시만 기다려 주세요"
+                    app.scope.launch { try { block() } finally { busy = false } }
+                }
                 SignUp(message, onSignIn = { email, pw ->
                     focus.clearFocus()
-                    app.scope.launch {
+                    once {
+                        message = null
                         app.social.signInEmail(email, pw)
                             .onSuccess { message = "${it.name}님 계정을 불러왔어요" }
                             .onFailure { message = it.message }
@@ -102,7 +111,7 @@ fun FriendsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                     }
                 }) { name ->
                     focus.clearFocus()
-                    app.scope.launch {
+                    once {
                         app.social.signUp(name).onSuccess {
                             message = null
                             // A QR link opened before signing up: add that friend now.

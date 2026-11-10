@@ -48,7 +48,13 @@ class SocialSync(
     fun start() {
         scope.launch {
             combine(backend.remote, backend.friends, backend.synced) { r, f, s -> Triple(r, f, s) }
-                .collect { (r, f, s) -> lock.withLock { pull(r, f, s) } }
+                .collect { (r, f, s) ->
+                    lock.withLock {
+                        pull(r, f, s)
+                        // The friend list may change before my capsules are loaded: re-check then.
+                        if (s && backend.me.value != null) followFriends(f)
+                    }
+                }
         }
         scope.launch {
             combine(backend.me, backend.friends) { me, f -> me to f }.collect { (me, f) ->
@@ -147,7 +153,9 @@ class SocialSync(
     /** Existing recipients can be removed, but newly added friends never receive older capsules. */
     private suspend fun followFriends(friends: List<Friend>) {
         val uids = friends.map { it.uid }.sorted()
-        val myIds = repo.all().filter { it.isMine && it.audience == Audience.FRIENDS.name }.mapNotNull { it.remoteId }.toSet()
+        // Letters to chosen people (SOME) too: an ex-friend must lose access to those as well.
+        val shared = setOf(Audience.FRIENDS.name, Audience.SOME.name)
+        val myIds = repo.all().filter { it.isMine && it.audience in shared }.mapNotNull { it.remoteId }.toSet()
         backend.remote.value.filter { it.id in myIds }
             .forEach { remote ->
                 val remaining = remote.visibleTo.filter { it in uids }
@@ -163,8 +171,15 @@ class SocialSync(
         val friendUids = friends.map { it.uid }.toSet()
         val list = all.filter { (it.ownerUid == me.uid && it.sourceRemoteId == null) ||
             (it.ownerUid in friendUids && (me.uid in it.visibleTo || it.audience == Audience.DEMO)) }
+        val local = repo.all()
         for (r in list) {
             if (r.id in hidden || repo.byRemoteId(r.id) != null) continue
+            if (r.ownerUid == me.uid) {
+                // My own capsule whose upload went through while the app was waiting (offline,
+                // timeout): it is already on this car, so link it instead of adding a copy.
+                val same = local.firstOrNull { it.isMine && it.remoteId == null && it.createdAt == r.createdAt }
+                if (same != null) { repo.setRemoteId(same.id, r.id); continue }
+            }
             val bytes = backend.audio(r.id) ?: continue
             val ext = if (bytes.size > 4 && String(bytes, 0, 4) == "RIFF") "wav" else "m4a"
             // The folder goes away with "모두 지우기"; a failed write skips this one, it is retried next time.

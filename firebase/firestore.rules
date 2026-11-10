@@ -1,44 +1,67 @@
 rules_version = '2';
 // TimeCapsule: friends + shared capsules. Accounts are anonymous Firebase users.
-// Deploy: Firebase console > Firestore > Rules, paste this file.
+// Deploy: Firebase console > Firestore > Rules, paste this file (or `firebase deploy --only firestore:rules`).
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function me() { return request.auth.uid; }
+    function myName() { return get(/databases/$(database)/documents/users/$(me())).data.name; }
+    // The friend code [code] belongs to [uid]: knowing someone's code is the consent to befriend them.
+    function codeOf(code, uid) {
+      return code is string && exists(/databases/$(database)/documents/codes/$(code))
+        && get(/databases/$(database)/documents/codes/$(code)).data.uid == uid;
+    }
+    function shortName(n) { return n is string && n.size() > 0 && n.size() <= 30; }
 
-    // Profile: anyone signed in may read a name; only the owner writes.
+    // Profile (name + own friend code): only the owner reads or writes it. No listing.
     match /users/{uid} {
-      allow read: if signedIn();
-      allow write: if signedIn() && me() == uid;
+      allow get, write: if signedIn() && me() == uid;
 
-      // Friendship is written on both sides at once by whoever adds the code.
+      // Friendship is written on both sides in one batch by whoever adds the code.
       match /friends/{fid} {
         allow read: if signedIn() && me() == uid;
-        allow create, update, delete: if signedIn() && (me() == uid || me() == fid);
+        // My side: I name the friend's code, which must really be theirs.
+        allow create, update: if signedIn() && me() == uid && fid != uid
+          && codeOf(request.resource.data.code, fid) && shortName(request.resource.data.name);
+        // Their side: only together with my side in the same batch, with my real name and code.
+        allow create, update: if signedIn() && me() == fid && fid != uid
+          && codeOf(getAfter(/databases/$(database)/documents/users/$(me())/friends/$(uid)).data.code, uid)
+          && codeOf(request.resource.data.code, me())
+          && request.resource.data.name == myName();
+        // Either person may end the friendship.
+        allow delete: if signedIn() && (me() == uid || me() == fid);
       }
     }
 
-    // Friend code -> account. Claimed once, never changed.
+    // Friend code -> account. Claimed once, never changed, never listed.
     match /codes/{code} {
       allow get: if signedIn();
       allow list: if false;
-      allow create: if signedIn() && request.resource.data.uid == me();
+      allow create: if signedIn() && request.resource.data.uid == me() && shortName(request.resource.data.name);
     }
 
     // A capsule is readable by its owner and by the people it was left for.
     match /capsules/{id} {
+      function valid(d) {
+        return d.ownerUid == me() && d.ownerName == myName()
+          && d.visibleTo is list && d.visibleTo.size() <= 50 && !(me() in d.visibleTo);
+      }
       allow read: if signedIn() && (resource.data.ownerUid == me() || me() in resource.data.visibleTo
         || resource.data.audience == 'DEMO');
-      allow create: if signedIn() && request.resource.data.ownerUid == me();
-      allow update, delete: if signedIn() && resource.data.ownerUid == me();
+      allow create: if signedIn() && valid(request.resource.data);
+      // The owner can change who sees it, never who owns it.
+      allow update: if signedIn() && resource.data.ownerUid == me() && valid(request.resource.data);
+      allow delete: if signedIn() && resource.data.ownerUid == me();
     }
 
-    // Voice, one document per capsule; same audience as the capsule.
+    // Voice, one document per capsule; same audience as the capsule. Only the owner writes it.
     match /audio/{id} {
       allow read: if signedIn() && (resource.data.ownerUid == me() ||
         me() in get(/databases/$(database)/documents/capsules/$(id)).data.visibleTo ||
         get(/databases/$(database)/documents/capsules/$(id)).data.audience == 'DEMO');
-      allow create, update: if signedIn() && request.resource.data.ownerUid == me()
+      allow create: if signedIn() && request.resource.data.ownerUid == me()
+        && request.resource.data.data.size() < 1000000;
+      allow update: if signedIn() && resource.data.ownerUid == me() && request.resource.data.ownerUid == me()
         && request.resource.data.data.size() < 1000000;
       allow delete: if signedIn() && resource.data.ownerUid == me();
     }
