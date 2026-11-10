@@ -142,61 +142,23 @@ private fun CapsuleDetail(model: MobileModel, c: RemoteCapsule, busy: Boolean, f
     var deletePhoto by remember { mutableStateOf(false) }
     LaunchedEffect(c.id) { model.loadPhoto(c.id) }
     val stored = records.memories.firstOrNull { it.capsuleId == c.id } ?: CapsuleMemory(c.id)
-    var title by rememberSaveable(c.id, stored.title) { mutableStateOf(stored.title) }
-    var note by rememberSaveable(c.id, stored.note) { mutableStateOf(stored.note) }
     var permissionDenied by rememberSaveable { mutableStateOf(false) }
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
         if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) model.open(c) else permissionDenied = true
     }
-    val destination = records.destinations.firstOrNull { it.capsuleId == c.id }
-    val now = LocalCapsuleTime.current
-    val lockedDate = c.openAfter?.let { it > LocalDate.now().toEpochDay() } == true || ReplyPolicy.waiting(c.replyMode, c.replyAvailableAt, now)
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { Text(c.placeName ?: "캡슐을 남긴 장소", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) }
-        item { Text("${c.originalOwnerName ?: c.ownerName}의 목소리 · ${c.durationSec}초") }
-        item { Text(if (lockedDate) replyWaitingLabel(c) else if (model.readyWithoutVisit(c)) "어디서든 들을 수 있는 목소리예요." else "이 장소에서 수집해 주세요. 수집하면 다음부터 어디서든 들을 수 있어요.") }
-        item { Button(onClick = {
-            if (playing == c.id) model.stop()
-            else if (model.needsLocation(c) && !PhoneLocation(context).permitted()) locationPermission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-            else model.open(c)
-        }, enabled = !busy && !lockedDate, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-            Icon(if (playing == c.id) Icons.Rounded.Stop else Icons.Rounded.PlayArrow, null)
-            Spacer(Modifier.width(8.dp)); Text(if (playing == c.id) "재생 정지" else if (model.readyWithoutVisit(c)) "목소리 듣기" else "여기서 수집하고 듣기")
-        } }
-        item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=${c.lat},${c.lng}(${Uri.encode(c.placeName ?: "캡슐")})"))) }.onFailure { model.notify("지도 앱을 열지 못했어요. 지도 앱을 설치한 뒤 다시 시도해 주세요.") } }, Modifier.weight(1f)) { Text("길 찾기") }
-            OutlinedButton(onClick = { model.sendToCar(c) }, Modifier.weight(1f), enabled = !busy && destination?.status != "pending") { Text(if (destination?.status == "pending") "차량 확인 대기" else "차량으로 보내기") }
-        } }
-        destination?.let { request -> item {
-            Text(when (request.status) {
-                "pending" -> "차량이 연결되면 주차 중에 안내 요청을 확인할 수 있어요."
-                "accepted" -> "차량에서 길 안내 요청을 확인했어요. 실제 경로는 차량 내비게이션에서 확인해 주세요."
-                "dismissed" -> "차량에서 안내 요청을 닫았어요. 필요하면 다시 보낼 수 있어요."
-                else -> "차량에서 안내를 시작하지 못했어요. 다시 보내 주세요."
-            }, style = MaterialTheme.typography.bodySmall)
-        } }
-        item { OutlinedButton(onClick = { model.saveMemory(stored.copy(visitLater = !stored.visitLater)) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (stored.visitLater) "방문할 장소에서 빼기" else "방문할 장소에 저장") } }
-        if (c.ownerUid == me?.uid && c.sourceRemoteId == null && c.replyToId == null) item {
-            OutlinedButton(onClick = { sharing = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("공개 범위 변경") }
-        }
-        if (me?.uid?.let { RemoteDelivery.eligible(c, it, model.isCollected(c)) } == true) item {
-            OutlinedButton(onClick = { forwarding = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("친구에게 보내기") }
-        }
-        if (model.readyWithoutVisit(c) && !lockedDate) item {
-            OutlinedButton(onClick = reply, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("음성 답장 남기기") }
-        }
-        item { HorizontalDivider() }
-        item { Text("나의 기록", style = MaterialTheme.typography.titleLarge) }
-        item { OutlinedButton(onClick = { model.saveMemory(stored.copy(favorite = !stored.favorite)) }, enabled = !busy) { Text(if (stored.favorite) "즐겨찾기 해제" else "즐겨찾기") } }
-        bitmap?.let { image -> item { Image(image, "이 캡슐에 추가한 내 사진", Modifier.fillMaxWidth().height(220.dp)) } }
-        item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = !busy) { Text(if (bitmap == null) "사진 추가" else "사진 바꾸기") }
-            if (bitmap != null) TextButton(onClick = { deletePhoto = true }, enabled = !busy) { Text("사진 삭제") }
-        } }
-        item { OutlinedTextField(title, { title = it.take(120) }, label = { Text("추억의 제목") }, modifier = Modifier.fillMaxWidth()) }
-        item { OutlinedTextField(note, { note = it.take(4000) }, label = { Text("직접 남기는 메모") }, modifier = Modifier.fillMaxWidth(), minLines = 3) }
-        item { Button(onClick = { model.saveMemory(stored.copy(title = title, note = note)) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("기록 저장") } }
-    }
+    CapsuleDetailContent(c, stored, me?.uid, model.isCollected(c), records.destinations.firstOrNull { it.capsuleId == c.id },
+        bitmap, playing == c.id, busy, LocalCapsuleTime.current, CapsuleDetailActions(
+            listen = {
+                if (playing == c.id) model.stop()
+                else if (model.needsLocation(c) && !PhoneLocation(context).permitted()) locationPermission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                else model.open(c)
+            },
+            navigate = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=${c.lat},${c.lng}(${Uri.encode(c.placeName ?: "캡슐")})"))) }.onFailure { model.notify("지도 앱을 열지 못했어요. 지도 앱을 설치한 뒤 다시 시도해 주세요.") } },
+            sendToCar = { model.sendToCar(c) }, saveMemory = model::saveMemory,
+            share = { sharing = true }, forward = { forwarding = true }, reply = reply,
+            pickPhoto = { photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            deletePhoto = { deletePhoto = true },
+        ))
     if (sharing || forwarding) CapsuleSharingDialog(model, c, forwarding, { sharing = false; forwarding = false }, friendsScreen)
     if (deletePhoto) AlertDialog(onDismissRequest = { deletePhoto = false }, title = { Text("사진을 삭제할까요?") }, text = { Text("원본 음성과 메모는 그대로 남아요.") }, confirmButton = { TextButton(onClick = { deletePhoto = false; model.deletePhoto(c.id) }) { Text("삭제") } }, dismissButton = { TextButton(onClick = { deletePhoto = false }) { Text("취소") } })
     DisposableEffect(c.id) { onDispose { model.stop() } }
@@ -286,13 +248,4 @@ internal fun EmptyPanel(title: String, message: String) {
         Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text(message, color = Color(0xFF666666))
     }
-}
-
-private fun replyWaitingLabel(c: RemoteCapsule): String {
-    if (ReplyPolicy.waiting(c.replyMode, c.replyAvailableAt, System.currentTimeMillis())) {
-        val at = c.replyAvailableAt ?: return "전송 시각을 확인하고 있어요"
-        val date = java.time.Instant.ofEpochMilli(at).atZone(java.time.ZoneId.systemDefault())
-        return "${date.format(DateTimeFormatter.ofPattern("M월 d일 HH:mm"))}부터 방문 없이 듣기"
-    }
-    return c.openAfter?.let { "${LocalDate.ofEpochDay(it)} 개봉" } ?: "개봉 대기"
 }

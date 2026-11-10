@@ -36,6 +36,7 @@ class MobileModel(app: Application) : AndroidViewModel(app) {
     private var photoJob: Job? = null
     private var photoTarget: String? = null
     private var media: MediaPlayer? = null
+    private var playbackGeneration = 0L
     private val audioManager = app.getSystemService(android.media.AudioManager::class.java)
     private var focus: android.media.AudioFocusRequest? = null
     private val location = PhoneLocation(app)
@@ -191,14 +192,17 @@ class MobileModel(app: Application) : AndroidViewModel(app) {
     }
     fun open(c: RemoteCapsule) = action {
         stop()
+        val generation = playbackGeneration
         val uid = me.value?.uid ?: error("먼저 로그인해 주세요.")
         val collected = isCollected(c)
         val fix = if (readyWithoutVisit(c)) null else location.current()
         check(backend!!.canOpen(c.id)) { "공유 권한을 확인하지 못했어요. 연결과 개봉일을 확인해 주세요." }
+        if (generation != playbackGeneration || !replyForeground) return@action
         val current = capsules.value.firstOrNull { it.id == c.id } ?: error("이 캡슐은 더 이상 공유되지 않아요.")
         CollectionPolicy.reason(current, me.value?.uid == uid, collected, LocalDate.now().toEpochDay(), fix, SystemClock.elapsedRealtime())?.let { error(CollectionPolicy.message(it)) }
         val bytes = backend.audio(c.id) ?: error("음성을 불러오지 못했어요. 다시 시도해 주세요.")
         check(me.value?.uid == uid) { "계정이 바뀌었어요." }
+        if (generation != playbackGeneration || !replyForeground) return@action
         if (!collected && !ReplyPolicy.remoteOpen(current.replyMode, current.replyAvailableAt, System.currentTimeMillis())) {
             CollectionPolicy.reason(current, true, false, LocalDate.now().toEpochDay(), fix, SystemClock.elapsedRealtime())?.let { error(CollectionPolicy.message(it)) }
             store.collect(c.id, "mobile")
@@ -209,6 +213,7 @@ class MobileModel(app: Application) : AndroidViewModel(app) {
             }
         }
         check(me.value?.uid == uid) { "계정이 바뀌었어요." }
+        if (generation != playbackGeneration || !replyForeground) return@action
         play(c.id, file)
     }
     private fun play(id: String, file: File) {
@@ -231,6 +236,7 @@ class MobileModel(app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) { stop(); throw e }
     }
     fun stop() {
+        playbackGeneration++
         media?.release(); media = null; _playing.value = null
         focus?.let { audioManager.abandonAudioFocusRequest(it) }; focus = null
     }

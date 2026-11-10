@@ -70,4 +70,20 @@ class MemoryRenderingTest {
             }
         }
     }
+    @Test fun collectedDetail() = renderDetail(capsule, true)
+    @Test fun waitingReplyDetail() = renderDetail(capsule.copy(replyToId = "parent", replyMode = ReplyPolicy.AFTER_THREE_DAYS, replyAvailableAt = 259201000), false)
+    @Test fun detailWithLargeText() = renderDetail(capsule.copy(placeName = "오랜 친구들과 함께 걸었던 서울숲의 저녁 산책길"), true, 1.5f)
+    private fun renderDetail(c: RemoteCapsule, collected: Boolean, fontScale: Float = 1f) {
+        paparazzi.snapshot {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, fontScale)) {
+                TimeCapsuleMobileTheme {
+                    Surface {
+                        CapsuleDetailContent(c, CapsuleMemory(c.id), "me", collected, null, null, false, false, 1000,
+                            CapsuleDetailActions({}, {}, {}, {}, {}, {}, {}, {}, {}))
+                    }
+                }
+            }
+        }
+    }
 }
