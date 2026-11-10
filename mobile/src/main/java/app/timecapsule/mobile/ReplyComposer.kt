@@ -29,6 +29,17 @@ internal fun ReplyComposer(model: MobileModel, parent: RemoteCapsule?, dismiss: 
     val recording by model.recordingReply.collectAsState()
     val busy by model.busy.collectAsState()
     val playing by model.playing.collectAsState()
+    val friends by model.friends.collectAsState()
+    val me by model.me.collectAsState()
+    val recipientUid = draft?.recipientUid ?: parent?.ownerUid
+    val recipientLabel = when {
+        recipientUid != null && recipientUid == me?.uid -> "나"
+        recipientUid != null -> friends.firstOrNull { it.uid == recipientUid }?.name?.let { "${it}님" }
+            ?: parent?.takeIf { it.ownerUid == recipientUid }?.ownerName?.let { "${it}님" }
+            ?: "답장에 지정된 친구"
+        else -> "캡슐을 공유한 사람"
+    }
+    val forwardedReply = parent?.sourceRemoteId != null && (draft == null || draft?.parentId == parent.id)
     val context = LocalContext.current
     var mode by rememberSaveable { mutableStateOf(ReplyPolicy.LOCATION) }
     var denied by rememberSaveable { mutableStateOf(false) }
@@ -47,8 +58,8 @@ internal fun ReplyComposer(model: MobileModel, parent: RemoteCapsule?, dismiss: 
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED && PhoneLocation(context).permitted()) model.startReply(parent, mode)
                 else permissions.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
             }
-        }, preview = model::previewReply, delete = { deleting = true }, send = { sending = true }, close = ::close)
-    if (sending) AlertDialog(onDismissRequest = { sending = false }, title = { Text("답장을 보낼까요?") }, text = { Text("녹음한 음성과 남긴 위치를 원본 작성자에게 보냅니다.") }, confirmButton = { TextButton(onClick = { sending = false; model.sendReply(dismiss) }) { Text("보내기") } }, dismissButton = { TextButton(onClick = { sending = false }) { Text("취소") } })
+        }, preview = model::previewReply, delete = { deleting = true }, send = { sending = true }, close = ::close, recipientLabel = recipientLabel, forwardedReply = forwardedReply)
+    if (sending) AlertDialog(onDismissRequest = { sending = false }, title = { Text("답장을 보낼까요?") }, text = { Text("녹음한 음성과 남긴 위치를 ${recipientLabel}에게 보냅니다.") }, confirmButton = { TextButton(onClick = { sending = false; model.sendReply(dismiss) }) { Text("보내기") } }, dismissButton = { TextButton(onClick = { sending = false }) { Text("취소") } })
     if (deleting) AlertDialog(onDismissRequest = { deleting = false }, title = { Text("임시 답장을 삭제할까요?") }, text = { Text("삭제한 녹음은 되돌릴 수 없어요.") }, confirmButton = { TextButton(onClick = { deleting = false; model.discardReply(); dismiss() }) { Text("삭제") } }, dismissButton = { TextButton(onClick = { deleting = false }) { Text("취소") } })
     if (denied) AlertDialog(onDismissRequest = { denied = false }, title = { Text("마이크와 정확한 위치가 필요해요") }, text = { Text("답장을 녹음하고 남길 장소를 확인할 때만 사용해요. 설정에서 권한을 허용한 뒤 다시 녹음해 주세요.") }, confirmButton = { TextButton(onClick = { denied = false; runCatching { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))) }.onFailure { model.notify("설정에서 타임캡슐의 마이크와 위치 권한을 허용해 주세요.") } }) { Text("설정으로 이동") } }, dismissButton = { TextButton(onClick = { denied = false }) { Text("취소") } })
 }
@@ -57,10 +68,12 @@ internal fun ReplyComposer(model: MobileModel, parent: RemoteCapsule?, dismiss: 
 internal fun ReplyComposerContent(
     draft: ReplyDraft?, recording: Boolean, busy: Boolean, previewing: Boolean, parentAvailable: Boolean, mode: String,
     chooseMode: (String) -> Unit, record: () -> Unit, preview: () -> Unit, delete: () -> Unit, send: () -> Unit, close: () -> Unit,
+    recipientLabel: String = "캡슐을 공유한 사람", forwardedReply: Boolean = false,
 ) {
     AlertDialog(onDismissRequest = close, title = { Text(if (recording) "음성 답장을 녹음하고 있어요" else "목소리로 답장하기") },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("답장은 원본 캡슐을 남긴 사람에게 보내요. 녹음한 현재 위치가 답장의 장소가 됩니다.")
+            Text("${recipientLabel}에게 답장을 보내요. 녹음한 현재 위치가 답장의 장소가 됩니다.")
+            if (forwardedReply) Text("전달받은 사본의 답장은 이 캡슐을 보내 준 친구에게 전달돼요.", style = MaterialTheme.typography.bodySmall)
             if (draft == null) {
                 FilterChip(mode == ReplyPolicy.LOCATION, { chooseMode(ReplyPolicy.LOCATION) }, enabled = !busy, label = { Text("장소에서 수집한 뒤 듣기") })
                 FilterChip(mode == ReplyPolicy.AFTER_THREE_DAYS, { chooseMode(ReplyPolicy.AFTER_THREE_DAYS) }, enabled = !busy, label = { Text("3일 후 어디서든 듣기") })

@@ -126,4 +126,13 @@ class MemoryRenderingTest {
         }
     }
 
+    @Test fun replyToForwardingFriend() {
+        paparazzi.snapshot {
+            TimeCapsuleMobileTheme {
+                ReplyComposerContent(null, false, false, false, true, ReplyPolicy.LOCATION, {}, {}, {}, {}, {}, {},
+                    recipientLabel = "지민님", forwardedReply = true)
+            }
+        }
+    }
+
 }
