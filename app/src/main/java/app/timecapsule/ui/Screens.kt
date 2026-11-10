@@ -151,7 +151,7 @@ fun HomeScreen(
             Column(Modifier.fillMaxSize().padding(Tc.Gutter), verticalArrangement = Arrangement.spacedBy(Tc.Gap)) {
                 AppBar(onPleos, restricted, onDev)
                 VoiceBar(drive, friendCount)
-                NowNotice(drive, restricted, today)
+                NowNotice(drive, restricted, today) { go(Screen.ALBUM) }
                 // The list takes what is left (only whole rows); the menu stays pinned to the bottom.
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                     val fits = ((maxHeight - 72.dp) / (Tc.Row + 1.dp)).toInt().coerceIn(1, 4)
@@ -175,7 +175,7 @@ fun HomeScreen(
                                 VoiceBar(drive, friendCount)
                             }
                         }
-                        NowNotice(drive, restricted, today)
+                        NowNotice(drive, restricted, today) { go(Screen.ALBUM) }
                         MenuBar(restricted, go, onLocked)
                     }
                     Surface(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(24.dp), color = Tc.Surface) {
@@ -243,7 +243,9 @@ private fun VoiceBar(drive: DriveController, friendCount: Int) {
 
 /** The single most relevant "now" message, as a plain row (or a question with two buttons). */
 @Composable
-private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalDate) {
+private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalDate, openAlbum: () -> Unit) {
+    val saved by drive.saveResult.collectAsState()
+    val review by drive.tripReview.collectAsState()
     val forecast by drive.forecast.collectAsState()
     val reprompt by drive.reprompt.collectAsState()
     val arrival by drive.arrivalPrompt.collectAsState()
@@ -256,6 +258,25 @@ private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalD
     val again = reprompt
     val f = forecast
     when {
+        review != null && !restricted -> InlinePrompt(
+            "이번 주행의 기록",
+            "남긴 캡슐 ${review!!.saved}개 · 수집 ${review!!.collected}개 · 임시 녹음 ${review!!.drafts}개",
+            cta = (if (review!!.drafts > 0) "임시 녹음 확인" else "앨범 보기") to { drive.dismissTripReview(); openAlbum() },
+            ctaIcon = Icons.Rounded.PhotoLibrary, sub = "닫기" to drive::dismissTripReview,
+        )
+        saved != null && !restricted -> InlinePrompt(
+            if (saved!!.capsule.draft) "녹음을 임시 보관했어요" else "캡슐을 남겼어요",
+            saved!!.let { result ->
+                val place = result.capsule.placeName ?: "장소 미확정"
+                when {
+                    result.capsule.draft -> "$place · ${result.capsule.durationSec}초 · 앨범에서 확인해 주세요"
+                    result.openAfter != null -> "$place · ${LocalDate.ofEpochDay(result.openAfter)} 개봉 후 현장에서 수집"
+                    else -> "$place · 잠김 · 이 장소에서 수집하면 들을 수 있어요"
+                }
+            },
+            cta = "앨범에서 확인" to { drive.dismissSaveResult(); openAlbum() }, ctaIcon = Icons.Rounded.PhotoLibrary,
+            sub = "닫기" to drive::dismissSaveResult,
+        )
         !prepared -> InlinePrompt("이번 주행 준비", "주차 중 권한과 동승자 동의를 확인해 주세요",
             cta = "준비하기" to { if (!restricted) preparing = true }, ctaIcon = Icons.Rounded.Mic,
             sub = null)

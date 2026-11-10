@@ -78,6 +78,21 @@ class DriveController(
     private fun today() = LocalDate.now()
     private fun now() = SystemClock.elapsedRealtime()
     private val session = DriveSession()
+    data class SaveResult(val capsule: Capsule, val openAfter: Long?)
+    data class TripReview(val saved: Int, val collected: Int, val drafts: Int)
+    private val _saveResult = MutableStateFlow<SaveResult?>(null)
+    val saveResult: StateFlow<SaveResult?> = _saveResult.asStateFlow()
+    fun dismissSaveResult() { _saveResult.value = null }
+    private val _tripReview = MutableStateFlow<TripReview?>(null)
+    val tripReview: StateFlow<TripReview?> = _tripReview.asStateFlow()
+    fun dismissTripReview() { _tripReview.value = null }
+    private var sessionNumber = 0L
+    private var recordingSessionNumber = 0L
+    private val sessionSaved = mutableMapOf<Long, Boolean>()
+    private val sessionCollected = mutableSetOf<Long>()
+    private fun updateTripReview() {
+        _tripReview.value = TripReview(sessionSaved.count { !it.value }, sessionCollected.size, sessionSaved.count { it.value })
+    }
     private val _quietTrip = MutableStateFlow(false)
     val quietTrip: StateFlow<Boolean> = _quietTrip.asStateFlow()
     private var lastAutomaticAlertAt: Long? = null
@@ -121,6 +136,7 @@ class DriveController(
     internal fun completePreparation(): Boolean {
         if ((!canEdit() && !byVoice) || !microphoneAllowed() || _prepared.value) return false
         session.start(now()); _prepared.value = true
+        sessionNumber++; sessionSaved.clear(); sessionCollected.clear(); _tripReview.value = null; _saveResult.value = null
         _quietTrip.value = false; lastAutomaticAlertAt = null
         if (!byVoice) say("이번 주행을 준비했어요. 요청할 때만 녹음해요")
         return true
@@ -150,6 +166,7 @@ class DriveController(
         return kotlinx.coroutines.withTimeoutOrNull(2_000) { _state.first { it == DriveState.Recording } } != null
     }
     fun endDrive() {
+        val wasPrepared = _prepared.value
         operationEpoch++
         if (_state.value == DriveState.Recording) dispatch(DriveEvent.SafetySignalOn)
         resumeJob?.cancel(); alertTimeout?.cancel(); arrivalTimeout?.cancel()
@@ -157,6 +174,7 @@ class DriveController(
         _answerWindow.value = null; _reprompt.value = null; _arrivalPrompt.value = false
         _userPaused.value = false; session.end(); _prepared.value = false
         _quietTrip.value = false; lastAutomaticAlertAt = null
+        if (wasPrepared) { _saveResult.value = null; updateTripReview() }
         releasePreparation()
     }
     private fun maintainSession() {
@@ -417,6 +435,7 @@ class DriveController(
         endDrive()
         repo.deleteEverything(context)
         settings.clearListenLater()
+        _saveResult.value = null; _tripReview.value = null; sessionSaved.clear(); sessionCollected.clear()
         _reprompt.value = null
         _forecast.value = null
         say("차량에 저장된 캡슐을 모두 지웠어요")
@@ -504,6 +523,8 @@ class DriveController(
     }
 
     private fun startRecording() {
+        recordingSessionNumber = sessionNumber
+        _saveResult.value = null
         // Spec F-02: tags describe the moment recording starts.
         recordSnapshot = car.value
         recordPosition = navi.position.value?.point?.takeIf { positionFresh() }
@@ -557,6 +578,7 @@ class DriveController(
             micFailed = false
             return
         }
+        val savedSession = recordingSessionNumber
         val audience = pendingAudience
         val recipients = pendingRecipients.toList()
         val at = recordPosition
@@ -565,6 +587,11 @@ class DriveController(
           try {
             val tags = MoodTagEngine.tagsFor(snap)
             val c = repo.bury(rec, snap, tags, at, null, openOn, audience, recipients, draft = interrupted || at == null)
+            if (savedSession == sessionNumber) {
+                sessionSaved[c.id] = c.draft
+                if (_prepared.value) _saveResult.value = SaveResult(c, openOn?.toEpochDay())
+                else if (_tripReview.value != null) updateTripReview()
+            }
             val name = c.placeName ?: tags.firstOrNull()?.label ?: "오늘의"
             say(if (c.draft) "녹음을 비공개로 임시보관했어요. 주차 후 확인해 주세요" else if (openOn != null) "편지 캡슐을 묻었어요. ${openOn.year}년 ${openOn.monthValue}월 ${openOn.dayOfMonth}일에 열려요" else "$name 캡슐을 묻었어요")
             if (!c.draft) sharing?.onBuried(c)
@@ -640,7 +667,15 @@ class DriveController(
                 val timedReply = app.timecapsule.companion.ReplyPolicy.remoteOpen(fresh.replyMode, fresh.replyAvailableAt, System.currentTimeMillis())
                 val collected = if (timedReply) fresh else fresh.copy(collectedAt = fresh.collectedAt ?: System.currentTimeMillis())
                 _playing.value = PlayingUi(collected, narration)
-                if (!fresh.isForwarded && !timedReply) scope.launch { repo.collect(id, collected.collectedAt!!) }
+                val collectedInSession = sessionNumber
+                val duringTrip = _prepared.value
+                if (!fresh.isForwarded && !timedReply) scope.launch {
+                    repo.collect(id, collected.collectedAt!!)
+                    if (duringTrip && collectedInSession == sessionNumber && fresh.collectedAt == null) {
+                        sessionCollected.add(id)
+                        if (!_prepared.value && _tripReview.value != null) updateTripReview()
+                    }
+                }
             }) {
                 scope.launch {
                     repo.logNotify(id, today(), "played")
