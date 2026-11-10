@@ -196,13 +196,18 @@ class FirebaseBackend(
     }.onFailure { Log.w(TAG, "addFriend", it) }
 
     override suspend fun removeFriend(friend: Friend) {
-        val me = me.value ?: return
-        runCatching {
+        removeFriendChecked(friend).onFailure { Log.w(TAG, "removeFriend", it) }
+    }
+    suspend fun removeFriendChecked(friend: Friend): Result<Unit> = runCatching {
+        val uid = auth.currentUser?.uid ?: error("먼저 로그인해 주세요.")
+        check(me.value?.uid == uid) { "계정이 바뀌었어요. 다시 시도해 주세요." }
+        withTimeout(WRITE_TIMEOUT_MS) {
             val batch = db.batch()
-            batch.delete(db.collection("users").document(me.uid).collection("friends").document(friend.uid))
-            batch.delete(db.collection("users").document(friend.uid).collection("friends").document(me.uid))
+            batch.delete(db.collection("users").document(uid).collection("friends").document(friend.uid))
+            batch.delete(db.collection("users").document(friend.uid).collection("friends").document(uid))
             batch.commit().await()
-        }.onFailure { Log.w(TAG, "removeFriend", it) }
+        }
+        Unit
     }
 
     override suspend fun upload(capsule: RemoteCapsule, audio: ByteArray): Result<String> = runCatching {

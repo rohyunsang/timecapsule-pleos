@@ -170,46 +170,10 @@ private fun CapsuleDetail(model: MobileModel, c: RemoteCapsule, busy: Boolean, f
 
 @Composable
 private fun AlbumsScreen(model: MobileModel, albums: List<MemoryAlbum>, capsules: List<RemoteCapsule>, open: (String) -> Unit) {
-    var editing by remember { mutableStateOf<MemoryAlbum?>(null) }
-    var title by rememberSaveable { mutableStateOf("") }
-    var selected by remember { mutableStateOf(setOf<String>()) }
-    var members by remember { mutableStateOf(setOf<String>()) }
-    var deleting by remember { mutableStateOf<MemoryAlbum?>(null) }
     val busy by model.busy.collectAsState()
     val me by model.me.collectAsState()
     val friends by model.friends.collectAsState()
-    fun edit(album: MemoryAlbum) { editing = album; title = album.title; selected = album.capsuleIds.toSet(); members = album.members.filter { it != me?.uid }.toSet() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("한 여행을 하나의 앨범으로", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
-        item { Button(onClick = { if (editing != null) editing = null else edit(MemoryAlbum("", "", emptyList())) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (editing != null) "편집 닫기" else "새 앨범 만들기") } }
-        editing?.let { album ->
-            item { OutlinedTextField(title, { title = it.take(100) }, label = { Text("앨범 이름") }, modifier = Modifier.fillMaxWidth()) }
-            item { Text("담을 캡슐", style = MaterialTheme.typography.titleMedium) }
-            items(capsules, key = { "select-${it.id}" }) { c -> Row(Modifier.fillMaxWidth().clickable(enabled = !busy) { selected = if (c.id in selected) selected - c.id else selected + c.id }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(c.id in selected, onCheckedChange = null); Text(c.placeName ?: "캡슐") } }
-            item { Text("가족·친구와 함께 보기", style = MaterialTheme.typography.titleMedium) }
-            item { Text("앨범 이름과 목록을 공유합니다. 음성은 각 캡슐의 공개 범위와 수집 상태를 따라요. 내 사진과 메모는 공유되지 않아요.", style = MaterialTheme.typography.bodySmall) }
-            items(friends, key = { "member-${it.uid}" }) { friend -> Row(Modifier.fillMaxWidth().clickable(enabled = !busy) { members = if (friend.uid in members) members - friend.uid else members + friend.uid }, verticalAlignment = Alignment.CenterVertically) { Checkbox(friend.uid in members, null); Text(friend.name) } }
-            if (members.any { id -> friends.none { it.uid == id } }) item { TextButton(onClick = { members = members.filter { id -> friends.any { it.uid == id } }.toSet() }) { Text("연결이 끊긴 친구를 공유 대상에서 빼기") } }
-            item { Button(onClick = { model.saveAlbum(album.copy(title = title, capsuleIds = selected.toList(), members = members.toList())) { editing = null } }, enabled = !busy && title.isNotBlank()) { Text("앨범 저장") } }
-        }
-        if (albums.isEmpty() && editing == null) item { EmptyPanel("아직 앨범이 없어요", "여행에서 모은 캡슐을 골라 나만의 앨범을 만들어 보세요.") }
-        items(albums, key = { it.id }) { album ->
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White)) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(album.title, style = MaterialTheme.typography.titleLarge)
-                Text("캡슐 ${album.capsuleIds.size}개 · 함께 보는 사람 ${album.members.size}명")
-                album.capsuleIds.forEach { id ->
-                    val c = capsules.firstOrNull { it.id == id }
-                    if (c != null) TextButton(onClick = { open(id) }) { Text(c.placeName ?: "캡슐 열기") }
-                    else Text("비공개이거나 공유가 종료된 캡슐", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                }
-                if (album.ownerUid == me?.uid) Row {
-                    TextButton(onClick = { edit(album) }, enabled = !busy) { Text("앨범 편집·공유") }
-                    TextButton(onClick = { deleting = album }, enabled = !busy) { Text("앨범 삭제") }
-                }
-            } }
-        }
-    }
-    deleting?.let { album -> AlertDialog(onDismissRequest = { deleting = null }, title = { Text("앨범을 삭제할까요?") }, text = { Text("함께 보는 사람에게도 앨범이 사라져요. 원본 캡슐과 음성은 지워지지 않아요.") }, confirmButton = { TextButton(onClick = { model.deleteAlbum(album.id); deleting = null }) { Text("삭제") } }, dismissButton = { TextButton(onClick = { deleting = null }) { Text("취소") } }) }
+    AlbumsContent(albums, capsules, me?.uid, friends, busy, open, model::saveAlbum, model::deleteAlbum)
 }
 
 @Composable
@@ -217,28 +181,7 @@ private fun AccountScreen(model: MobileModel, busy: Boolean) {
     val me by model.me.collectAsState()
     val friends by model.friends.collectAsState()
     val email by model.email.collectAsState()
-    var code by rememberSaveable { mutableStateOf("") }
-    var linkEmail by rememberSaveable { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var loggingOut by remember { mutableStateOf(false) }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { Text("${me?.name}님의 타임캡슐", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
-        item { Text(email ?: "이메일을 연결하면 차량에서도 같은 기록을 볼 수 있어요.") }
-        if (email == null) {
-            item { OutlinedTextField(linkEmail, { linkEmail = it }, label = { Text("연결할 이메일") }) }
-            item { OutlinedTextField(password, { password = it }, label = { Text("비밀번호") }, visualTransformation = PasswordVisualTransformation()) }
-            item { Button(onClick = { model.linkEmail(linkEmail, password) }, enabled = !busy && linkEmail.contains('@') && password.length >= 6) { Text("이메일 연결") } }
-        }
-        item { Text("내 친구 코드  ${me?.code}", style = MaterialTheme.typography.titleLarge) }
-        item { OutlinedTextField(code, { code = it.uppercase().take(8) }, label = { Text("친구 코드") }, modifier = Modifier.fillMaxWidth()) }
-        item { Button(onClick = { model.addFriend(code) }, enabled = !busy && FriendCode.normalize(code) != null) { Text("친구 추가") } }
-        items(friends, key = { it.uid }) { friend -> ListItem(headlineContent = { Text(friend.name) }, supportingContent = { Text(friend.code) }) }
-        item { HorizontalDivider() }
-        item { Text("차량 연결", style = MaterialTheme.typography.titleLarge) }
-        item { Text("차량의 친구 화면에서 같은 이메일로 로그인하세요. 비공개 캡슐은 차량에서 동기화를 켜야 모바일로 가져옵니다. 수집 기록과 방문할 장소는 같은 계정에 저장됩니다.") }
-        item { OutlinedButton(onClick = { loggingOut = true }, enabled = !busy) { Text("로그아웃") } }
-    }
-    if (loggingOut) AlertDialog(onDismissRequest = { loggingOut = false }, title = { Text("로그아웃할까요?") }, text = { Text("서버의 기록은 그대로 보관됩니다.") }, confirmButton = { TextButton(onClick = { loggingOut = false; model.logout() }) { Text("로그아웃") } }, dismissButton = { TextButton(onClick = { loggingOut = false }) { Text("취소") } })
+    AccountContent(me, friends, email, busy, model::linkEmail, model::addFriend, model::removeFriend, model::logout)
 }
 
 @Composable

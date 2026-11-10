@@ -8,7 +8,7 @@
 | 차량과 같은 계정 연결 | `shared/.../social/FirebaseBackend.kt`, `FirebaseCompanionStore.kt` | 대상 Firebase 프로젝트 및 두 앱 등록, 이메일 로그인, 계정 전환 실서버 검증 |
 | 모바일 현장 수집·수집 후 어디서든 재생 | `PhoneLocation.kt`, `CollectionPolicy.kt`, `MobileModel.open`; 위치/날짜/권한 경계 단위 테스트 | 실제 GPS·권한 거부·오프라인·음성 출력 검증 |
 | 목록·검색·상태 구분·지도 | `LibraryContent.kt`, `MemoryCapsuleCard.kt`, `CapsuleMapScreen.kt`; 실제 목록/마커 렌더링 | MapLibre 타일·손가락 이동·확대/축소의 기기 검증 |
-| 제목·메모·사진·즐겨찾기·앨범 | `MobileModel.kt`, `AlbumsScreen`, 계정별 CompanionStore | 사진 선택·업로드 실패·앨범 편집 충돌 및 공유 대상별 접근 실서버 검증; 사진이 있는 상세/앨범 화면 렌더링 |
+| 제목·메모·사진·즐겨찾기·앨범 | `MobileModel.kt`, `AlbumsScreen`, 계정별 CompanionStore | 사진 선택·업로드 실패·앨범 편집 충돌 및 공유 대상별 접근 실서버 검증; 사진이 있는 상세 및 앨범 편집 화면 검증 |
 | 친구 전달·공개 범위·가족/친구 앨범 공유 | `RemoteDelivery.kt`, `SharingDialogs.kt`, `updateSharing`, `memoryAlbums` | 서로 다른 실제 계정의 허용/철회·원본 삭제·재전송 검증; 전달/공유 화면 렌더링 |
 | 음성 답장 | `ReplyComposer.kt`, `ReplyRecorder.kt`, `ReplyPolicy.kt`; 저장 복원/계정 분리/72시간 경계 테스트 | 실제 녹음/오디오 포커스/권한, 서버 시각과 접근 규칙, 작성창 렌더링 |
 | 수집 기본·선택 시 72시간 후 방문 없이 듣기 | 서버 `replySentAt`, 공통 정책, 차량 OpenPolicy 및 수집 기록 분리 | 실제 서버 규칙 배포·72시간 전/후 및 기기 시각 변경 검증 |
@@ -16,7 +16,7 @@
 | 모바일 목적지 전송·차량 확인 후 안내 | `CarDestination`, 차량 확인창, 계정별 결과 재전송 | 실제 내비 연결·네트워크 단절/복구·중복 확인 검증 |
 | 차량 저장 결과·잠금 안내·나중에·조용한 주행·종료 기록 | DriveController, Settings, Screens, AlertCadence 테스트 | 차량 크기별 렌더링 및 실제 주행/중단 시나리오 |
 | AI 요약 제외 | 이번 작업에서 AI 요약·전사 서비스 호출을 추가하지 않음 | 출시 전 변경 범위 검토 |
-| 기존 디자인을 따른 모바일 | MobileTheme와 실제 Compose 스냅샷 8개 | 앨범·친구·답장 및 좁은 화면 검증 (상세는 기본/150% 글자 렌더링 확인) |
+| 기존 디자인을 따른 모바일 | MobileTheme와 실제 Compose 스냅샷 11개 | 답장·공유 선택 및 좁은 화면 검증 (상세·앨범·친구 기본 화면 렌더링 확인) |
 | 에뮬레이터 미사용 | 빌드·JVM 단위 테스트·Paparazzi/Layoutlib만 실행 | 계속 유지 |
 | PR 병합과 정리 | 하위 작업 브랜치에 커밋 보존, PR 미생성 | 필수 검증 후 hub 병합, 하위 작업 정리, PR→integration 병합, hub 정리 |
 

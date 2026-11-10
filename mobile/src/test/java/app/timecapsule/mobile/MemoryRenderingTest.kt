@@ -49,14 +49,14 @@ class MemoryRenderingTest {
     @Test fun loginScreen() {
         paparazzi.snapshot {
             TimeCapsuleMobileTheme {
-                Surface { LoginContent(false, { _, _ -> }, { _, _, _ -> }, {}) }
+                Surface(color = MaterialTheme.colorScheme.background) { LoginContent(false, { _, _ -> }, { _, _, _ -> }, {}) }
             }
         }
     }
     @Test fun emptyLibrary() {
         paparazzi.snapshot {
             TimeCapsuleMobileTheme {
-                Surface { MemoryLibraryContent(CompanionSnapshot(loading = false), emptyList(), "me", 1000) {} }
+                Surface(color = MaterialTheme.colorScheme.background) { MemoryLibraryContent(CompanionSnapshot(loading = false), emptyList(), "me", 1000) {} }
             }
         }
     }
@@ -78,11 +78,31 @@ class MemoryRenderingTest {
             val density = androidx.compose.ui.platform.LocalDensity.current
             androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, fontScale)) {
                 TimeCapsuleMobileTheme {
-                    Surface {
+                    Surface(color = MaterialTheme.colorScheme.background) {
                         CapsuleDetailContent(c, CapsuleMemory(c.id), "me", collected, null, null, false, false, 1000,
                             CapsuleDetailActions({}, {}, {}, {}, {}, {}, {}, {}, {}))
                     }
                 }
+            }
+        }
+    }
+    @Test fun sharedAlbumWithUnavailableCapsule() {
+        paparazzi.snapshot {
+            TimeCapsuleMobileTheme {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    AlbumsContent(listOf(MemoryAlbum("album", "친구들과 함께한 가을 여행", listOf("preview", "private"), listOf("friend", "me"), "friend")),
+                        listOf(capsule), "me", listOf(Friend("friend", "민수", "ABC123")), false, {}, { _, _ -> }, { _, _ -> })
+                }
+            }
+        }
+    }
+    @Test fun emptyAlbums() {
+        paparazzi.snapshot { TimeCapsuleMobileTheme { Surface(color = MaterialTheme.colorScheme.background) { AlbumsContent(emptyList(), emptyList(), "me", emptyList(), false, {}, { _, _ -> }, { _, _ -> }) } } }
+    }
+    @Test fun linkedAccountAndFriends() {
+        paparazzi.snapshot {
+            TimeCapsuleMobileTheme {
+                Surface(color = MaterialTheme.colorScheme.background) { AccountContent(Profile("me", "지민", "XYZ123"), listOf(Friend("friend", "민수", "ABC123")), "example@example.com", false, { _, _ -> }, {}, { _, _ -> }, {}) }
             }
         }
     }
