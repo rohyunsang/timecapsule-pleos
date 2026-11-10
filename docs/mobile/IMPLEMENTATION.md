@@ -101,3 +101,10 @@
 - gcloud의 만료된 로그인과 별개로 Firebase CLI의 기존 로그인이 유효함을 확인했다. `firebase projects:list --json`은 성공했다.
 - 현재 계정은 `dev1@block-s.io`이며 접근 가능한 목록에 `.firebaserc`의 `timecapsule-pleos-11020143`은 없다. 프로젝트가 전 세계적으로 없다는 의미가 아니라 현재 계정으로 접근할 수 없다는 의미다.
 - 사용자에게 새 TimeCapsule 프로젝트를 현재 계정에 만들지 다른 계정을 사용할지 질문했다. 답변이 필요한 상태이며 프로젝트 생성·서버 배포·원격 데이터 변경은 하지 않았다.
+
+## 2026-11-10 CI 및 완료 점검표
+- `.github/workflows/android.yml`에 PR 대상 main/integration 및 수동 실행용 검증을 추가했다. Java 21, Android SDK 35, 차량/모바일 APK, 세 모듈 테스트·lint와 Paparazzi 이미지 비교를 실행한다. 에뮬레이터는 설치하거나 시작하지 않는다.
+- 사용하는 GitHub Actions의 v4 참조를 GitHub API에서 확인한 커밋 SHA로 고정했다. 권한은 contents:read이며 보고서를 7일 보관한다. YAML 파싱을 확인했다. 실제 GitHub Actions 실행은 아직 하지 않았다.
+- PR 템플릿에서 에뮬레이터를 필수 조건으로 두지 않고, 실제 수행한 검증과 수행하지 못한 검증을 구분하도록 변경했다.
+- `COMPLETION-AUDIT.md`에 요구 사항별 소스/증거/남은 작업과 실제 계정 시나리오를 작성했다. 현재 모든 명시적 요구가 완료됐다는 주장은 하지 않는다.
+- 전체 검증 명령을 로컬에서 실행해 두 앱 빌드, 세 모듈 lint, 단위/저장/렌더링 테스트 111개(실패/오류 0개)가 통과했다.
