@@ -147,7 +147,7 @@ fun CollectedMapScreen(drive: DriveController, back: () -> Unit) {
                             }, shape = RoundedCornerShape(16.dp), color = Tc.Basic) {
                                 Row(Modifier.fillMaxWidth().heightIn(min = 104.dp).padding(20.dp),
                                     horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(if (states[c.id] == CapsuleMapData.State.OPEN) Icons.Rounded.PlayArrow else Icons.Rounded.Lock,
+                                    Icon(if (states[c.id] == CapsuleMapData.State.OPEN || states[c.id] == CapsuleMapData.State.READY) Icons.Rounded.PlayArrow else Icons.Rounded.Lock,
                                         null, Modifier.size(36.dp), tint = Tc.Text)
                                     Column(Modifier.weight(1f)) {
                                         Text(c.placeName ?: "캡슐 지점", style = Type.BodyStrong, color = Tc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)

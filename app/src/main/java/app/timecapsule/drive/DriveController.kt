@@ -185,9 +185,18 @@ class DriveController(
         }
         if (!microphoneAllowed() || session.expired(now(), canEdit())) { endDrive(); return }
         if (!vehicleKnown() || (!positionFresh() && _state.value != DriveState.Recording && _playing.value?.capsule?.canReplayAnywhere != true)) {
-            if (_state.value == DriveState.Recording || _state.value is DriveState.Playing || _state.value is DriveState.ApproachAlert)
-                dispatch(DriveEvent.SafetySignalOn)
+            when (_state.value) {
+                // No car signal will ever clear a lost GPS fix, so a pending alert must not wait
+                // in Paused: it becomes "later" and is offered again at the next stop.
+                is DriveState.ApproachAlert -> dispatch(DriveEvent.Later)
+                DriveState.Recording, is DriveState.Playing -> dispatch(DriveEvent.SafetySignalOn)
+                else -> {}
+            }
         }
+        // An alert paused by a signal that has cleared, while the resume check failed: let it go.
+        val st = _state.value
+        if (st is DriveState.Paused && st.resumeTo is DriveState.ApproachAlert && interrupting.value.isEmpty() &&
+            resumeJob?.isActive != true) dispatch(DriveEvent.PlaybackFinished)
 
     }
     fun openingReason(c: Capsule, at: app.timecapsule.navi.NaviPosition? = position.value): String? = OpenPolicy.reason(c, locks.value[c.id], today(), at?.point,
@@ -225,6 +234,14 @@ class DriveController(
         combine(vehicle.activeSafetySignals, player.navigationSpeaking) { set, naviSpeaking ->
             if (naviSpeaking) set + SafetySignal.NAVI_VOICE else set
         }.stateIn(scope, SharingStarted.Eagerly, emptySet())
+
+    /**
+     * Signals that cut off a recording or pause a capsule already playing. A brake press only
+     * holds off starting something new: the SDK reports the pedal, not deceleration, and ending
+     * every recording at the first brake tap in city traffic would turn most of them into drafts.
+     */
+    private val interrupting: StateFlow<Set<SafetySignal>> =
+        signals.map { it - SafetySignal.HARD_BRAKE }.stateIn(scope, SharingStarted.Eagerly, emptySet())
 
     val capsules: StateFlow<List<Capsule>> = repo.capsules.stateIn(scope, SharingStarted.Eagerly, emptyList())
     val locks: StateFlow<Map<Long, LetterLock>> = repo.locks.stateIn(scope, SharingStarted.Eagerly, emptyMap())
@@ -286,7 +303,7 @@ class DriveController(
             }
         }
         scope.launch {
-            signals.map { it.isNotEmpty() }.distinctUntilChanged().collect { on ->
+            interrupting.map { it.isNotEmpty() }.distinctUntilChanged().collect { on ->
                 if (on) {
                     resumeJob?.cancel()
                     dispatch(DriveEvent.SafetySignalOn)
@@ -514,8 +531,12 @@ class DriveController(
                 resumeJob?.cancel()
                 resumeJob = scope.launch {
                     delay(effect.millis)
-                    if (_prepared.value && vehicleKnown() && positionFresh() && signals.value.isEmpty() && _state.value is DriveState.Paused) {
+                    if (_state.value !is DriveState.Paused) return@launch
+                    if (_prepared.value && vehicleKnown() && positionFresh() && signals.value.isEmpty()) {
                         apply(DriveStateMachine.resume(effect.target))
+                    } else if (effect.target is DriveState.ApproachAlert && interrupting.value.isEmpty()) {
+                        // Nothing else will resume it (stale GPS or car data): offer it again later.
+                        dispatch(DriveEvent.PlaybackFinished)
                     }
                 }
             }
@@ -676,6 +697,9 @@ class DriveController(
                         if (!_prepared.value && _tripReview.value != null) updateTripReview()
                     }
                 }
+            }, interrupted = {
+                // Cut off by another app or a broken file: not logged as heard.
+                scope.launch { if (epoch == operationEpoch || _playing.value?.capsule?.id == id) dispatch(DriveEvent.PlaybackFinished) }
             }) {
                 scope.launch {
                     repo.logNotify(id, today(), "played")

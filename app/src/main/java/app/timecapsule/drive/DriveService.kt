@@ -16,7 +16,6 @@ class DriveService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == STOP) { drive.endDrive(); stopSelf(); return START_NOT_STICKY }
-        if (drive.prepared.value && intent?.action == PREPARE) return START_NOT_STICKY
         if (intent?.action != PREPARE) { stopSelf(); return START_NOT_STICKY }
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "이번 주행", NotificationManager.IMPORTANCE_LOW))
@@ -30,6 +29,8 @@ class DriveService : Service() {
             if (Build.VERSION.SDK_INT >= 30) startForeground(40, n,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
             else startForeground(40, n)
+            // startForeground always comes first: a started-but-not-foreground service crashes.
+            if (drive.prepared.value) return START_NOT_STICKY
             if (!drive.completePreparation()) stopSelf()
         } catch (_: Exception) { drive.endDrive(); stopSelf() }
         return START_NOT_STICKY
