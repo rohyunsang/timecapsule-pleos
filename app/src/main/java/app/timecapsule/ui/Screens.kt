@@ -258,25 +258,8 @@ private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalD
     val again = reprompt
     val f = forecast
     when {
-        review != null && !restricted -> InlinePrompt(
-            "이번 주행의 기록",
-            "남긴 캡슐 ${review!!.saved}개 · 수집 ${review!!.collected}개 · 임시 녹음 ${review!!.drafts}개",
-            cta = (if (review!!.drafts > 0) "임시 녹음 확인" else "앨범 보기") to { drive.dismissTripReview(); openAlbum() },
-            ctaIcon = Icons.Rounded.PhotoLibrary, sub = "닫기" to drive::dismissTripReview,
-        )
-        saved != null && !restricted -> InlinePrompt(
-            if (saved!!.capsule.draft) "녹음을 임시 보관했어요" else "캡슐을 남겼어요",
-            saved!!.let { result ->
-                val place = result.capsule.placeName ?: "장소 미확정"
-                when {
-                    result.capsule.draft -> "$place · ${result.capsule.durationSec}초 · 앨범에서 확인해 주세요"
-                    result.openAfter != null -> "$place · ${LocalDate.ofEpochDay(result.openAfter)} 개봉 후 현장에서 수집"
-                    else -> "$place · 잠김 · 이 장소에서 수집하면 들을 수 있어요"
-                }
-            },
-            cta = "앨범에서 확인" to { drive.dismissSaveResult(); openAlbum() }, ctaIcon = Icons.Rounded.PhotoLibrary,
-            sub = "닫기" to drive::dismissSaveResult,
-        )
+        review != null && !restricted -> TripReviewNotice(review!!, { drive.dismissTripReview(); openAlbum() }, drive::dismissTripReview)
+        saved != null && !restricted -> SavedCapsuleNotice(saved!!, { drive.dismissSaveResult(); openAlbum() }, drive::dismissSaveResult)
         !prepared -> InlinePrompt("이번 주행 준비", "주차 중 권한과 동승자 동의를 확인해 주세요",
             cta = "준비하기" to { if (!restricted) preparing = true }, ctaIcon = Icons.Rounded.Mic,
             sub = null)
@@ -938,4 +921,31 @@ private fun FriendDev(app: TimeCapsuleApp, close: () -> Unit) {
         }
         Btn("다른 사람으로 시작", height = 72.dp) { app.switchAccount(null) }
     }
+}
+
+@Composable
+internal fun TripReviewNotice(review: DriveController.TripReview, openAlbum: () -> Unit, dismiss: () -> Unit) {
+    InlinePrompt(
+            "이번 주행의 기록",
+            "남긴 캡슐 ${review.saved}개 · 수집 ${review.collected}개 · 임시 녹음 ${review.drafts}개",
+            cta = "앨범" to openAlbum,
+            ctaIcon = Icons.Rounded.PhotoLibrary, sub = "닫기" to dismiss, descriptionMaxLines = 2,
+        )
+}
+
+@Composable
+internal fun SavedCapsuleNotice(saved: DriveController.SaveResult, openAlbum: () -> Unit, dismiss: () -> Unit) {
+    InlinePrompt(
+            if (saved.capsule.draft) "녹음을 임시 보관했어요" else "캡슐을 남겼어요",
+            saved.let { result ->
+                val place = result.capsule.placeName ?: "장소 미확정"
+                when {
+                    result.capsule.draft -> "${result.capsule.durationSec}초 · $place · 앨범에서 확인해 주세요"
+                    result.openAfter != null -> "${LocalDate.ofEpochDay(result.openAfter)} 개봉 후 현장에서 수집 · $place"
+                    else -> "잠김 · 현장에서 수집한 뒤 듣기 · $place"
+                }
+            },
+            cta = "앨범" to openAlbum, ctaIcon = Icons.Rounded.PhotoLibrary,
+            sub = "닫기" to dismiss, descriptionMaxLines = 2,
+        )
 }

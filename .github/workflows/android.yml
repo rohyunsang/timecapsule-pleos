@@ -33,7 +33,7 @@ jobs:
         run: >-
           bash ./gradlew --no-daemon
           :app:assembleDebug :mobile:assembleDebug
-          :app:testDebugUnitTest :shared:testDebugUnitTest :mobile:verifyPaparazziDebug
+          :app:verifyPaparazziDebug :shared:testDebugUnitTest :mobile:verifyPaparazziDebug
           :app:lintDebug :shared:lintDebug :mobile:lintDebug
       - name: 검증 보고서 보관
         if: always()

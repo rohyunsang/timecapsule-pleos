@@ -366,11 +366,11 @@ fun SystemNotice(
 
 /** An in-page question: text, then two equal buttons under it. No box. */
 @Composable
-fun InlinePrompt(title: String, description: String?, cta: Pair<String, () -> Unit>, sub: Pair<String, () -> Unit>?, ctaIcon: ImageVector? = null) {
+fun InlinePrompt(title: String, description: String?, cta: Pair<String, () -> Unit>, sub: Pair<String, () -> Unit>?, ctaIcon: ImageVector? = null, descriptionMaxLines: Int = 1) {
     Column(Modifier.fillMaxWidth().padding(horizontal = Tc.Inset, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = Type.BodyStrong, color = Tc.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (description != null) Text(description, style = Type.LabelM, color = Tc.TextMute, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (description != null) Text(description, style = Type.LabelM, color = Tc.TextMute, maxLines = descriptionMaxLines, overflow = TextOverflow.Ellipsis)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             if (sub != null) Btn(sub.first, Modifier.weight(1f), onClick = sub.second)
