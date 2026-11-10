@@ -14,6 +14,29 @@ import java.time.LocalDate
 class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
+    private val _backupUid = MutableStateFlow(prefs.getString("mobile_backup_uid", "").orEmpty())
+    val backupUid: StateFlow<String> = _backupUid.asStateFlow()
+    fun setMobileBackup(uid: String, on: Boolean) {
+        val value = if (on) uid else ""
+        prefs.edit().putString("mobile_backup_uid", value).apply(); _backupUid.value = value
+    }
+    fun mobileBackup(uid: String?) = !uid.isNullOrBlank() && _backupUid.value == uid
+
+    private val _listenLater = MutableStateFlow(prefs.getStringSet("listen_later_ids", emptySet()).orEmpty().mapNotNull(String::toLongOrNull).toSet())
+    val listenLater: StateFlow<Set<Long>> = _listenLater.asStateFlow()
+    fun setListenLater(id: Long, later: Boolean) {
+        val ids = if (later) _listenLater.value + id else _listenLater.value - id
+        prefs.edit().putStringSet("listen_later_ids", ids.map(Long::toString).toSet()).apply(); _listenLater.value = ids
+    }
+    fun clearListenLater() { prefs.edit().remove("listen_later_ids").apply(); _listenLater.value = emptySet() }
+
+    private val _alertInterval = MutableStateFlow(prefs.getInt("alert_interval_minutes", 5).takeIf { it in app.timecapsule.drive.AlertCadence.choicesMinutes } ?: 5)
+    val alertIntervalMinutes: StateFlow<Int> = _alertInterval.asStateFlow()
+    fun setAlertIntervalMinutes(minutes: Int) {
+        if (minutes !in app.timecapsule.drive.AlertCadence.choicesMinutes) return
+        prefs.edit().putInt("alert_interval_minutes", minutes).apply(); _alertInterval.value = minutes
+    }
+
     private val _arrivalPrompt = MutableStateFlow(prefs.getBoolean(KEY_ARRIVAL, true))
     val arrivalPrompt: StateFlow<Boolean> = _arrivalPrompt.asStateFlow()
 

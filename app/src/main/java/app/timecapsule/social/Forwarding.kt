@@ -4,7 +4,7 @@ import app.timecapsule.data.Capsule
 import java.util.UUID
 
 object Forwarding {
-    fun eligible(c: Capsule) = !c.isMine && !c.isForwarded && c.collectedAt != null &&
+    fun eligible(c: Capsule) = !c.isMine && !c.isForwarded && c.replyToId == null && c.collectedAt != null &&
         !c.draft && !c.locationUncertain && !c.remoteId.isNullOrBlank()
 
     suspend fun send(

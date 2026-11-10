@@ -216,6 +216,26 @@ private fun Root(app: TimeCapsuleApp) {
                 Screen.FRIENDS -> FriendsScreen(app) { screen = Screen.HOME }
             }
         }
+        val companion by app.sync.companionState.collectAsState()
+        val pendingDestinationReplies by app.sync.pendingDestinationReplies.collectAsState()
+        val destinationOwner by app.social.me.collectAsState()
+        var handledDestinations by remember { mutableStateOf(setOf<String>()) }
+        val destination = companion.destinations.firstOrNull { it.status == "pending" && it.createdAt > 0 && it.id !in handledDestinations && "${destinationOwner?.uid}/${it.id}" !in pendingDestinationReplies }
+        if (!restricted && s == DriveState.Idle && destination != null) ConfirmPopup(
+            "모바일에서 보낸 장소로 안내할까요?",
+            "${destination.title}을 목적지로 설정해요. 기존 경로가 있다면 바뀝니다.",
+            "길 안내 시작",
+            onConfirm = {
+                if (drive.driveToMobileDestination(destination)) {
+                    handledDestinations = handledDestinations + destination.id
+                    app.sync.acknowledgeDestination(destination, true)
+                }
+            },
+            onDismiss = {
+                handledDestinations = handledDestinations + destination.id
+                app.sync.acknowledgeDestination(destination, false)
+            },
+        )
         val hearing by app.voiceAnswer.listening.collectAsState()
         alert?.let { AlertCard(it, drive::listen, drive::later, hearing) }
         if (dev && s != DriveState.Recording) DevPanel(app) { dev = false }

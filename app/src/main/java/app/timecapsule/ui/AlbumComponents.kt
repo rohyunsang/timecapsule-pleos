@@ -75,8 +75,11 @@ internal fun AlbumDraftRow(c: Capsule, onPreview: () -> Unit, onSave: (() -> Uni
 @Composable
 internal fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onShare: (() -> Unit)?,
     onForward: (() -> Unit)?, onNavigate: (() -> Unit)?, locationBlocked: Boolean, onDelete: () -> Unit) {
-    val locked = lockedUntil != null || locationBlocked
+    val replyWaiting = app.timecapsule.companion.ReplyPolicy.waiting(c.replyMode, c.replyAvailableAt, System.currentTimeMillis())
+    val locked = lockedUntil != null || locationBlocked || replyWaiting
     val state = when {
+        replyWaiting -> "답장 개봉 대기"
+        c.replyMode == app.timecapsule.companion.ReplyPolicy.AFTER_THREE_DAYS -> "어디서든 듣기"
         lockedUntil != null -> "개봉 대기"
         locationBlocked -> "수집 전"
         c.isForwarded -> "전달받음"
@@ -92,6 +95,8 @@ internal fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onSh
     }
     val time = Instant.ofEpochMilli(c.createdAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("a h:mm"))
     val detail = when {
+        replyWaiting -> c.replyAvailableAt?.let { "${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("M월 d일 HH:mm"))}부터 방문 없이 듣기" } ?: "전송 시각을 확인하고 있어요"
+        c.replyMode == app.timecapsule.companion.ReplyPolicy.AFTER_THREE_DAYS -> "3일이 지난 답장 · 어디서든 듣기"
         lockedUntil != null -> "${LocalDate.ofEpochDay(lockedUntil).format(dayFmt)}부터 현장에서 열기"
         c.locationUncertain -> "장소를 확인할 수 없어요"
         locationBlocked -> "잠금 버튼을 누르면 이 장소로 길 안내"
@@ -105,7 +110,7 @@ internal fun CapsuleRow(c: Capsule, lockedUntil: Long?, onPlay: () -> Unit, onSh
         onSecondary = onForward ?: onShare,
         mainIcon = if (locked) Icons.Rounded.Lock else Icons.Rounded.PlayArrow,
         mainDescription = if (locked) "잠긴 캡슐 장소로 길 안내" else if (AlbumData.needsCollection(c)) "수집하고 듣기" else "캡슐 재생",
-        mainEnabled = !locked || onNavigate != null,
+        mainEnabled = !replyWaiting && (!locked || onNavigate != null),
         onMain = if (locked) ({ onNavigate?.invoke(); Unit }) else onPlay, onDelete = onDelete)
 }
 

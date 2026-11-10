@@ -4,6 +4,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 object Migrations {
+    val FROM_5 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE capsule ADD COLUMN replyToId TEXT")
+            db.execSQL("ALTER TABLE capsule ADD COLUMN replyMode TEXT")
+            db.execSQL("ALTER TABLE capsule ADD COLUMN replyAvailableAt INTEGER")
+        }
+    }
     val FROM_4 = object : Migration(4, 5) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE capsule ADD COLUMN sourceRemoteId TEXT")
