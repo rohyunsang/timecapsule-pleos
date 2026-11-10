@@ -53,7 +53,7 @@ internal fun MemoryLibraryContent(records: CompanionSnapshot, capsules: List<Rem
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("차곡차곡 쌓인 목소리", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
         item { Text("수집한 추억 ${capsules.count(::collected)}개 · 캡슐 ${capsules.size}개", color = Color(0xFF6C6C6C)) }
-        item { OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("장소, 사람, 메모 검색") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true) }
+        item { OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("검색") }, placeholder = { Text("장소, 사람, 메모", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true) }
         item { Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("전체", "내 캡슐", "수집", "갈 곳", "즐겨찾기").forEachIndexed { i, text -> FilterChip(filter == i, onClick = { filter = i }, label = { Text(text) }) }
         } }
