@@ -1,6 +1,7 @@
 import java.util.Properties
 
 plugins {
+    id("app.cash.paparazzi") version "1.3.5"
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)

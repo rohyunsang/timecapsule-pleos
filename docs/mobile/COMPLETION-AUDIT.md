@@ -14,11 +14,11 @@
 | 수집 기본·선택 시 72시간 후 방문 없이 듣기 | 서버 `replySentAt`, 공통 정책, 차량 OpenPolicy 및 수집 기록 분리 | 실제 서버 규칙 배포·72시간 전/후 및 기기 시각 변경 검증 |
 | 비공개 백업 선택·수집 기록 동기화 | 차량 Settings/SocialSync와 공유 receipts | 서로 다른 두 앱에서 실제 동기화 및 계정 전환 검증 |
 | 모바일 목적지 전송·차량 확인 후 안내 | `CarDestination`, 차량 확인창, 계정별 결과 재전송, 재시도 ID 유지 및 생성 트랜잭션 | 실제 내비 연결·네트워크 단절/복구·중복 확인 검증 |
-| 차량 저장 결과·잠금 안내·나중에·조용한 주행·종료 기록 | DriveController, Settings, Screens, AlertCadence 테스트 | 차량 크기별 렌더링 및 실제 주행/중단 시나리오 |
+| 차량 저장 결과·잠금 안내·나중에·조용한 주행·종료 기록 | DriveController, Settings, Screens, AlertCadence 테스트 | 실제 주행/중단 시나리오 (저장·종료 안내 600dp/400dp 렌더링 확인) |
 | AI 요약 제외 | 이번 작업에서 AI 요약·전사 서비스 호출을 추가하지 않음 | 출시 전 변경 범위 검토 |
-| 기존 디자인을 따른 모바일 | MobileTheme와 실제 Compose 스냅샷 21개 | 차량 화면 검증 (사진 기록·앨범 편집 확인, 모바일 320dp·시스템 글꼴 1.5배에서 목록·답장·공유 선택 확인) |
+| 기존 디자인을 따른 모바일 | MobileTheme와 실제 Compose 스냅샷 21개 | 실제 기기 화면 검증 (차량 안내 2개 및 사진 기록·앨범 편집 확인, 모바일 320dp·시스템 글꼴 1.5배에서 목록·답장·공유 선택 확인) |
 | 에뮬레이터 미사용 | 빌드·JVM 단위 테스트·Paparazzi/Layoutlib만 실행 | 계속 유지 |
-| PR 병합과 정리 | 하위 작업 브랜치에 커밋 보존, PR 미생성 | 필수 검증 후 hub 병합, 하위 작업 정리, PR→integration 병합, hub 정리 |
+| PR 병합과 정리 | PR #20 초안, 최초 GitHub Actions 성공, 모바일 하위 작업 병합·정리 | Firebase 및 기기 검증 후 PR→integration 병합, hub 정리 |
 
 ## 실제 Firebase 연결을 막는 조건
 
@@ -42,8 +42,8 @@
 ```sh
 JAVA_HOME=/opt/homebrew/opt/openjdk@21 bash ./gradlew \
   :app:assembleDebug :mobile:assembleDebug \
-  :app:testDebugUnitTest :shared:testDebugUnitTest :mobile:verifyPaparazziDebug \
+  :app:verifyPaparazziDebug :shared:testDebugUnitTest :mobile:verifyPaparazziDebug \
   :app:lintDebug :shared:lintDebug :mobile:lintDebug
 ```
 
-GitHub Actions는 같은 Gradle 작업을 실행하도록 구성했으나, workflow를 원격에서 실행한 결과는 아직 없다. 이미지 테스트에는 예시 데이터만 사용하며 로그인·GPS·녹음 성공을 가짜로 증명하지 않는다.
+최초 GitHub Actions 실행 42786673991은 성공했다. 차량 렌더링을 추가한 최신 커밋의 CI는 별도로 확인한다. 이미지 테스트에는 예시 데이터만 사용하며 로그인·GPS·녹음 성공을 가짜로 증명하지 않는다.
