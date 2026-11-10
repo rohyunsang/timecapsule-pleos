@@ -23,7 +23,8 @@ private val CapsuleIdSetSaver = listSaver<Set<String>, String>(save = { it.toLis
 internal fun AlbumsContent(albums: List<MemoryAlbum>, capsules: List<RemoteCapsule>, uid: String?, friends: List<Friend>, busy: Boolean,
     open: (String) -> Unit, save: (MemoryAlbum, () -> Unit) -> Unit, delete: (String, () -> Unit) -> Unit) {
     var editingId by rememberSaveable(uid) { mutableStateOf<String?>(null) }
-    val editing = editingId?.let { id -> albums.firstOrNull { it.id == id } ?: if (id.isEmpty()) MemoryAlbum("", "", emptyList()) else null }
+    var newAlbumId by rememberSaveable(uid) { mutableStateOf<String?>(null) }
+    val editing = editingId?.let { id -> albums.firstOrNull { it.id == id } ?: if (id == newAlbumId) MemoryAlbum(id, "", emptyList()) else null }
     var title by rememberSaveable(uid) { mutableStateOf("") }
     var selected by rememberSaveable(uid, stateSaver = CapsuleIdSetSaver) { mutableStateOf(setOf<String>()) }
     var members by rememberSaveable(uid, stateSaver = CapsuleIdSetSaver) { mutableStateOf(setOf<String>()) }
@@ -31,7 +32,7 @@ internal fun AlbumsContent(albums: List<MemoryAlbum>, capsules: List<RemoteCapsu
     fun edit(album: MemoryAlbum) { editingId = album.id; title = album.title; selected = album.capsuleIds.toSet(); members = album.members.filter { it != uid }.toSet() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("한 여행을 하나의 앨범으로", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
-        item { Button(onClick = { if (editing != null) editingId = null else edit(MemoryAlbum("", "", emptyList())) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (editing != null) "편집 닫기" else "새 앨범 만들기") } }
+        item { Button(onClick = { if (editing != null) editingId = null else { val id = java.util.UUID.randomUUID().toString(); newAlbumId = id; edit(MemoryAlbum(id, "", emptyList())) } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (editing != null) "편집 닫기" else "새 앨범 만들기") } }
         if (editingId != null && editing == null) item { Text("편집하던 앨범을 확인하고 있어요. 연결과 공유 상태를 확인해 주세요.") }
         editing?.let { album ->
             item { OutlinedTextField(title, { title = it.take(100) }, label = { Text("앨범 이름") }, enabled = !busy, modifier = Modifier.fillMaxWidth()) }

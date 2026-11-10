@@ -41,6 +41,7 @@ class MobileModel(app: Application) : AndroidViewModel(app) {
     private var focus: android.media.AudioFocusRequest? = null
     private val location = PhoneLocation(app)
     private val recorder = ReplyRecorder(app)
+    private val destinationRequests = DestinationRequests(app.getSharedPreferences("destination_requests", 0))
     private var replyForeground = true
     fun setReplyForeground(value: Boolean) { replyForeground = value; if (!value) finishReply() }
     private val _reply = MutableStateFlow<ReplyDraft?>(null)
@@ -103,7 +104,9 @@ class MobileModel(app: Application) : AndroidViewModel(app) {
     fun deleteAlbum(id: String, onDeleted: () -> Unit = {}) = action { store.deleteAlbum(id); onDeleted(); _message.value = "앨범을 삭제했어요. 원본 캡슐은 그대로 남아 있어요." }
     fun sendToCar(c: RemoteCapsule) = action {
         check(records.value.destinations.none { it.capsuleId == c.id && it.status == "pending" }) { "이미 차량 확인을 기다리는 요청이 있어요." }
-        store.sendDestination(c.id, c.placeName ?: "캡슐 장소", c.lat, c.lng); _message.value = "차량으로 보냈어요. 주차 중 차량에서 길 안내를 확인해 주세요." }
+        val uid = me.value?.uid ?: error("먼저 로그인해 주세요")
+        val requestId = destinationRequests.idFor(uid, c.id, records.value.destinations)
+        store.sendDestination(requestId, c.id, c.placeName ?: "캡슐 장소", c.lat, c.lng); _message.value = "차량으로 보냈어요. 주차 중 차량에서 길 안내를 확인해 주세요." }
     fun loadPhoto(id: String) {
         photoJob?.cancel(); photoTarget = id; _photo.value = null
         val uid = me.value?.uid ?: return
