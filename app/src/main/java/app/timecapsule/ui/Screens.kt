@@ -919,7 +919,10 @@ private fun FriendDev(app: TimeCapsuleApp, close: () -> Unit) {
             val friend = friends.firstOrNull()
             Btn("${friend?.name ?: "친구"}가 이 길에 캡슐 남김", enabled = friend != null, height = 72.dp) {
                 val here = app.navi.position.value
-                val at = here?.point?.let { GeoPoint(it.lat + 0.005, it.lng) } ?: GeoPoint(37.7569, 128.8761)
+                // The fake navi drives past ~550 m ahead; the real navi may stand still, so
+                // stay inside the 300 m capsule radius there or the alert never comes.
+                val ahead = if (app.forceFake) 0.005 else 0.002
+                val at = here?.point?.let { GeoPoint(it.lat + ahead, it.lng) } ?: GeoPoint(37.7569, 128.8761)
                 fake.friendLeavesCapsule(friend!!, at, app.drive.car.value.placeName ?: "7번 국도", daysAgo = 3)
                 close()
             }
