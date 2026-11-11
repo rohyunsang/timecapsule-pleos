@@ -1,0 +1,5 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <string name="current">{&quot;uid&quot;:&quot;fake-yuna&quot;,&quot;name&quot;:&quot;윤아&quot;,&quot;code&quot;:&quot;LNKYGM&quot;}</string>
+    <string name="known">[{&quot;uid&quot;:&quot;fake-yuna&quot;,&quot;name&quot;:&quot;윤아&quot;,&quot;code&quot;:&quot;LNKYGM&quot;}]</string>
+</map>
