@@ -84,6 +84,12 @@ class MainActivity : ComponentActivity() {
     private fun handleGleo(intent: android.content.Intent?) {
         if (intent?.action != Gleo.START) return
         intent.action = null
+        // The action is exported for Gleo, so an ordinary installed app could also send it and
+        // turn the microphone on. Only the car's own (system) apps and this app may start it.
+        if (!trustedCaller()) {
+            android.util.Log.w("Gleo", "START ignored from ${referrer?.host}")
+            return
+        }
         app.openScreen.value = Screen.HOME
         app.scope.launch {
             val ok = app.drive.recordByVoice()
@@ -92,6 +98,16 @@ class MainActivity : ComponentActivity() {
                 if (ok) "Recording a voice capsule." else "Recording could not start now.",
             )
         }
+    }
+
+    /** True when the launcher is unknown (system), this app, or a preinstalled system app. */
+    private fun trustedCaller(): Boolean {
+        val pkg = referrer?.takeIf { it.scheme == "android-app" }?.host ?: return true
+        if (pkg == packageName) return true
+        return runCatching {
+            val info = packageManager.getApplicationInfo(pkg, 0)
+            info.flags and (android.content.pm.ApplicationInfo.FLAG_SYSTEM or android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+        }.getOrDefault(false)
     }
 
     /** A friend QR code opened on this car (timecapsule://friend?code=...). */
@@ -134,8 +150,18 @@ private fun Root(app: TimeCapsuleApp) {
     val signals by drive.signals.collectAsState()
     val userPaused by drive.userPaused.collectAsState()
     val recordingSince by drive.recordingSince.collectAsState()
-    val uxRestricted by app.ux.restricted.collectAsState()
-    var screen by remember { mutableStateOf(Screen.HOME) }
+    var screen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(Screen.HOME) }
+    val formState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    var permissionReturnScreen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<Screen?>(null) }
+    var settingsReturned by remember { mutableStateOf(false) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME && permissionReturnScreen != null) settingsReturned = true
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var dev by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -145,7 +171,20 @@ private fun Root(app: TimeCapsuleApp) {
     val restricted = !editable
 
     // Spec 07: only screens 04-06 (and home) while driving.
-    LaunchedEffect(restricted) { if (restricted) screen = Screen.HOME }
+    LaunchedEffect(restricted) {
+        if (restricted) {
+            screen = Screen.HOME
+            // The dev panel has account switching and data tools: not while driving (except fake demos).
+            if (!app.forceFake) dev = false
+        }
+    }
+    LaunchedEffect(restricted, settingsReturned) {
+        if (!restricted && settingsReturned) {
+            permissionReturnScreen?.let { screen = it }
+            permissionReturnScreen = null
+            settingsReturned = false
+        }
+    }
     LaunchedEffect(Unit) {
         drive.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
     }
@@ -154,7 +193,8 @@ private fun Root(app: TimeCapsuleApp) {
     }
     val open by app.openScreen.collectAsState()
     LaunchedEffect(open) { open?.let { if (!restricted) screen = it; app.openScreen.value = null } }
-    BackHandler(screen != Screen.HOME) { screen = Screen.HOME }
+    // System back follows the header back: the map returns to the album it was opened from.
+    BackHandler(screen != Screen.HOME) { screen = if (screen == Screen.MAP) Screen.ALBUM else Screen.HOME }
 
     Box(Modifier.fillMaxSize()) {
         val s = state
@@ -191,16 +231,36 @@ private fun Root(app: TimeCapsuleApp) {
                     onDev = { dev = !dev },
                     friendCount = friends.size,
                 )
-                Screen.LETTER -> LetterScreen(app) { screen = Screen.HOME }
+                Screen.LETTER -> formState.SaveableStateProvider("letter") { LetterScreen(app) { screen = Screen.HOME } }
                 Screen.ALBUM -> AlbumScreen(app, onMap = { screen = Screen.MAP }) { screen = Screen.HOME }
                 Screen.MAP -> CollectedMapScreen(drive) { screen = Screen.ALBUM }
                 Screen.SETTINGS -> SettingsScreen(app) { screen = Screen.HOME }
                 Screen.FRIENDS -> FriendsScreen(app) { screen = Screen.HOME }
             }
         }
+        val companion by app.sync.companionState.collectAsState()
+        val pendingDestinationReplies by app.sync.pendingDestinationReplies.collectAsState()
+        val destinationOwner by app.social.me.collectAsState()
+        var handledDestinations by remember { mutableStateOf(setOf<String>()) }
+        val destination = companion.destinations.firstOrNull { it.status == "pending" && it.createdAt > 0 && it.id !in handledDestinations && "${destinationOwner?.uid}/${it.id}" !in pendingDestinationReplies }
+        if (!restricted && s == DriveState.Idle && destination != null) ConfirmPopup(
+            "모바일에서 보낸 장소로 안내할까요?",
+            "${destination.title}을 목적지로 설정해요. 기존 경로가 있다면 바뀝니다.",
+            "길 안내 시작",
+            onConfirm = {
+                if (drive.driveToMobileDestination(destination)) {
+                    handledDestinations = handledDestinations + destination.id
+                    app.sync.acknowledgeDestination(destination, true)
+                }
+            },
+            onDismiss = {
+                handledDestinations = handledDestinations + destination.id
+                app.sync.acknowledgeDestination(destination, false)
+            },
+        )
         val hearing by app.voiceAnswer.listening.collectAsState()
         alert?.let { AlertCard(it, drive::listen, drive::later, hearing) }
-        if (dev && s != DriveState.Recording) DevPanel(app) { dev = false }
+        if (dev && s != DriveState.Recording && (!restricted || app.forceFake)) DevPanel(app) { dev = false }
         val microphonePermissionNeeded by drive.microphonePermissionNeeded.collectAsState()
         if (microphonePermissionNeeded && !restricted) ConfirmPopup(
             title = "마이크 권한이 필요해요",
@@ -211,7 +271,10 @@ private fun Root(app: TimeCapsuleApp) {
                 if (drive.canEdit()) {
                     val settingsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         Uri.fromParts("package", context.packageName, null))
+                    permissionReturnScreen = screen
+                    settingsReturned = false
                     runCatching { context.startActivity(settingsIntent) }.onFailure {
+                        permissionReturnScreen = null
                         Toast.makeText(context, "설정을 열지 못했어요. 차량 설정 → 앱 → 타임캡슐 → 권한에서 마이크를 허용해 주세요", Toast.LENGTH_LONG).show()
                     }
                 }

@@ -67,9 +67,13 @@ class CapsuleRepository(private val db: AppDatabase) {
         return capsule.copy(id = id)
     }
 
+    suspend fun updateReplyDeadline(id: Long, at: Long?) = dao.updateReplyDeadline(id, at)
+
     suspend fun collect(id: Long, at: Long) = dao.collect(id, at)
     suspend fun confirmDraft(id: Long) = dao.confirmDraft(id)
     suspend fun setSharing(id: Long, audience: String, recipients: List<String>) = dao.setSharing(id, audience, recipients.joinToString(","))
+
+    suspend fun updateRemoteSharing(id: Long, audience: String, recipients: List<String>) = dao.updateRemoteSharing(id, audience, recipients.joinToString(","))
 
     suspend fun byRemoteId(remoteId: String) = dao.byRemoteId(remoteId)
     suspend fun all() = dao.all()

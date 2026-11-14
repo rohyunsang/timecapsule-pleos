@@ -265,7 +265,7 @@ fun PlayingScreen(
                 Panel(Modifier.padding(bottom = 16.dp)) {
                     ListRow(
                         if (safetyPaused.isEmpty()) "이어 듣기를 기다리고 있어요" else "${safetyPaused.joinToString(", ") { it.korean() }} 때문에 잠시 멈췄어요",
-                        "안내가 끝나면 재생 버튼으로 이어 들으세요",
+                        "안내가 끝나면 이어 듣기 버튼을 눌러 주세요",
                         leading = Icons.Rounded.PauseCircle,
                     )
                 }
@@ -287,7 +287,7 @@ fun PlayingScreen(
 @Composable
 private fun VoiceProgress(pos: Pair<Int, Int>?, owner: String?) {
     fun t(ms: Int) = "%d:%02d".format(ms / 60000, ms / 1000 % 60)
-    val frac = pos?.let { (it.first.toFloat() / it.second).coerceIn(0f, 1f) } ?: 0f
+    val frac = pos?.takeIf { it.second > 0 }?.let { (it.first.toFloat() / it.second).coerceIn(0f, 1f) } ?: 0f
     Column(Modifier.fillMaxWidth().widthIn(max = 720.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         androidx.compose.material3.LinearProgressIndicator(
             progress = { frac },

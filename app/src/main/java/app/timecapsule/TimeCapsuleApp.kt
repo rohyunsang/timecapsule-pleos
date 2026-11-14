@@ -68,7 +68,7 @@ class TimeCapsuleApp : Application() {
     override fun onCreate() {
         super.onCreate()
         db = Room.databaseBuilder(this, AppDatabase::class.java, "timecapsule.db")
-            .addMigrations(app.timecapsule.data.Migrations.FROM_1, app.timecapsule.data.Migrations.FROM_2, app.timecapsule.data.Migrations.FROM_3, app.timecapsule.data.Migrations.FROM_4)
+            .addMigrations(app.timecapsule.data.Migrations.FROM_1, app.timecapsule.data.Migrations.FROM_2, app.timecapsule.data.Migrations.FROM_3, app.timecapsule.data.Migrations.FROM_4, app.timecapsule.data.Migrations.FROM_5)
             .build()
         settings = Settings(this)
         repo = CapsuleRepository(db)
@@ -81,7 +81,9 @@ class TimeCapsuleApp : Application() {
                 ?: FakeVehicleSource(VehicleSnapshot()).also { onPleos = false }
         } else if (forceFake) fakeVehicle() else FakeVehicleSource(VehicleSnapshot())
         navi = if (!forceFake && isInstalled(PLEOS_NAVI_SERVICE)) {
-            PleosNaviSource(this, scope).also { it.start() }
+            runCatching { PleosNaviSource(this, scope).also { it.start() } }
+                .onFailure { android.util.Log.w("TimeCapsuleApp", "NaviHelper failed", it) }.getOrNull()
+                ?: FakeNaviSource(null)
         } else FakeNaviSource(if (forceFake) NaviPosition(GeoPoint(37.7519, 128.8761), "강원특별자치도 강릉시 7번 국도") else null)
 
         ux = UxRestrictions(this).also { it.start() }
@@ -115,7 +117,7 @@ class TimeCapsuleApp : Application() {
         }.also { it.start() }
         drive.sharing = sync
         drive.currentRecipients = { social.friends.value.map { it.uid } }
-        drive.authorizeShared = { c -> c.isMine || c.remoteId?.let { social.canOpen(it) } == true }
+        drive.authorizeShared = { c -> if (c.replyToId != null) c.remoteId?.let { social.canOpen(it) } == true else c.isMine || c.remoteId?.let { social.canOpen(it) } == true }
         scope.launch {
             var previous = social.me.value?.uid
             social.me.collect { profile ->
