@@ -1,75 +1,121 @@
-# 타임캡슐 integration
+# 타임캡슐 (TimeCapsule)
 
-`proto/sso06052`의 Compose 디자인과 기능을 기준으로 `ym`의 기록 복구·개봉 검증·주행 세션 정책을 반영한 통합 브랜치입니다. 기준 커밋은 `5b58938`이며 원본 `main`, `ym`, `proto/sso06052`는 변경하지 않습니다.
+차 안에서 소중한 사람들과 나눈 이야기를 녹음해 두면, 나중에 같은 길을 지날 때 차가 그날의 추억을 다시 들려주는 Pleos Connect 차량용 앱입니다.
 
-## 사용 흐름
+- 팀: 호날두
+- APK: [`apk/호날두_타임캡슐_release.apk`](apk/호날두_타임캡슐_release.apk)
+- 시연 영상: https://youtu.be/oO8jo5hJyEo
+- 숏폼: https://youtube.com/shorts/2_C2LxtG1Eg
+- 상황별 화면 70장: [`screenshots/integration_2026-11-03`](screenshots/integration_2026-11-03)
 
-1. P단에서 차량 상태와 마이크 권한을 확인하고 홈의 **이번 주행 준비**를 누릅니다. 동승자 동의를 확인해도 마이크는 바로 열리지 않습니다.
-2. **목소리 남기기** 또는 명시적 RECORD 명령으로 최대 30초 녹음합니다. 일반 PLAY·헤드셋 키는 녹음을 시작하지 않습니다.
-3. 안내나 차량 신호로 중단된 음성은 비공개 임시보관합니다. 앨범에서 주차 중 미리 듣고 저장하거나 삭제할 수 있습니다. 위치가 없는 음성은 장소 미확정 메모로 보관하며 개봉·공유하지 않습니다.
-4. 날짜·위치·권한 조건을 충족하면 캡슐을 엽니다. 실제 청취 제안은 저장 반경(기본 300m) 안에서 표시합니다. 1.2km 후보 검색값은 유지하지만 구역 밖에서 재생을 유도하지 않습니다.
-5. 현장에서 조건을 충족해 원본 음성이 재생되기 시작하면 캡슐을 수집합니다. 수집 상태는 앱 재시작 후에도 유지되며, 주차 중 **앨범 → 지도 아이콘 → 열린 마커 → 재생 확인**로 위치·GPS·주행 준비 없이 다시 들을 수 있습니다. 안내로 멈춘 음성은 수동으로 재개합니다.
-6. 설정 또는 알림에서 **이번 주행 종료**를 선택합니다. 세션은 최대 2시간, 연속 주차 15분 뒤 종료하며 프로세스 재시작 시 복구하지 않습니다. 시간·거리 수치는 제품 설정이며 안전 인증 기준이 아닙니다.
+## 주요 기능
 
-## 수집 지도
+- **캡슐 묻기**: 홈의 녹음 버튼을 누르거나 Gleo에게 "타임캡슐 녹음해 줘"라고 말하면 녹음합니다. 녹음한 자리의 위치, 차량 상태(와이퍼는 비, 전조등은 밤, 탑승 인원, 창문, 도착 등), 날씨 서비스에서 받은 날씨와 바깥 기온이 태그로 함께 저장됩니다.
+- **접근 알림과 재생**: 캡슐 300m 안에 들어서면 내비 위에 알림이 뜹니다. "들려줘"를 누르거나 말로 답하면 Pleos TTS가 누가 언제 남겼는지 안내한 뒤 원본 목소리를 들려줍니다.
+- **안전 중단**: 방향지시등을 켜거나 핸들을 크게 돌릴 때, 내비 음성 안내가 나올 때는 재생을 멈추고 "이어 듣기"로 이어 갑니다. 녹음 중이면 그때까지의 녹음을 비공개로 임시보관합니다. 브레이크를 밟고 있는 동안에는 새 알림과 재생을 시작하지 않고, 주행 중에는 목록과 입력 화면을 잠급니다.
+- **친구와 편지 캡슐**: 6자리 친구 코드로 친구를 맺고, 받는 사람과 열리는 날을 정한 편지 캡슐을 남깁니다.
+- **여행 앨범과 캡슐 지도**: 한 번 연 캡슐은 앨범과 지도에 남고, 그 뒤로는 주차 중 어디서든 다시 들을 수 있습니다.
 
-지도는 주차 중에만 탐색할 수 있습니다. 내가 남긴 장소와 직접 수집한 친구 캡슐을 이름 아바타로 표시하며, 잠금·재생 배지와 색상으로 상태를 구분합니다. 잠긴 마커는 길 안내 확인창을, 수집한 마커는 재생 확인창을 엽니다. 같은 장소의 여러 캡슐은 선택창에서 구분합니다. 친구 프로필 사진은 현재 저장·동기화 기능이 없어 이름 첫 글자로 대신합니다.
+## APK
 
-지도 아래 상시 녹음 목록은 제거했고 선택한 캡슐 한 건만 표시합니다. 우측 아이콘으로 확대·축소·전체 보기·현재 위치를 조작하며, 상단 목록 아이콘은 지도 배경 오류나 목록 탐색에 사용할 수 있습니다. OpenFreeMap 요청에는 보이는 지도 영역과 IP가 전달되지만 음성·제목·계정은 보내지 않습니다. MapLibre Native Android 12.0.1을 사용하며 WebView를 사용하지 않습니다. 최근 차량 위치는 파란 점으로 표시합니다. 기존 재생 로그를 수집으로 소급 변환하지 않습니다. [지도 UI 설계와 검증](docs/design/capsule-map.md)에 적용 근거를 정리했습니다.
+| 항목 | 값 |
+|---|---|
+| 위치 | `apk/호날두_타임캡슐_release.apk` (약 97MB) |
+| 패키지 이름 | `app.timecapsule.proto` |
+| 버전 | 0.1.0-proto (versionCode 1) |
+| 빌드 | release, 팀 서명키로 서명(APK Signature Scheme v2) |
+| 지원 ABI | arm64-v8a, x86_64 |
+| Android SDK | minSdk 28, targetSdk 35 |
 
-## 공유
+## 테스트 환경
 
-기본은 나만 듣기입니다. 친구 공유 대상은 녹음 또는 공개 선택 시점에 확정되며 새 친구가 과거 캡슐을 자동으로 받지 않습니다. 임시 녹음과 장소 미확정 음성은 업로드하지 않습니다. 받은 캡슐은 수집 후 다시 들을 때에도 서버에서 친구 관계·수신 권한·개봉일을 확인하므로 인터넷이 필요합니다. 현재 일시정지된 음성을 이어 듣는 동안에는 재확인하지 않습니다. 수집은 위치 조건만 해제하며 공유 철회·삭제를 무효화하지 않습니다. 오프라인 사본의 즉시 삭제나 이미 들은 음성의 회수는 보장하지 않습니다.
+| 항목 | 값 |
+|---|---|
+| 에뮬레이터 | Pleos Connect 에뮬레이터, 기기 프로필 `Pleos_Connect_v2_0` (Pleos Connect v2.0) |
+| 화면 규격 | 2560 × 1440 가로, 160dpi |
+| 시스템 이미지 | Android 14 (API 34) Android Automotive, arm64-v8a |
+| Android Emulator | 37.2.13 |
+| Pleos SDK | Vehicle 2.3.2, NaviHelper 3.0.5, TextToSpeech·SpeechToText 3.3.1, Gleo Interface([`schema.json`](app/src/main/assets/schema.json)) |
 
-## 빌드와 검증
+## 실행 방법
 
-JDK 21과 Android SDK 35를 사용했습니다. `local.properties`에는 로컬 SDK 경로를 설정하고, Firebase 설정과 서명키는 Git에 넣지 않습니다.
+1. Pleos Connect v2.0 기기 프로필로 만든 에뮬레이터를 실행합니다.
+2. APK를 설치하고 권한을 부여합니다.
 
-```sh
-JAVA_HOME=/opt/homebrew/opt/openjdk@21 bash ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug :app:assembleRelease
-python3 scripts/verify-migrations.py
+   ```sh
+   adb install -r -g apk/호날두_타임캡슐_release.apk
+   # 앱 화면 밖(내비 위)에도 캡슐 알림을 띄우려면
+   adb shell appops set --user 10 app.timecapsule.proto SYSTEM_ALERT_WINDOW allow
+   ```
+
+   Android Automotive의 현재 사용자 번호가 10이 아니면 `adb shell am get-current-user`로 확인해 바꿔 넣습니다.
+3. 런처에서 **타임캡슐**을 엽니다. 명령으로 열 때는 다음과 같이 실행합니다.
+
+   ```sh
+   adb shell am start --user 10 -n app.timecapsule.proto/app.timecapsule.MainActivity
+   ```
+
+4. 차량 신호는 Virtual Console에서 바꿉니다. `adb forward tcp:8088 tcp:8088`을 실행한 뒤 브라우저에서 http://127.0.0.1:8088 을 엽니다.
+   - 와이퍼나 전조등을 켜면 홈의 녹음 버튼 아래에 "비", "밤" 태그가 붙습니다.
+   - 기어를 D로 바꾸면 주행 중 화면으로 바뀌어 탭과 목록이 잠기고 큰 녹음 버튼만 남습니다.
+5. 녹음하려면 P단에서 홈의 **이번 주행 준비 → 준비하기**로 마이크 권한과 동승자 동의를 먼저 확인합니다. 그다음 녹음 버튼을 누르고 말한 뒤 **녹음 완료**를 누르면 그 자리에 캡슐이 저장됩니다.
+
+## 필요한 설정
+
+- **마이크 입력**: 말소리가 없거나 3초보다 짧은 녹음은 저장하지 않습니다. 에뮬레이터의 Extended Controls → Microphone에서 "Virtual microphone uses host audio input"을 켜거나, 에뮬레이터를 `-allow-host-audio` 옵션으로 실행해 PC 마이크를 연결해 주세요.
+- **인터넷**: 친구와 공유 캡슐(Firebase), 날씨(Open-Meteo), 캡슐 지도 배경(OpenFreeMap)에 필요합니다. 인터넷이 없어도 녹음, 재생, 앨범은 동작합니다.
+- **계정**: 이 APK는 팀의 Firebase 프로젝트에 연결되어 있습니다. 친구 화면에서 이름만 정하면 바로 시작합니다.
+- **위치**: Pleos NaviHelper가 알려 주는 내비 위치를 씁니다. 에뮬레이터의 내비 위치는 한곳에 고정되어 있어 `adb emu geo fix`로 바뀌지 않습니다.
+- **시연 패널**: 홈 오른쪽 위 ⋯ 버튼으로 엽니다. 가짜 차량·내비 모드, 그리고 가짜 서버로 친구 캡슐을 받아 재생하는 기능은 debug 빌드에서만 동작합니다. 시연 영상에서 친구 캡슐에 다가가는 장면은 debug 빌드의 시연 모드로 만들었습니다.
+
+## 직접 빌드하기
+
+JDK 21과 Android SDK 35가 필요합니다. Pleos SDK는 `settings.gradle.kts`에 등록한 Pleos 저장소(nexus-playground.pleos.ai)에서 받습니다. 비밀 값은 저장소에 넣지 않고, 아래 두 파일을 저장소 최상위에 직접 만듭니다.
+
+```properties
+# local.properties
+sdk.dir=/path/to/Android/sdk
+firebase.apiKey=...      # 세 값이 없으면 앱 안의 가짜 서버로 동작합니다
+firebase.appId=...
+firebase.projectId=...
+
+# keystore.properties (release 서명용)
+storeFile=/path/to/release.jks
+storePassword=...
+keyAlias=...
+keyPassword=...
 ```
 
-- [변경 정책과 구현 근거](docs/integration/decisions.md)
-- [검증 결과와 남은 기기 시험](docs/integration/verification.md)
-- 초기 기능 명세: `docs/feature-spec.html`, 개인 proto 경과: `PROTO.md`. integration의 동작은 이 README와 위 정책 문서를 우선합니다.
+```sh
+./gradlew :app:testDebugUnitTest :app:assembleRelease
+# 결과: app/build/outputs/apk/release/app-release.apk
+```
 
-## 실행 환경
+## 검증
 
-실제 사용 모드에서 차량 또는 위치 연결이 없으면 기능을 잠급니다. 가짜 위치는 자동 대체하지 않습니다. debug 빌드에서 명시적으로 시연 모드를 선택한 뒤 재시작해야 가짜 차량·위치가 적용됩니다.
+2026-11-15 기준으로 확인한 내용입니다.
 
-이번 환경에는 proto용 Firebase 환경값과 release 서명키가 없었습니다. 서버 인증을 실제로 검증했다거나 release APK에 제출용 서명을 완료했다고 주장하지 않습니다. Firebase 키가 없는 기존 시연 서버는 실제 공유 서버가 아니며 release의 수신 캡슐 개봉 검증을 통과시키지 않습니다.
+- `:app:testDebugUnitTest` 단위 테스트 90개를 모두 통과했습니다.
+- 제출 APK를 데이터가 비어 있는 새 Pleos Connect v2.0 에뮬레이터(arm64-v8a)에 설치해 실행했습니다. 홈, 여행 앨범, 캡슐 지도, 친구 화면이 열리고 Firebase 서버에 연결되는 것을 확인했습니다.
+- 실제 차량에서의 GPS와 마이크 동작, 실제 Gleo 음성 명령은 아직 시험하지 못했습니다.
+
+## 저장소 구성
+
+| 폴더 | 내용 |
+|---|---|
+| `app/` | 차량 앱(제출 APK) |
+| `mobile/` | 휴대폰 앱(2단계 확장, 개발 중이며 제출 APK와 별개) |
+| `shared/` | 차량 앱과 휴대폰 앱이 함께 쓰는 코드 |
+| `firebase/` | Firestore 보안 규칙 |
+| `docs/` | 설계와 검증 문서. 개봉, 공유, 주행 세션 정책은 [integration 동작 정책](docs/integration/overview.md)과 [결정 기록](docs/integration/decisions.md)에 정리했습니다. |
+| `screenshots/` | 상황별 화면 |
+| `apk/` | 제출 APK |
+
+## 알려진 제한
+
+- "그날처럼"(캡슐을 열 때 창문, 실내 온도, 조명을 그날처럼 되돌리는 기능)은 차량 제어 SDK가 공개되지 않아 구현하지 않았습니다.
+- 에뮬레이터의 Virtual Console에서 좌석을 비워도 앱의 탑승 인원이 줄지 않는 경우가 있습니다.
 
 ## 권리
 
-기존 저장소의 All rights reserved 정책을 유지합니다. 제출 여부와 실차 검증 여부는 별도입니다.
-
-## 수집한 캡슐을 친구에게 보내기
-
-앨범에서 다른 사람이 남긴 캡슐을 직접 수집한 경우에만 **친구에게 보내기** 버튼이 나타납니다. 친구 한 명을 선택하고 전송을 확인하면 음성 사본이 전달됩니다. 내가 남긴 캡슐이나 아직 수집하지 않은 캡슐, 전달받은 사본은 이 버튼의 대상이 아닙니다.
-
-받은 친구는 원래 장소로 이동하거나 먼저 수집하지 않아도 앨범에서 바로 들을 수 있습니다. 원작자와 전달자가 구분되어 표시되며, 실제 방문 기록이나 수집 지도에는 추가되지 않습니다. 차량 안전 제한과 새 재생 시 서버 권한 확인은 유지되므로 인터넷 연결이 필요합니다. 원본을 삭제해도 이미 전달한 사본은 남습니다. 같은 원본을 같은 친구에게 다시 보내면 기존 전달 건을 사용합니다.
-
-검증 명령은 다음과 같습니다. 기기 테스트는 별도 임시 파일·설정·메모리 DB와 FakeBackend만 사용하며 실제 친구에게 전송하지 않습니다.
-
-```sh
-bash gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest
-python3 scripts/verify-migrations.py
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb shell am instrument --user 10 -w app.timecapsule.proto.test/app.timecapsule.ForwardingSmokeRunner
-```
-
-AAOS의 현재 사용자 번호가 다르면 `--user 10`을 해당 번호로 바꿉니다. 기기 테스트는 수집 전 전송 거부, 수집 후 전달, 재시도 중복 방지, 수신 동기화, 음성 일치, 위치 없는 재생 정책과 송신자 앨범을 확인합니다. 실제 Firebase 계정 간 전송과 실차 오디오 재생은 별도로 검증해야 합니다.
-
-## 앨범 탭과 개별 장소 안내
-
-앨범은 **내가 남긴 캡슐**과 **수집한 캡슐** 탭으로 나뉩니다. 내가 남긴 캡슐은 수집 여부와 관계없이 첫 번째 탭에 남고, 두 번째 탭에는 직접 수집한 타인의 캡슐과 친구에게 전달받은 사본이 표시됩니다. 아직 수집하지 않은 타인의 도로 캡슐은 수집 목록에 포함하지 않습니다.
-
-내가 남긴 캡슐도 처음에는 남긴 장소 주변에서만 열 수 있습니다. 현장에 없으면 잠금과 `수집 전` 상태를 표시하고, 현장에서 음성 재생이 실제로 시작되면 수집 완료로 기록합니다. 이후에는 위치와 관계없이 다시 들을 수 있습니다. 정차 중에는 별도 주행 준비 없이도 이 개봉 정책에 따라 수집·재생할 수 있으며, 차량 상태·안전 신호·개봉일 검사는 유지합니다.
-
-장소 이름의 `길 안내`를 누르고 확인하면 선택한 캡슐 한 곳만 내비게이션 목적지로 설정합니다. 잠긴 내 캡슐도 위치가 유효하면 길 안내가 가능합니다. 여러 캡슐을 묶어 경유하던 `다시 달리기` 버튼과 앨범 일괄 경로 생성 기능은 제거했습니다.
-
-앨범 레이아웃의 공식 차량용 레퍼런스와 적용 근거는 [차량용 앨범 UI 검토](docs/design/automotive-album.md)에 정리했습니다.
-
-홈과 녹음 화면의 레퍼런스 및 구형 캡슐 애니메이션은 [홈·녹음 UI 설계](docs/design/home-recording.md)에 정리했습니다.
+All rights reserved.
