@@ -23,6 +23,10 @@ android {
         versionCode = 1
         versionName = "0.1.0-proto"
 
+        // Pleos head units and the Pleos Connect emulator images are 64-bit only. Dropping the
+        // 32-bit native libraries keeps the release APK under GitHub's 100 MB file limit.
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+
         // Firebase (friends + shared capsules). Keys live in local.properties, never in git:
         //   firebase.apiKey=...  firebase.appId=...  firebase.projectId=...
         // Without them the app runs on an in-memory fake server.
