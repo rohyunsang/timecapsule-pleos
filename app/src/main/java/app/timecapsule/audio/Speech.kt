@@ -27,7 +27,10 @@ object Speeches {
 
     fun create(context: Context, attrs: AudioAttributes): Speech {
         val pleosAvailable = runCatching { context.packageManager.getPackageInfo(CAAS, 0) }.isSuccess
-        return if (pleosAvailable) Fallback(PleosSpeech(context, attrs)) { AndroidSpeech(context, attrs) } else AndroidSpeech(context, attrs)
+        // A Pleos SDK that throws while binding must not stop the app from starting.
+        val pleos = if (pleosAvailable) runCatching { PleosSpeech(context, attrs) }
+            .onFailure { Log.w("Speech", "Pleos TTS failed to start", it) }.getOrNull() else null
+        return if (pleos != null) Fallback(pleos) { AndroidSpeech(context, attrs) } else AndroidSpeech(context, attrs)
     }
 }
 
@@ -38,6 +41,7 @@ private class Fallback(primary: PleosSpeech, private val backup: () -> Speech) :
     init {
         primary.onUnavailable = {
             Log.w("Speech", "Pleos TTS unavailable, using Android TTS")
+            runCatching { primary.release() }
             current = backup()
         }
     }

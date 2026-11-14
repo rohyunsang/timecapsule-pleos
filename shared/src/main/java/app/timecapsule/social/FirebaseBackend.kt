@@ -241,7 +241,7 @@ class FirebaseBackend(
     }.onFailure { Log.w(TAG, "upload", it) }
 
     override suspend fun setVisibleTo(id: String, uids: List<String>) {
-        runCatching { db.collection("capsules").document(id).update("visibleTo", uids).await() }
+        runCatching { withTimeoutOrNull(WRITE_TIMEOUT_MS) { db.collection("capsules").document(id).update("visibleTo", uids).await() } }
             .onFailure { Log.w(TAG, "setVisibleTo", it) }
     }
 
@@ -264,8 +264,11 @@ class FirebaseBackend(
 
     override suspend fun delete(id: String) {
         runCatching {
-            db.collection("capsules").document(id).delete().await()
-            db.collection("audio").document(id).delete().await()
+            // One batch: both deletes are queued together even if the app dies while offline.
+            val batch = db.batch()
+            batch.delete(db.collection("capsules").document(id))
+            batch.delete(db.collection("audio").document(id))
+            withTimeoutOrNull(WRITE_TIMEOUT_MS) { batch.commit().await() }
         }.onFailure { Log.w(TAG, "delete", it) }
     }
 

@@ -139,6 +139,8 @@ fun HomeScreen(
             else drive.playCapsule(id)
         }
     }
+    // Started driving with the question open: confirming would silently do nothing, so close it.
+    androidx.compose.runtime.LaunchedEffect(restricted) { if (restricted) routeTarget = null }
     routeTarget?.let { c ->
         ConfirmPopup("이 장소로 안내할까요?", "${c.placeName ?: "캡슐 지점"}을 내비게이션 목적지로 설정해요. 기존 경로가 있다면 바뀝니다.",
             "길 안내 시작", onConfirm = { drive.driveToCapsule(c.id); routeTarget = null }, onDismiss = { routeTarget = null })
@@ -261,7 +263,8 @@ private fun NowNotice(drive: DriveController, restricted: Boolean, today: LocalD
         review != null && !restricted -> TripReviewNotice(review!!, { drive.dismissTripReview(); openAlbum() }, drive::dismissTripReview)
         saved != null && !restricted -> SavedCapsuleNotice(saved!!, { drive.dismissSaveResult(); openAlbum() }, drive::dismissSaveResult)
         !prepared -> InlinePrompt("이번 주행 준비", "주차 중 권한과 동승자 동의를 확인해 주세요",
-            cta = "준비하기" to { if (!restricted) preparing = true }, ctaIcon = Icons.Rounded.Mic,
+            // While driving it explains why instead of silently doing nothing.
+            cta = "준비하기" to { if (!restricted) preparing = true else drive.prepareDrive() }, ctaIcon = Icons.Rounded.Mic,
             sub = null)
         arrival -> InlinePrompt(
             "도착했어요. 한마디 남길까요?", "이곳엔 아직 캡슐이 없어요",
@@ -597,7 +600,7 @@ fun AlbumScreen(app: TimeCapsuleApp, onMap: () -> Unit, back: () -> Unit) {
     deleting?.let { c ->
         ConfirmPopup(
             "이 캡슐을 삭제할까요?",
-            "${c.date().format(dayFmt)} ${c.placeName ?: ""}에서 남긴 목소리가 지워지고 되돌릴 수 없어요.",
+            "${c.date().format(dayFmt)} ${c.placeName ?: "이곳"}에 ${if (c.isMine) "남긴" else "${c.ownerName ?: "친구"}님이 남긴"} 목소리가 이 차에서 지워지고 되돌릴 수 없어요.",
             "삭제하기",
             onConfirm = { drive.delete(c); deleting = null },
             onDismiss = { deleting = null },
@@ -715,10 +718,15 @@ fun SettingsScreen(app: TimeCapsuleApp, back: () -> Unit) {
                     "지도 위에 알림 띄우기",
                     if (overlay) "내비를 보고 있어도 캡슐 알림이 지도 위에 떠요" else "켜지 않으면 내비를 보는 동안 알림이 알림 센터로만 가요",
                     onClick = {
-                        ctx.startActivity(
-                            android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + ctx.packageName))
-                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-                        )
+                        runCatching {
+                            ctx.startActivity(
+                                android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + ctx.packageName))
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }.onFailure {
+                            // Some car settings builds have no screen for this permission.
+                            android.widget.Toast.makeText(ctx, "이 차량에서는 설정 화면을 열 수 없어요. 차량 설정 → 앱 → 타임캡슐에서 허용해 주세요", android.widget.Toast.LENGTH_LONG).show()
+                        }
                     },
                 ) { ValueText(if (overlay) "켜짐" else "꺼짐") }
             }
@@ -911,15 +919,29 @@ private fun FriendDev(app: TimeCapsuleApp, close: () -> Unit) {
             val friend = friends.firstOrNull()
             Btn("${friend?.name ?: "친구"}가 이 길에 캡슐 남김", enabled = friend != null, height = 72.dp) {
                 val here = app.navi.position.value
-                val at = here?.point?.let { GeoPoint(it.lat + 0.005, it.lng) } ?: GeoPoint(37.7569, 128.8761)
+                // The fake navi drives past ~550 m ahead; the real navi may stand still, so
+                // stay inside the 300 m capsule radius there or the alert never comes.
+                val ahead = if (app.forceFake) 0.005 else 0.002
+                val at = here?.point?.let { GeoPoint(it.lat + ahead, it.lng) } ?: GeoPoint(37.7569, 128.8761)
                 fake.friendLeavesCapsule(friend!!, at, app.drive.car.value.placeName ?: "7번 국도", daysAgo = 3)
                 close()
             }
         }
+        // Switching wipes every capsule on this car, so it is confirmed first.
+        var switchTo by remember { mutableStateOf<Pair<Boolean, app.timecapsule.social.Profile?>?>(null) }
         known.filter { it.uid != me?.uid }.forEach { p ->
-            Btn("${p.name}(으)로 바꾸기", height = 72.dp) { app.switchAccount(p) }
+            Btn("${p.name}(으)로 바꾸기", height = 72.dp) { switchTo = true to p }
         }
-        Btn("다른 사람으로 시작", height = 72.dp) { app.switchAccount(null) }
+        Btn("다른 사람으로 시작", height = 72.dp) { switchTo = true to null }
+        switchTo?.let { (_, p) ->
+            ConfirmPopup(
+                title = if (p != null) "${p.name}(으)로 바꿀까요?" else "다른 사람으로 시작할까요?",
+                body = "이 차에 저장된 캡슐이 모두 지워져요. 서버에 올린 캡슐은 계정에 남아요.",
+                confirm = "바꾸기",
+                onConfirm = { switchTo = null; app.switchAccount(p) },
+                onDismiss = { switchTo = null },
+            )
+        }
     }
 }
 

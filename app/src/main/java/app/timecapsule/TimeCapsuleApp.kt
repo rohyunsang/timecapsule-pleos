@@ -81,7 +81,9 @@ class TimeCapsuleApp : Application() {
                 ?: FakeVehicleSource(VehicleSnapshot()).also { onPleos = false }
         } else if (forceFake) fakeVehicle() else FakeVehicleSource(VehicleSnapshot())
         navi = if (!forceFake && isInstalled(PLEOS_NAVI_SERVICE)) {
-            PleosNaviSource(this, scope).also { it.start() }
+            runCatching { PleosNaviSource(this, scope).also { it.start() } }
+                .onFailure { android.util.Log.w("TimeCapsuleApp", "NaviHelper failed", it) }.getOrNull()
+                ?: FakeNaviSource(null)
         } else FakeNaviSource(if (forceFake) NaviPosition(GeoPoint(37.7519, 128.8761), "강원특별자치도 강릉시 7번 국도") else null)
 
         ux = UxRestrictions(this).also { it.start() }

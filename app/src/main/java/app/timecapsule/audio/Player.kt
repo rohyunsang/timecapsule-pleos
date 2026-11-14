@@ -44,6 +44,7 @@ class Player(context: Context) {
     private var audioPath: String = ""
     private var onFinished: () -> Unit = {}
     private var onStarted: () -> Unit = {}
+    private var onInterrupted: () -> Unit = {}
     private var focus: AudioFocusRequest? = null
 
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
@@ -51,7 +52,8 @@ class Player(context: Context) {
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> _navigationSpeaking.value = true
             AudioManager.AUDIOFOCUS_GAIN -> _navigationSpeaking.value = false
-            AudioManager.AUDIOFOCUS_LOSS -> { _navigationSpeaking.value = false; stop(); onFinished() }
+            // Another app took the speaker for good: stop, but it was not heard to the end.
+            AudioManager.AUDIOFOCUS_LOSS -> { _navigationSpeaking.value = false; stop(); interrupted() }
         }
     }
 
@@ -64,26 +66,39 @@ class Player(context: Context) {
     }
 
     /** Starts from the beginning: narration, then the recording at [path]. */
-    fun play(narrationText: String, path: String, onStarted: () -> Unit = {}, done: () -> Unit) {
+    /**
+     * Starts from the beginning: narration, then the recording at [path]. [done] runs after the
+     * voice played to the end; [interrupted] when it could not start or another app took the
+     * speaker for good (not counted as heard).
+     */
+    fun play(narrationText: String, path: String, onStarted: () -> Unit = {}, interrupted: (() -> Unit)? = null, done: () -> Unit) {
         stopInternal()
         narration = narrationText
         audioPath = path
         onFinished = done
+        onInterrupted = interrupted ?: done
         this.onStarted = onStarted
-        if (!requestFocus()) { finished(); return }
+        if (!requestFocus()) { interrupted(); return }
         startNarration()
     }
 
+    /**
+     * Safety or user pause. Focus is given back so the driver's radio or music continues while
+     * the capsule waits for a manual resume.
+     */
     fun pause() {
         when (phase) {
             Phase.NARRATION -> { phase = Phase.PAUSED_NARRATION; speech.stop() }
             Phase.VOICE -> { media?.pause(); phase = Phase.PAUSED_VOICE }
-            else -> {}
+            else -> return
         }
+        abandonFocus()
     }
 
-    /** Continues after a safety pause; narration restarts, the voice continues where it stopped. */
+    /** Continues after a pause; narration restarts, the voice continues where it stopped. */
     fun resume() {
+        if (phase != Phase.PAUSED_NARRATION && phase != Phase.PAUSED_VOICE) return
+        if (focus == null && !requestFocus()) return
         when (phase) {
             Phase.PAUSED_NARRATION -> startNarration()
             Phase.PAUSED_VOICE -> { media?.start(); phase = Phase.VOICE }
@@ -91,7 +106,7 @@ class Player(context: Context) {
         }
     }
 
-    fun restart() = play(narration, audioPath, done = onFinished)
+    fun restart() = play(narration, audioPath, interrupted = onInterrupted, done = onFinished)
 
     fun stop() {
         stopInternal()
@@ -130,11 +145,18 @@ class Player(context: Context) {
             }
         } catch (e: Exception) {
             Log.w(TAG, "cannot play $audioPath", e)
-            finished()
+            interrupted()
             return
         }
         phase = Phase.VOICE
         val started = onStarted; onStarted = {}; started()
+    }
+
+    private fun interrupted() {
+        val cb = onInterrupted
+        stopInternal()
+        abandonFocus()
+        cb()
     }
 
     private fun finished() {
